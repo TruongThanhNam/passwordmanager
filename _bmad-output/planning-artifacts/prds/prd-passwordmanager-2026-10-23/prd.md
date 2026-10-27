@@ -2,7 +2,7 @@
 title: PAK Manager (iOS + Android) — PRD
 status: final
 created: 2026-10-23
-updated: 2026-10-25
+updated: 2026-10-27
 ---
 
 # PAK Manager (iOS + Android) — PRD
@@ -17,7 +17,7 @@ updated: 2026-10-25
 - **Vault:** toàn bộ dữ liệu đã mã hóa của app, gồm card, Recent và bản nháp.
 - **Recent:** cách gọi tắt của Recent Passwords, tức danh sách mật khẩu vừa tạo (F4).
 - **Màn hình Tạo mật khẩu:** nội dung của tab Tạo mật khẩu (`password_generator.jpg`).
-- **Sheet tạo mật khẩu:** sheet được mở từ form sửa card (`edit_pass.jpg`).
+- **Sheet tạo mật khẩu:** sheet được mở từ form tạo hoặc sửa card (`edit_pass.jpg`).
 - **Tên nút và tên cài đặt** trong tài liệu này là tên tham chiếu, lấy theo ảnh tham chiếu. Chuỗi hiển thị thực tế có đủ bản English và Tiếng Việt (NFR-14).
 
 ## 1. Tầm nhìn
@@ -125,7 +125,7 @@ Mỗi máy chỉ có **một tài khoản PAK Manager**, được bảo vệ b�
   - **Không** bắt buộc phải có chữ hoa, chữ số hay ký tự đặc biệt.
   - **Từ chối** mật khẩu nằm trong danh sách mật khẩu phổ biến hoặc đã bị lộ. Danh sách này được nhúng sẵn trong app để dùng offline. Nguồn và kích thước danh sách sẽ chốt ở bước architecture.
   - **Từ chối** mật khẩu chỉ gồm một ký tự lặp lại hoặc một dãy tuần tự, ví dụ `aaaaaaaaaaaaaaa` hay `123456789012345`.
-  - Trong lúc nhập có thanh độ mạnh với 3 nhãn **Low / Medium / High**. Thanh này dùng cách tính **khác** FR-34: nó đánh giá theo các mẫu dễ đoán như từ điển, dãy phím hay ngày tháng, vì công thức entropy đánh giá quá cao mật khẩu do người tự đặt.
+  - Trong lúc nhập có một dòng chữ báo độ mạnh với 3 mức **Low / Medium / High** (không vẽ thanh). Mức độ mạnh này dùng cách tính **khác** FR-34: nó đánh giá theo các mẫu dễ đoán như từ điển, dãy phím hay ngày tháng, vì công thức entropy đánh giá quá cao mật khẩu do người tự đặt.
 
 **Đăng nhập và chống dò mật khẩu**
 - **FR-3:** Khi máy đã có tài khoản, màn hình Login hiển thị tên app (**PAK Manager**), ô nhập mật khẩu chính và nút **Đăng nhập**. Nút Đăng nhập bị vô hiệu khi ô mật khẩu có ít hơn 15 ký tự. Đăng nhập đúng thì app chuyển sang tab Quản lý mật khẩu.
@@ -183,11 +183,9 @@ Mỗi card gồm **Tiêu đề**, **Tên đăng nhập**, **Mật khẩu** và *
 - **FR-21:** Tab Quản lý mật khẩu có một **nút nổi bật** để tạo card mới.
 - **FR-22:** Khi tạo hoặc sửa card, **Tiêu đề, Tên đăng nhập và Mật khẩu là bắt buộc**, còn Note thì không. Các card được phép **trùng tiêu đề**.
 - **FR-23:** Góc trên bên phải mỗi card có một nút menu. Bấm vào sẽ mở popup gồm **Sửa** và **Xóa**.
-- **FR-24:** Ở form sửa card, người dùng sửa được cả 4 field rồi bấm **Lưu**. Có hai cách đổi mật khẩu:
-  - Gõ thủ công.
-  - Bấm nút **"Tạo mật khẩu"** trong form để mở sheet tạo mật khẩu (FR-28). Bấm **Use Password** thì mật khẩu vừa tạo thay cho giá trị hiện có trong field Mật khẩu. Đóng sheet mà không bấm Use Password thì field giữ nguyên.
-
-  Form **tạo card mới không có** nút "Tạo mật khẩu". Người dùng gõ hoặc dán mật khẩu vào, ví dụ dán từ Recent như ở UJ-2.
+- **FR-24:** Ở form tạo card và form sửa card, người dùng nhập hoặc sửa cả 4 field rồi bấm **Lưu**. Có hai cách nhập mật khẩu:
+  - Gõ hoặc dán thủ công, ví dụ dán từ Recent như ở UJ-2.
+  - Bấm nút **"Tạo mật khẩu"** trong form để mở sheet tạo mật khẩu (FR-28). Bấm **Use Password** thì mật khẩu vừa tạo được điền vào field Mật khẩu, thay cho giá trị hiện có nếu field đã có giá trị. Đóng sheet mà không bấm Use Password thì field giữ nguyên.
 - **FR-25:** Muốn xóa card, người dùng phải đồng ý ở **hộp thoại xác nhận**.
 - **FR-26:** **Bản nháp:**
   - Trong lúc người dùng tạo hoặc sửa card, app **tự động lưu bản nháp đã mã hóa sau mỗi thay đổi**. App chỉ giữ tối đa **một** bản nháp.
@@ -205,7 +203,7 @@ App có hai nơi tạo mật khẩu: màn hình Tạo mật khẩu và sheet t�
   - Nút **Copy**.
   - Dòng **Password Length** để điều chỉnh độ dài. Kiểu điều khiển do bước UX quyết định.
   - 4 công tắc: **Uppercase Letters (A–Z)**, **Lowercase Letters (a–z)**, **Digits (0–9)** và **Special Characters**. Bên dưới hiển thị bộ ký tự đặc biệt `~!@#$%^&*+-/.,\{}[]();:?<>"'_`.
-- **FR-28:** **Sheet tạo mật khẩu** (mở từ form sửa card, `edit_pass.jpg`) gồm:
+- **FR-28:** **Sheet tạo mật khẩu** (mở từ form tạo hoặc sửa card, `edit_pass.jpg`) gồm:
   - Tay nắm kéo (drag handle) của sheet và nút tạo lại.
   - Nhãn **Password strength**. Nhãn này chỉ có ở sheet; màn hình Tạo mật khẩu không có.
   - Mật khẩu vừa tạo.

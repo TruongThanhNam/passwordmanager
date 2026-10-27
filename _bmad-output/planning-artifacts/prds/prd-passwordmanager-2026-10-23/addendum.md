@@ -51,7 +51,7 @@ Tài liệu này giữ lại các chi tiết kỹ thuật và chi tiết triển
 **Màn hình Tạo mật khẩu và sheet tạo mật khẩu**
 - **Chọn độ dài trên màn hình Tạo mật khẩu.** Dòng "Password Length 16 >" có chevron. Cần chọn cách nhập giá trị 4–99, ví dụ picker hoặc một màn hình con.
 - **Thanh trượt trong sheet tạo mật khẩu.** Khoảng 4–99 có 96 nấc, nên khó chỉnh chính xác. Có thể thêm nút +/− hoặc cho nhập số.
-- **Phân biệt hai chỗ dùng tên "Tạo mật khẩu".** Cả tab lẫn nút trong form sửa card đang dùng tên này. Cần đặt nhãn sao cho người dùng không nhầm hai chỗ với nhau.
+- **Phân biệt hai chỗ dùng tên "Tạo mật khẩu".** Cả tab lẫn nút trong form tạo/sửa card đang dùng tên này. Cần đặt nhãn sao cho người dùng không nhầm hai chỗ với nhau.
 
 **Màn hình Login**
 - **Nút "Xóa & Tạo tài khoản mới" (FR-9).** Đặt nút cách xa nút Đăng nhập. Thao tác giữ 3 giây cần có phản hồi rõ, ví dụ vòng tiến trình.
