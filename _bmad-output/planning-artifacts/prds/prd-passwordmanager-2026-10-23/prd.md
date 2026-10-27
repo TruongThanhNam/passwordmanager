@@ -52,7 +52,7 @@ updated: 2026-10-27
 - Nếu app bị tắt giữa chừng khi đang kiểm tra lần nhập thứ 10, lần đó bị tính là sai và có thể dẫn đến xóa dữ liệu (FR-5).
 - Nhập sai mật khẩu cũ ở màn hình Change Main Password, hoặc nhập sai mật khẩu chính trước khi Export, không bị tính vào bộ đếm (FR-13, FR-51).
 - Không giới hạn số lần nhập sai mật khẩu export khi Import (FR-56).
-- Trên Android, nội dung đã copy có thể còn trong clipboard tối đa khoảng 1 giờ nếu người dùng không quay lại app (FR-65).
+- Trên Android, nội dung đã copy có thể còn trong clipboard nếu người dùng không quay lại app (FR-65): tối đa khoảng 1 giờ trên Android 13 trở lên, và **không giới hạn thời gian** trên Android 7–12, vì các bản này không có cơ chế hệ thống tự xóa clipboard.
 
 **Phát hành:** App Store và Google Play, miễn phí hoàn toàn, phi thương mại.
 
@@ -299,7 +299,7 @@ File export là **bản backup duy nhất** của người dùng, vì quên mậ
 - **FR-64:** App có các nút Copy sau: tên đăng nhập và mật khẩu trên card, màn hình Tạo mật khẩu, và từng mục trong Recent. Mật khẩu và Note **không** cho bôi chọn hay kéo thả ra ngoài. Muốn lấy mật khẩu, người dùng chỉ có cách bấm nút Copy.
 - **FR-65:** **Mọi** thao tác copy đều áp dụng Clear Clipboard (giá trị mặc định: FR-46). App chỉ xóa clipboard nếu clipboard vẫn còn chứa đúng giá trị app đã copy, để không xóa nhầm thứ người dùng copy sau đó. Hệ điều hành không cho app chạy hẹn giờ khi đang ở nền, nên cách xóa khác nhau theo nền tảng:
   - **iOS:** nội dung copy được gắn **hạn tự hết** bằng đúng thời gian Clear Clipboard, và **chỉ nằm trên máy**, không đồng bộ qua Universal Clipboard.
-  - **Android:** nội dung copy được đánh dấu **nhạy cảm** (Android 13 trở lên). Khi người dùng quay lại app mà đã quá thời hạn, app xóa clipboard ngay. Nếu người dùng không quay lại, nội dung có thể nằm trong clipboard cho tới khi hệ thống tự xóa, khoảng 1 giờ trên Android 13 trở lên. Đây là giới hạn của nền tảng.
+  - **Android:** nội dung copy được đánh dấu **nhạy cảm** (Android 13 trở lên). Khi người dùng quay lại app mà đã quá thời hạn, app xóa clipboard ngay. Nếu người dùng không quay lại, nội dung có thể nằm trong clipboard cho tới khi hệ thống tự xóa: khoảng 1 giờ trên Android 13 trở lên; trên Android 7–12 hệ thống không tự xóa. Đây là giới hạn của nền tảng.
   - **Cả hai nền tảng:** app xóa clipboard khi app bị khóa lúc đang ở tiền cảnh (ví dụ Lock Vault hoặc hết phiên) và khi dữ liệu bị xóa (FR-12).
 
 ## 5. Yêu cầu phi chức năng

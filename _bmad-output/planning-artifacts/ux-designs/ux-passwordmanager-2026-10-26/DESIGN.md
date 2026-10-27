@@ -630,5 +630,5 @@ Cột **Mock** trỏ tới file trong [`mockups/`](mockups/) thể hiện compon
 | Mật khẩu bằng sans thường (`{typography.password-display}`, `{typography.password-inline}`) | Monospace cho mật khẩu (dù ảnh mẫu dùng) |
 | Dáng iOS native trên cả Android (UISwitch, sheet có grabber, alert iOS, popup-menu) | Material components, ripple, FAB Material mở rộng (extended FAB), top app bar Material |
 | Phẳng: phân tầng bằng tông nền, hairline, viền 1px; popup-menu chỉ có viền 1px `{colors.border}` | Đổ bóng card / nút / popup-menu |
-| Tablet: một cột căn giữa ≤ `{spacing.content-max-tablet}`, chỉ dọc | Kéo giãn hàng full-width màn tablet; master-detail hai cột; bố cục ngang |
+| Tablet: một cột căn giữa ≤ `{spacing.content-max-tablet}` ở mọi hướng (architecture AD-1) | Kéo giãn hàng full-width màn tablet; master-detail hai cột; đổi sang bố cục hai cột khi xoay ngang |
 | Dark mode theo các token `*-dark` | Đảo màu tự động hoặc dùng lại giá trị light trên nền tối |

@@ -334,11 +334,11 @@ Những gì có được chỉ là mặc định của nền tảng:
 
 | Chủ đề | Hành vi |
 |---|---|
-| Hướng màn hình | **Chỉ dọc** trên cả điện thoại và tablet. Không xoay ngang. |
+| Hướng màn hình | Điện thoại: **chỉ dọc**. Tablet: **mọi hướng**, vì Android 16+ bỏ qua khóa hướng trên màn lớn và cờ khóa dọc của iPad đã bị deprecate (architecture AD-1). |
 | Điện thoại | Bố cục như ảnh tham chiếu, dọc. |
-| Máy tính bảng | Dọc. **Một cột căn giữa**, rộng tối đa `{spacing.content-max-tablet}` (giá trị ở `DESIGN.md`, [ASSUMPTION — đã ghi memlog]); nền phủ toàn màn. Tab bar giữ nguyên ở đáy. page-sheet và bottom-sheet hiển thị dạng form sheet căn giữa theo mặc định iPad [ASSUMPTION]. |
+| Máy tính bảng | Mọi hướng. **Một cột căn giữa** ở cả dọc lẫn ngang, rộng tối đa `{spacing.content-max-tablet}` (giá trị ở `DESIGN.md`, [ASSUMPTION — đã ghi memlog]); nền phủ toàn màn. Tab bar giữ nguyên ở đáy. page-sheet và bottom-sheet hiển thị dạng form sheet căn giữa theo mặc định iPad [ASSUMPTION]. |
 | Android — dáng iOS | Cùng dáng iOS trên Android: tab bar đáy, nav-bar inline căn giữa, UISwitch, sheet có grabber, alert iOS, popup-menu, wheel-picker. Không Material. Font và bộ icon Android: xem `DESIGN.md` › Typography, Components. |
-| Android — nút Back hệ thống | Đóng tầng trên cùng (dialog → sheet → màn push). Form card có thay đổi → hiện S12 như vuốt xuống. Ở gốc tab: hành vi mặc định của OS (đưa app ra nền) [ASSUMPTION]. S4 đang giữ: Back = hủy [ASSUMPTION]. |
+| Android — nút Back hệ thống | Đóng tầng trên cùng (dialog → sheet → màn push). Form card có thay đổi → hiện S12 như vuốt xuống. Ở gốc tab: hành vi mặc định của OS (đưa app ra nền) [ASSUMPTION]. S4 đang giữ: Back = hủy [ASSUMPTION]. S6: Back = đóng dialog, **giữ** bản nháp (hỏi lại ở lần đăng nhập sau). S13, S17, S26: Back = Hủy. S27: Back = OK. S5 và lúc đang chạy KDF/ghi: Back bị chặn (architecture AD-23). |
 | Clipboard (FR-65) | **iOS:** clipboard có hạn tự hết bằng thời gian Tự xóa clipboard, chỉ trên máy (không Universal Clipboard). **Android 13+:** đánh dấu nhạy cảm (OS che nội dung trong bản xem trước clipboard); quay lại app quá hạn → xóa ngay; không quay lại → có thể còn tới ~1 giờ (giới hạn nền tảng, rủi ro chấp nhận). **Cả hai:** hết thời gian Tự xóa clipboard → chỉ xóa khi clipboard còn đúng giá trị app đã copy; xóa khi khóa lúc tiền cảnh và khi xóa dữ liệu. UI giống nhau trên hai nền tảng: toast "Đã copy", không có thông báo nào khi xóa. |
 | Import / Export | Dùng menu chia sẻ và trình chọn file **của từng OS** (FR-55, FR-56) — đây là hai chỗ app hiện UI hệ thống thật, không vẽ lại dáng iOS. |
 | Tương thích file | File export đọc được chéo iOS ↔ Android (FR-61). |

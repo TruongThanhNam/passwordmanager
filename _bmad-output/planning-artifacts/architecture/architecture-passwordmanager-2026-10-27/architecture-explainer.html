@@ -1,0 +1,317 @@
+<title>Kiến trúc PAK Manager</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: một cột đọc ~68ch, mỗi phần là một câu hỏi người chủ app sẽ hỏi; màu nhấn teal lấy từ chính app */
+:root {
+  --bg: #f5f7f6;
+  --surface: #ffffff;
+  --ink: #17201d;
+  --ink-2: #4c5a55;
+  --line: #d9e1de;
+  --accent: #198470;
+  --accent-soft: #e5f4ef;
+  --warn: #b25e00;
+  --warn-soft: #fbefe1;
+  --danger: #b3261e;
+  --danger-soft: #f9e6e4;
+  --font-body: "Be Vietnam Pro", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1412; --surface: #171e1b; --ink: #e6ecea; --ink-2: #a3b1ac; --line: #2a3531;
+    --accent: #3fc2a4; --accent-soft: #15302a; --warn: #f0a447; --warn-soft: #33261a;
+    --danger: #f2887f; --danger-soft: #3a1d1b; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1412; --surface: #171e1b; --ink: #e6ecea; --ink-2: #a3b1ac; --line: #2a3531;
+  --accent: #3fc2a4; --accent-soft: #15302a; --warn: #f0a447; --warn-soft: #33261a;
+  --danger: #f2887f; --danger-soft: #3a1d1b; color-scheme: dark;
+}
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: var(--font-body); font-size: 16px; line-height: 1.65;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+main { max-width: 760px; margin: 0 auto; padding-block: 48px 80px; display: flex; flex-direction: column; gap: 56px; }
+h1, h2, h3 { text-wrap: balance; line-height: 1.25; margin: 0; }
+h1 { font-size: clamp(2rem, 5vw, 2.75rem); font-weight: 800; letter-spacing: -0.02em; }
+h2 { font-size: 1.5rem; font-weight: 700; }
+h3 { font-size: 1.05rem; font-weight: 600; }
+p { margin: 0; }
+section { display: flex; flex-direction: column; gap: 16px; }
+.eyebrow { font-size: 0.75rem; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); }
+.lede { font-size: 1.15rem; color: var(--ink-2); max-width: 62ch; }
+.meta { font-family: var(--font-mono); font-size: 0.8rem; color: var(--ink-2); }
+code, .mono { font-family: var(--font-mono); font-size: 0.88em; }
+code { background: var(--accent-soft); padding: 1px 5px; border-radius: 4px; }
+ul.plain { margin: 0; padding-left: 1.2em; display: flex; flex-direction: column; gap: 6px; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 20px; }
+.diagram { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 20px; }
+
+/* sơ đồ tự vẽ bằng HTML/CSS */
+.node { border: 1.5px solid var(--line); border-radius: 8px; padding: 10px 14px; background: var(--bg); min-width: 0; }
+.node strong { display: block; font-size: 0.95rem; }
+.node span { display: block; font-size: 0.85rem; color: var(--ink-2); line-height: 1.45; }
+.node.accent { border-color: var(--accent); background: var(--accent-soft); }
+.node.warn { border-color: var(--warn); background: var(--warn-soft); }
+.node.danger { border-color: var(--danger); background: var(--danger-soft); }
+.node.ghost { border-style: dashed; }
+.arrow { text-align: center; color: var(--ink-2); font-size: 0.82rem; line-height: 1.3; padding: 4px 0; }
+.arrow::before { content: "↓"; display: block; font-size: 1.1rem; color: var(--accent); }
+.arrow.right::before { content: "→"; }
+
+.layers { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 200px); gap: 0 16px; align-items: stretch; }
+.layers .stack { display: flex; flex-direction: column; }
+.layers .side { display: flex; flex-direction: column; justify-content: flex-end; gap: 6px; }
+.layers .side .arrow::before { content: "↖"; }
+@media (max-width: 560px) { .layers { grid-template-columns: minmax(0, 1fr); } .layers .side { margin-top: 12px; } .layers .side .arrow::before { content: "↑"; } }
+
+.disk { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 16px; }
+.group { border: 1.5px dashed var(--line); border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 8px; }
+.group > .label { font-size: 0.75rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-2); }
+.group.locked { border-color: var(--accent); }
+.vault-files { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 560px) { .disk { grid-template-columns: minmax(0, 1fr); } }
+
+.flow { display: flex; flex-direction: column; gap: 0; }
+.flow-row { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 8px; align-items: center; }
+.flow-row .arrow { padding: 0 4px; }
+.outcomes { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+.outcome { display: flex; flex-direction: column; gap: 6px; }
+.outcome .then { font-size: 0.8rem; color: var(--ink-2); padding-left: 4px; }
+@media (max-width: 560px) { .flow-row { grid-template-columns: minmax(0, 1fr); } .flow-row .arrow.right::before { content: "↓"; } }
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.cols > * { min-width: 0; }
+.card h3 { margin-bottom: 6px; }
+.card p { color: var(--ink-2); font-size: 0.95rem; }
+
+/* dải 10 lần thử */
+.attempts { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 6px; }
+.att { border-radius: 8px; padding: 10px 4px; text-align: center; font-family: var(--font-mono); font-size: 0.85rem; border: 1px solid var(--line); background: var(--surface); }
+.att b { display: block; font-size: 1.1rem; font-family: var(--font-body); }
+.att.ok { background: var(--accent-soft); border-color: transparent; }
+.att.wait { background: var(--warn-soft); border-color: transparent; }
+.att.wipe { background: var(--danger-soft); border-color: transparent; color: var(--danger); }
+.legend { display: flex; flex-wrap: wrap; gap: 16px; font-size: 0.88rem; color: var(--ink-2); }
+.legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+.legend .l-ok::before { background: var(--accent-soft); outline: 1px solid var(--accent); }
+.legend .l-wait::before { background: var(--warn-soft); outline: 1px solid var(--warn); }
+.legend .l-wipe::before { background: var(--danger-soft); outline: 1px solid var(--danger); }
+@media (max-width: 520px) { .attempts { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+
+/* bố cục byte của header */
+.bytes { display: flex; flex-wrap: wrap; gap: 4px; font-family: var(--font-mono); font-size: 0.78rem; }
+.bytes span { padding: 6px 8px; border-radius: 6px; background: var(--accent-soft); white-space: nowrap; }
+.bytes span.k { background: var(--warn-soft); }
+
+table { border-collapse: collapse; width: 100%; font-size: 0.95rem; }
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+th { font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-2); font-weight: 600; }
+td.id { font-family: var(--font-mono); font-size: 0.85rem; color: var(--accent); white-space: nowrap; }
+
+.risk { border-left: 3px solid var(--warn); padding: 4px 0 4px 14px; }
+.risk + .risk { margin-top: 10px; }
+.check { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.check li { display: grid; grid-template-columns: 22px 1fr; gap: 8px; }
+.check li::before { content: ""; width: 14px; height: 14px; border: 1.5px solid var(--accent); border-radius: 4px; margin-top: 5px; }
+a { color: var(--accent); }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+</style>
+
+<main>
+  <header style="display:flex;flex-direction:column;gap:14px">
+    <div class="eyebrow">Architecture spine · bản giải thích</div>
+    <h1>Kiến trúc PAK Manager</h1>
+    <p class="lede">Trang này giải thích bằng lời thường những gì file <code>ARCHITECTURE-SPINE.md</code> quy định: app được chia thành khối nào, dữ liệu của chị Lan được khóa ra sao, và các luật mà mọi agent viết code phải theo. Mục đích là để anh/chị đọc hiểu và đối chiếu khi review công việc của agent.</p>
+    <p class="meta">Cập nhật 2026-10-27 · 26 quyết định (AD-1 → AD-26) · Flutter 3.47.8 · Android 7+ · iOS 15+</p>
+  </header>
+
+  <section>
+    <div class="eyebrow">Bức tranh chung</div>
+    <h2>Một codebase, bốn lớp, chỉ một chiều phụ thuộc</h2>
+    <p>App viết bằng Flutter, một bộ code chạy cả iPhone lẫn Android. Giao diện dùng bộ widget kiểu iOS (<code>cupertino_ui</code>) trên cả hai nền tảng, đúng như bước UX đã chốt. Code được chia thành bốn lớp. Lớp trên được gọi lớp dưới, lớp dưới không bao giờ gọi ngược lên.</p>
+    <div class="diagram" role="img" aria-label="Bốn lớp: màn hình gọi dịch vụ, dịch vụ gọi lõi, nền tảng cắm vào lõi qua interface">
+      <div class="layers">
+        <div class="stack">
+          <div class="node"><strong>Màn hình · features</strong><span>Login, danh sách card, tạo mật khẩu, cài đặt</span></div>
+          <div class="arrow">chỉ gọi xuống</div>
+          <div class="node accent"><strong>Dịch vụ · services</strong><span>Giữ chìa khóa, khóa app, đếm sai, clipboard</span></div>
+          <div class="arrow">chỉ gọi xuống</div>
+          <div class="node"><strong>Lõi · core</strong><span>Mã hóa, định dạng file, luật mật khẩu. Dart thuần, test được 100%</span></div>
+        </div>
+        <div class="side">
+          <div class="node ghost"><strong>Nền tảng · platform</strong><span>Đồng hồ, clipboard, chặn backup, fsync</span></div>
+          <div class="arrow">cắm vào lõi qua interface</div>
+        </div>
+      </div>
+    </div>
+    <div class="cols">
+      <div class="panel card"><h3>Màn hình không đụng file</h3><p>Không màn hình nào tự đọc, ghi file hay tự gọi mã hóa. CI có script tự chặn nếu agent vi phạm (AD-2).</p></div>
+      <div class="panel card"><h3>Một người giữ chìa</h3><p>Chỉ <span class="mono">VaultSession</span> giữ chìa giải mã và dữ liệu đã mở. Mỗi lần đăng nhập tạo một phiên mới; khóa app là phiên đó chết hẳn (AD-3).</p></div>
+      <div class="panel card"><h3>Native gom một chỗ</h3><p>Phần code riêng cho iOS/Android chỉ có 4 nhóm: đồng hồ, clipboard, chặn backup, fsync. Thêm nhóm nào phải sửa spine (AD-11).</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="eyebrow">Dữ liệu được bảo vệ thế nào</div>
+    <h2>Hai lớp chìa khóa</h2>
+    <p>Mật khẩu chính <strong>không</strong> trực tiếp khóa dữ liệu. Lúc tạo tài khoản, app sinh ngẫu nhiên một <strong>chìa dữ liệu</strong> (DEK, 32 byte). Chìa này khóa toàn bộ card, Recent và bản nháp. Sau đó mật khẩu chính đi qua Argon2id, một hàm cố tình chậm khoảng 1 giây, để tạo ra chìa thứ hai, dùng để khóa lại chìa dữ liệu.</p>
+    <ul class="plain">
+      <li><strong>Đổi mật khẩu chính</strong> chỉ cần khóa lại chìa dữ liệu, không phải mã hóa lại hết card, nên nhanh và gần như không thể hỏng giữa chừng.</li>
+      <li><strong>Kẻ chép được file</strong> phải đoán mật khẩu, mỗi lần đoán tốn ~1 giây và 64 MiB RAM. Mật khẩu chính tối thiểu 15 ký tự nên việc dò là không thực tế.</li>
+      <li><strong>Header của vault</strong> có hai dấu kiểm tra riêng. Dấu thứ nhất (<span class="mono">checksum</span>) phát hiện file bị hỏng mà không cần mật khẩu. Dấu thứ hai (<span class="mono">kcv</span>) xác nhận mật khẩu đúng. Nhờ vậy file hỏng <strong>không bao giờ</strong> bị tính là nhập sai, nên không thể dẫn tới tự xóa (FR-7).</li>
+    </ul>
+    <div class="panel" style="display:flex;flex-direction:column;gap:10px">
+      <h3>Cấu trúc file <span class="mono">header</span> (cố định, AD-20)</h3>
+      <div class="bytes">
+        <span>PAKV · 4</span><span>version · 2</span><span>kdfAlg · 1</span><span>opslimit · 4</span><span>memlimit · 8</span><span>salt · 16</span><span>wrapNonce · 24</span><span class="k">wrappedDek · 48</span><span class="k">kcv · 16</span><span>checksum · 32</span>
+      </div>
+      <p class="meta">Số sau dấu chấm giữa là số byte. Ô màu cam là phần phụ thuộc mật khẩu chính.</p>
+    </div>
+    <div class="diagram" role="img" aria-label="Thư mục pak gồm phần ngoài vault không mã hóa và thư mục vault mã hóa">
+      <div class="disk">
+        <div class="group">
+          <div class="label">pak/ · ngoài vault, không mã hóa</div>
+          <div class="node"><strong class="mono">guard</strong><span>Số lần sai, mốc bắt đầu chờ</span></div>
+          <div class="node"><strong class="mono">settings</strong><span>Ngôn ngữ, giao diện, 3 mốc thời gian, tiêu chí tạo mật khẩu</span></div>
+          <div class="node"><strong class="mono">tmp/</strong><span>Tối đa 1 file export (đã mã hóa) đang chờ gửi</span></div>
+        </div>
+        <div class="group locked">
+          <div class="label">pak/vault/ · đều mã hóa</div>
+          <div class="node warn"><strong class="mono">header</strong><span>Chìa dữ liệu đã bị khóa bằng mật khẩu chính</span></div>
+          <div class="arrow">mật khẩu đúng thì mở được chìa, chìa mở ba file</div>
+          <div class="vault-files">
+            <div class="node accent"><strong class="mono">cards</strong><span>Mọi card</span></div>
+            <div class="node accent"><strong class="mono">recent</strong><span>72 giờ</span></div>
+            <div class="node accent"><strong class="mono">draft</strong><span>Bản nháp</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p>Toàn bộ thư mục <span class="mono">pak/</span> bị loại khỏi iCloud Backup và Google Backup. Cờ loại trừ được đặt ở <strong>cấp thư mục</strong>, vì mỗi lần lưu, app ghi file mới rồi đổi tên đè lên file cũ, và cờ đặt trên từng file sẽ mất theo file cũ (AD-11).</p>
+  </section>
+
+  <section>
+    <div class="eyebrow">Nhập sai mật khẩu</div>
+    <h2>Mười lần, không có lần thứ mười một</h2>
+    <div class="attempts" role="img" aria-label="Lần 1 đến 4 thử lại ngay, lần 5 đến 9 chờ 30 phút, lần 10 xóa dữ liệu">
+      <div class="att ok"><b>1</b>ngay</div><div class="att ok"><b>2</b>ngay</div><div class="att ok"><b>3</b>ngay</div><div class="att ok"><b>4</b>ngay</div>
+      <div class="att wait"><b>5</b>30′</div><div class="att wait"><b>6</b>30′</div><div class="att wait"><b>7</b>30′</div><div class="att wait"><b>8</b>30′</div><div class="att wait"><b>9</b>30′</div>
+      <div class="att wipe"><b>10</b>xóa</div>
+    </div>
+    <div class="legend"><span class="l-ok">thử lại ngay</span><span class="l-wait">chờ 30 phút</span><span class="l-wipe">xóa toàn bộ dữ liệu</span></div>
+    <p>Bốn luật giữ cho bộ đếm không thể bị lách (AD-8):</p>
+    <ul class="plain">
+      <li><strong>Ghi trước, kiểm sau.</strong> Bộ đếm, và cả mốc bắt đầu chờ nếu là lần 5–9, được ghi xuống đĩa <em>trước</em> khi kiểm tra mật khẩu. Tắt app giữa chừng thì lần đó vẫn tính là sai; mở lại thấy bộ đếm = 10 thì xóa.</li>
+      <li><strong>Không tin đồng hồ máy.</strong> Thời gian chờ đo bằng đồng hồ đơn điệu của hệ thống, cộng thêm mã nhận diện lần khởi động máy. Chỉnh giờ hay khởi động lại máy chỉ làm thời gian chờ <em>bắt đầu lại từ 30 phút</em>, không bao giờ ngắn đi.</li>
+      <li><strong>Gõ lại đúng chuỗi sai cũ</strong> thì không tính thêm. App chỉ nhớ dấu vân tay của chuỗi đó trong RAM, không bao giờ ghi ra đĩa, vì chuỗi sai thường rất gần mật khẩu thật.</li>
+      <li><strong>Không ghi được bộ đếm</strong> (ví dụ đĩa đầy) thì lần thử bị hủy, không cho thử tiếp.</li>
+    </ul>
+    <div class="diagram" role="img" aria-label="Luồng một lần đăng nhập: ghi bộ đếm, kiểm tra, rồi năm kết quả">
+      <div class="flow">
+        <div class="flow-row">
+          <div class="node"><strong>Bấm Đăng nhập</strong><span>Gõ lại đúng chuỗi sai cũ thì báo sai ngay, không đếm</span></div>
+          <div class="arrow right"></div>
+          <div class="node warn"><strong>Ghi bộ đếm xuống đĩa</strong><span>+1, kèm mốc chờ nếu là lần 5–9. Ghi lỗi thì hủy lần thử</span></div>
+        </div>
+        <div class="arrow">chạy Argon2id ~1 giây, so khớp mật khẩu</div>
+        <div class="outcomes">
+          <div class="outcome"><div class="node accent"><strong>Đúng</strong><span>Bộ đếm về 0</span></div><div class="then">→ vào app</div></div>
+          <div class="outcome"><div class="node accent"><strong>Đúng, dữ liệu hỏng</strong><span>Bộ đếm về 0, không xóa</span></div><div class="then">→ "Dữ liệu bị hỏng"</div></div>
+          <div class="outcome"><div class="node"><strong>Sai lần 1–4</strong><span>Thử lại ngay</span></div><div class="then">→ về Login</div></div>
+          <div class="outcome"><div class="node warn"><strong>Sai lần 5–9</strong><span>Khóa ô nhập 30 phút</span></div><div class="then">→ đếm ngược</div></div>
+          <div class="outcome"><div class="node danger"><strong>Sai lần 10</strong><span>Xóa toàn bộ</span></div><div class="then">→ Tạo tài khoản</div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="eyebrow">Khóa app</div>
+    <h2>Khóa nghĩa là thay cả giao diện, không phải che lên trên</h2>
+    <p>Chỉ một bộ phận (<span class="mono">SessionController</span>) quyết định khi nào khóa: hết giới hạn phiên, chạy nền quá thời gian Tự khóa, hoặc bấm Khóa Vault. Mọi mốc thời gian đều đo bằng đồng hồ có tính cả lúc máy ngủ. Nếu dùng đồng hồ thông thường của Dart, iPhone ngủ 2 tiếng thì app vẫn không tự khóa.</p>
+    <p>Khi khóa, app làm theo đúng thứ tự (AD-9):</p>
+    <ol style="margin:0;padding-left:1.4em;display:flex;flex-direction:column;gap:6px">
+      <li>Lưu ngay bản nháp đang gõ dở, để đăng nhập lại còn có "Tiếp tục bản nháp?".</li>
+      <li>Chờ thao tác ghi đang chạy (đổi mật khẩu, export, import) xong hẳn.</li>
+      <li>Hủy chìa dữ liệu trong RAM.</li>
+      <li>Xóa clipboard nếu nó còn chứa thứ app vừa copy.</li>
+      <li>Vứt bỏ toàn bộ cây giao diện sau đăng nhập và dựng màn Login mới. Nhờ vậy không còn sheet hay ô nhập nào giữ mật khẩu nằm ẩn bên dưới (AD-23).</li>
+    </ol>
+  </section>
+
+  <section>
+    <div class="eyebrow">Đổi điện thoại</div>
+    <h2>File export là hợp đồng vĩnh viễn</h2>
+    <p>File export là bản backup duy nhất, nên định dạng của nó được khóa cứng (AD-10, AD-20): mở đầu bằng <span class="mono">PAKX</span>, có số phiên bản, tham số Argon2id cố định (64 MiB, 3 vòng), rồi tới dữ liệu mã hóa. Một phiên bản định dạng đã phát hành thì không bao giờ được sửa.</p>
+    <ul class="plain">
+      <li>Mỗi phiên bản có một <strong>file mẫu</strong> (dữ liệu giả) trong repo. CI bắt buộc mọi bản app sau này phải import được file đó, để file anh/chị export hôm nay vẫn mở được sau 5 năm, trên iPhone lẫn Android.</li>
+      <li>File trên 8 MiB, sai định dạng hay tham số lạ bị từ chối <em>trước khi</em> chạy giải mã, để file độc hại không làm treo máy.</li>
+      <li>Import là thêm vào, ghi một lần duy nhất. Sai ở bất kỳ card nào thì từ chối cả file, không bao giờ thêm dở dang.</li>
+    </ul>
+  </section>
+
+  <section>
+    <div class="eyebrow">Các quyết định chính</div>
+    <h2>26 luật, gom theo chủ đề</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>AD</th><th>Luật ngắn gọn</th></tr></thead>
+        <tbody>
+          <tr><td class="id">1, 23</td><td>Một codebase Flutter, giao diện kiểu iOS ở cả hai nền tảng. Điện thoại khóa dọc, tablet xoay tự do trong một cột giữa. Mọi sheet, dialog, toast đi qua một bộ trình bày chung.</td></tr>
+          <tr><td class="id">2</td><td>Bốn lớp, phụ thuộc một chiều, CI kiểm tra import.</td></tr>
+          <tr><td class="id">3, 22, 26</td><td>Một phiên cho mỗi lần đăng nhập, giữ toàn bộ bản rõ. Service sống lâu hơn phiên không được giữ bản rõ.</td></tr>
+          <tr><td class="id">4, 5</td><td>Chìa hai tầng; Argon2id chạy ngoài luồng giao diện, ~1 giây trên máy yếu nhất.</td></tr>
+          <tr><td class="id">6, 7, 20, 25</td><td>Dữ liệu nằm trong vài file mã hóa nguyên khối, schema cố định, ghi nguyên tử, có phiên bản và migration.</td></tr>
+          <tr><td class="id">8, 21</td><td>Bộ đếm sai bền vững; một bộ phận duy nhất chạy quy trình xóa.</td></tr>
+          <tr><td class="id">9</td><td>Một bộ phận duy nhất quyết định khóa app, theo trình tự cố định.</td></tr>
+          <tr><td class="id">10</td><td>Định dạng file export là hợp đồng vĩnh viễn.</td></tr>
+          <tr><td class="id">11, 12, 13</td><td>Không mạng, không backup hệ thống, không Keychain. Ngoài vault chỉ có 3 thứ được ghi.</td></tr>
+          <tr><td class="id">14, 15, 16, 17</td><td>Ô nhập bí mật dùng widget chung; luật mật khẩu ở một chỗ; ngẫu nhiên từ CSPRNG; clipboard qua một service.</td></tr>
+          <tr><td class="id">18, 19, 24</td><td>Repo public không chứa secret; build và phát hành qua GitHub Actions; test ba tầng.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="eyebrow">Đã chấp nhận có chủ đích</div>
+    <h2>Rủi ro anh/chị đã đồng ý</h2>
+    <div>
+      <p class="risk"><strong>Root hoặc jailbreak sửa được file bộ đếm.</strong> File này phải đọc được trước khi đăng nhập nên không mã hóa được. Lớp bảo vệ thật trong trường hợp đó là độ mạnh của mật khẩu chính và Argon2id.</p>
+      <p class="risk"><strong>Không gắn chìa với phần cứng máy</strong> (Secure Enclave / Keystore). Giữ đúng threat model của PRD và tránh dữ liệu sót lại trong Keychain sau khi gỡ app.</p>
+      <p class="risk"><strong>Android 7–12 không tự xóa clipboard.</strong> Nếu chị Lan copy rồi không bao giờ mở lại app, mật khẩu có thể nằm trong clipboard vô thời hạn. Đã ghi vào PRD.</p>
+      <p class="risk"><strong>Tắt app rồi mở lại</strong> thì gõ lại chuỗi sai cũ bị tính thêm một lần, vì chuỗi đó chỉ được nhớ trong RAM.</p>
+      <p class="risk"><strong>Hệ điều hành tắt app ở nền</strong> thì coi như đã khóa. Form đang gõ được khôi phục qua bản nháp.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="eyebrow">Khi review công việc của agent</div>
+    <h2>Những gì anh/chị tự kiểm được</h2>
+    <p>Phần lớn luật đã được CI kiểm tự động. Những mục dưới đây chỉ kiểm được trên máy thật, qua TestFlight hoặc bản thử nghiệm kín, trước mỗi lần phát hành (AD-24):</p>
+    <ul class="check">
+      <li>Mở khóa trên máy yếu nhất mất khoảng 1 giây, không quá 2 giây.</li>
+      <li>Nhập sai 5 lần, tắt app, chỉnh giờ máy, khởi động lại: vẫn phải chờ đủ 30 phút.</li>
+      <li>Ô mật khẩu không hiện đề nghị lưu mật khẩu, không gợi ý từ, với bàn phím mặc định, Gboard và Laban Key.</li>
+      <li>Export trên iPhone, import trên Android (và ngược lại): đủ 100% card, đúng thứ tự.</li>
+      <li>Copy mật khẩu, chờ hết thời gian Tự xóa clipboard: clipboard trống; nếu đã copy thứ khác thì không bị xóa nhầm.</li>
+      <li>Bản iOS chạy qua mọi luồng mà không có kết nối mạng nào (bắt gói tin).</li>
+    </ul>
+  </section>
+
+  <section>
+    <div class="eyebrow">Tiếp theo</div>
+    <h2>Từ spine tới code</h2>
+    <p>Bước kế tiếp là tách PRD thành epic và story (<span class="mono">bmad-create-epics-and-stories</span>). Mỗi story trích dẫn mã AD liên quan, để agent build biết luật nào phải tuân theo. Còn vài mục được hoãn có chủ đích, như công cụ ký app, danh sách máy test thật và lên Flutter 3.50; mỗi mục đều có ghi điều kiện xem lại trong spine.</p>
+    <p class="meta">Nguồn: ARCHITECTURE-SPINE.md · .memlog.md · reviews/ (5 bản review độc lập)</p>
+  </section>
+</main>
