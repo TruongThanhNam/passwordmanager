@@ -132,6 +132,22 @@ void main() {
     expect(cards.readAsBytesSync(), [2]);
   });
 
+  test('nfr11_default_sweep_removes_tmp_files', () async {
+    // Không truyền `sweepTmp`: chạy đúng hàm dọn mà main() dùng.
+    Directory('$pak${sep}vault').createSync(recursive: true);
+    final tmp = File('$pak${sep}vault${sep}cards.tmp')..writeAsBytesSync([1]);
+    final cards = File('$pak${sep}vault${sep}cards')..writeAsBytesSync([2]);
+
+    final result = await StorageBootstrap(
+      directories: _FakeDirectory(log, path: support),
+      backup: _FakeBackup(log),
+    ).run();
+
+    expect(result, isA<StorageReady>());
+    expect(tmp.existsSync(), isFalse);
+    expect(cards.readAsBytesSync(), [2]);
+  });
+
   test('nfr8_path_failure_is_unavailable_without_io', () async {
     final backup = _FakeBackup(log);
 

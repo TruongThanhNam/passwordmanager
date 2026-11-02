@@ -1,11 +1,14 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:cupertino_ui/cupertino_ui.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pak_manager/core/ports/app_directory_port.dart';
 import 'package:pak_manager/core/ports/backup_port.dart';
 import 'package:pak_manager/main.dart' as app;
+import 'package:pak_manager/platform/platform_api.g.dart';
 import 'package:pak_manager/services/storage_bootstrap.dart';
 
 void main() {
@@ -43,15 +46,35 @@ void main() {
     expect(kept, (true, true, true));
   });
 
-  testWidgets('ad18_real_main_builds_app_and_keeps_handlers', (tester) async {
+  testWidgets('ad18_nfr8_real_main_bootstraps_storage_then_builds_app', (
+    tester,
+  ) async {
     final savedDebugPrint = debugPrint;
     final savedFlutterOnError = FlutterError.onError;
     final savedPlatformOnError = PlatformDispatcher.instance.onError;
-    // Ghi lại mọi lời gọi Pigeon. Dưới `flutter test` path_provider không có
-    // cài đặt cho máy host, nên bootstrap dừng ở `resolvePath` trước khi tạo
-    // `pak/` hay gọi `excludeFromBackup`: không chạm hệ thống file thật.
-    final pigeonCalls = <String>[];
+    final sep = Platform.pathSeparator;
+
+    // ApplicationSupport giả: kênh path_provider trả về thư mục tạm, để main()
+    // chạy hết bootstrap mà không chạm thư mục dữ liệu thật của máy.
+    final sandbox = Directory.systemTemp.createTempSync('pak_main_');
+    addTearDown(() => sandbox.deleteSync(recursive: true));
+    final pak = '${sandbox.path}${sep}pak';
+    Directory('$pak${sep}vault').createSync(recursive: true);
+    final staleTmp = File('$pak${sep}vault${sep}cards.tmp')
+      ..writeAsBytesSync([1]);
+
     final messenger = tester.binding.defaultBinaryMessenger;
+    const pathProvider = MethodChannel('plugins.flutter.io/path_provider');
+    messenger.setMockMethodCallHandler(pathProvider, (call) async {
+      if (call.method == 'getApplicationSupportDirectory') {
+        return sandbox.path;
+      }
+      throw MissingPluginException(call.method);
+    });
+    addTearDown(() => messenger.setMockMethodCallHandler(pathProvider, null));
+
+    // Ghi lại mọi lời gọi Pigeon kèm tham số; trả lời thành công (`[null]`).
+    final pigeonCalls = <(String, Object?)>[];
     const prefix = 'dev.flutter.pigeon.pak_manager.PlatformApi.';
     const methods = [
       'bootId',
@@ -60,28 +83,31 @@ void main() {
       'fsyncDirectory',
     ];
     for (final method in methods) {
-      messenger.setMockMessageHandler('$prefix$method', (message) async {
-        pigeonCalls.add(method);
-        return null;
+      final channel = BasicMessageChannel<Object?>(
+        '$prefix$method',
+        PlatformApi.pigeonChannelCodec,
+      );
+      messenger.setMockDecodedMessageHandler<Object?>(channel, (message) async {
+        pigeonCalls.add((method, message));
+        return [null];
       });
+      addTearDown(
+        () => messenger.setMockDecodedMessageHandler<Object?>(channel, null),
+      );
     }
-    addTearDown(() {
-      for (final method in methods) {
-        messenger.setMockMessageHandler('$prefix$method', null);
-      }
-    });
 
     app.main();
-    // Bootstrap chờ kênh plugin bằng async thật, nên chờ ngoài FakeAsync.
-    await tester.runAsync(() async {
-      for (var i = 0; i < 50; i++) {
-        await Future<void>.delayed(const Duration(milliseconds: 20));
-        if (find.byType(CupertinoApp).evaluate().isNotEmpty) {
-          break;
-        }
+    // Bootstrap xen kẽ I/O thật (tạo `pak/`, dọn tmp) với phản hồi của kênh
+    // giả trong FakeAsync: chờ async thật rồi pump, lặp tới khi có app.
+    for (var i = 0; i < 100; i++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 20)),
+      );
+      await tester.pump();
+      if (find.byType(CupertinoApp).evaluate().isNotEmpty) {
+        break;
       }
-    });
-    await tester.pump();
+    }
 
     final kept = (
       identical(debugPrint, savedDebugPrint),
@@ -94,7 +120,12 @@ void main() {
 
     expect(find.byType(CupertinoApp), findsOneWidget);
     expect(kept, (true, true, true));
-    expect(pigeonCalls, isEmpty);
+    // main() nối adapter Pigeon thật vào bootstrap: cờ backup được đặt trên
+    // `pak/`, rồi `*.tmp` sót bị dọn bằng sweeper mặc định.
+    expect(pigeonCalls.map((c) => c.$1), ['excludeFromBackup']);
+    expect(pigeonCalls.single.$2, [pak]);
+    expect(Directory(pak).existsSync(), isTrue);
+    expect(staleTmp.existsSync(), isFalse);
   });
 
   testWidgets('nfr8_run_app_waits_for_storage_bootstrap', (tester) async {

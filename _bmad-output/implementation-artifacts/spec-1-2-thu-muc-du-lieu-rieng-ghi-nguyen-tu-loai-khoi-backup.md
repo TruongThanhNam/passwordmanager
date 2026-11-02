@@ -86,6 +86,36 @@ context:
 - Given PR mở, when CI chạy, then job iOS build được với Swift mới (đăng ký trong `FlutterImplicitEngineDelegate`).
 - Given toàn bộ `lib/` và native code, when tìm `Keychain`/`SecItem`/`KeyStore`, then không có kết quả.
 
+### Review Findings
+
+Code review 2026-11-02 (nhánh `feat/1-2-data-dir-atomic-write` so với `main`, 4 lớp: blind, edge, verif-gap, acceptance).
+
+- [x] [Review][Patch] Test `main()` thật không điều khiển `path_provider`: bootstrap dừng ở `resolvePath`, nên bỏ bootstrap hay nối `BackupPort` no-op trong `main()` vẫn xanh; test còn dựa vào việc plugin vắng mặt trên host, nếu có thì tạo `pak/` thật (medium) [pak_manager/test/app_test.dart:46]
+- [x] [Review][Patch] Giá trị mặc định `sweepTmp = sweepTmpFiles` của `StorageBootstrap` không test nào chạy tới; đổi thành no-op vẫn xanh (medium) [pak_manager/lib/services/storage_bootstrap.dart:57]
+- [x] [Review][Patch] Test crash trước rename không kiểm `<path>.tmp` đã bị xóa (low) [pak_manager/test/core/io/atomic_file_writer_test.dart:208]
+- [x] [Review][Patch] Doc của `fsyncDirectory` trong Pigeon (và code sinh ra) vẫn ghi `fsync`, trong khi iOS dùng `F_FULLFSYNC`, chỉ fallback `fsync` (low) [pak_manager/pigeons/platform_api.dart:31]
+- [x] [Review][Patch] Mục deferred của story 1.2 nằm dưới heading "code review of spec-1-1" (low) [_bmad-output/implementation-artifacts/deferred-work.md:42]
+- [x] [Review][Patch] Test `clock_monotonic_ms_returns_host_value`, `clock_boot_id_returns_host_value` không gắn mã yêu cầu theo quy ước (low) [pak_manager/test/platform/pigeon_ports_test.dart]
+- [x] [Review][Defer] Kết quả bootstrap bị bỏ trong `runPakApp`; ngoài comment, không có mục backlog nào theo dõi việc truyền kết quả vào `PakApp`/`SessionGate` [pak_manager/lib/main.dart:29] — deferred: story 1.6 sẽ dùng kết quả; ghi vào deferred-work
+- [x] [Review][Defer] Regex kiểm backup mới trong `check_android_apk.sh` không có kiểm âm trên APK xấu [pak_manager/tool/ci/check_android_apk.sh:54] — deferred: có sẵn từ story 1.1 (harness kiểm âm cho script APK)
+
+Đã sửa cả 6 patch (2026-11-02). Xác minh: `analyze` 0 issue, `check_imports` OK, `flutter test` 77 pass / 1 skip, chạy lại Pigeon khớp code đã sinh. Test `ad18_nfr8_real_main_bootstraps_storage_then_builds_app` giả kênh `plugins.flutter.io/path_provider` trỏ về thư mục tạm, nên `main()` chạy hết bootstrap (`excludeFromBackup(pak)`, dọn `*.tmp`) mà không chạm thư mục dữ liệu thật.
+
+**Rejected:**
+- `low` — Nhánh fail-closed `sweepTmp` không bao giờ chạy vì `sweepTmpFiles` nuốt mọi lỗi: `pak/` vừa tạo xong mà không liệt kê được là gần như không xảy ra; sửa phải đổi ngữ nghĩa sweeper.
+- `low` — `check_imports` chặn plugin bằng denylist; services có thể dùng `MethodChannel`/`path_provider_*` (blind, edge): phải cố ý né mới gặp; sửa cần thêm allowlist cho services.
+- `low` — `storage_bootstrap.dart` (services) import `dart:io`: AD-2 chỉ giới hạn `dart:io` bên trong core; test bằng FS thật vẫn chạy được.
+- `low` — Code Pigeon sinh ra import `package:meta` không khai báo (blind, acceptance): Flutter SDK đã ghim `meta`; chỉ là annotation, không có mã mạng; muốn sửa phải quyết định lại bảng Stack.
+- `false` — Code Map còn nhắc exclude trong `analysis_options.yaml` (blind, acceptance): sửa là sửa spec, bị loại theo quy tắc.
+- `false` — `pigeon_ports_test` thiếu ca reply null (`channel-error`): test reply lỗi đã chứng minh adapter đẩy exception lên; ca null do code Pigeon sinh ra xử lý giống hệt.
+- `false` — Status spec `done` lệch sprint `review` (blind, acceptance): đúng thiết kế; bước review này đồng bộ status.
+- `low` — Luật plugin cho phép `lib/main.dart` import plugin: `main.dart` là composition root; đúng như patch #8 của triage trước.
+- `low` — `List<int>` có giá trị ngoài 0..255 bị cắt khi ghi: codec luôn truyền `Uint8List`; sửa cần thêm guard.
+- `low` — Thư mục cha bị xóa giữa `exists()` và `open()` thì trả `io` thay vì `parentMissing`: race gần như không gặp; sửa cần thêm nhánh.
+- `low` — `fsync` trả `EINTR` trên iOS: rất hiếm với file thường; sửa cần thêm vòng lặp thử lại.
+- `false` — `StorageReady` mà chưa có `vault/`, `tmp/`: theo AD-7 `create()` tạo `vault/`; `tmp/` thuộc story 6.2.
+- `false` — Bước Pigeon CI không quét ngoài `lib android ios`: mọi output trong cấu hình hiện tại đều nằm trong ba thư mục đó.
+
 ## Implementation Notes
 
 - **Package bắc cầu có native code** (từ `path_provider: 2.1.6`, resolve trong `pubspec.lock`):

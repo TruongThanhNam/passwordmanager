@@ -136,8 +136,10 @@ class PlatformApi {
     ;
   }
 
-  /// `open(O_RDONLY)` + `fsync` + `close` trên thư mục [dirPath] để rename
-  /// trong thư mục đó bền qua mất điện.
+  /// fsync thư mục [dirPath] để rename trong thư mục đó bền qua mất điện.
+  /// Android: `open(O_RDONLY)` + `fsync` + `close`. iOS: `fcntl(F_FULLFSYNC)`
+  /// (xả cả cache ổ đĩa), chỉ lùi về `fsync` khi `F_FULLFSYNC` không được hỗ
+  /// trợ.
   Future<void> fsyncDirectory(String dirPath) async {
     final pigeonVar_channelName = 'dev.flutter.pigeon.pak_manager.PlatformApi.fsyncDirectory$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(

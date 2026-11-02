@@ -106,8 +106,10 @@ protocol PlatformApi {
   /// iOS: đặt `isExcludedFromBackup` cho [dirPath]. Android: no-op, manifest
   /// đã loại mọi domain khỏi backup.
   func excludeFromBackup(dirPath: String) throws
-  /// `open(O_RDONLY)` + `fsync` + `close` trên thư mục [dirPath] để rename
-  /// trong thư mục đó bền qua mất điện.
+  /// fsync thư mục [dirPath] để rename trong thư mục đó bền qua mất điện.
+  /// Android: `open(O_RDONLY)` + `fsync` + `close`. iOS: `fcntl(F_FULLFSYNC)`
+  /// (xả cả cache ổ đĩa), chỉ lùi về `fsync` khi `F_FULLFSYNC` không được hỗ
+  /// trợ.
   func fsyncDirectory(dirPath: String) throws
 }
 
@@ -164,8 +166,10 @@ class PlatformApiSetup {
     } else {
       excludeFromBackupChannel.setMessageHandler(nil)
     }
-    /// `open(O_RDONLY)` + `fsync` + `close` trên thư mục [dirPath] để rename
-    /// trong thư mục đó bền qua mất điện.
+    /// fsync thư mục [dirPath] để rename trong thư mục đó bền qua mất điện.
+    /// Android: `open(O_RDONLY)` + `fsync` + `close`. iOS: `fcntl(F_FULLFSYNC)`
+    /// (xả cả cache ổ đĩa), chỉ lùi về `fsync` khi `F_FULLFSYNC` không được hỗ
+    /// trợ.
     let fsyncDirectoryChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.pak_manager.PlatformApi.fsyncDirectory\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
     if let api = api {
       fsyncDirectoryChannel.setMessageHandler { message, reply in

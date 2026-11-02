@@ -134,6 +134,8 @@ void main() {
         expect(result, isA<AtomicWriteFailure>());
         expect((result as AtomicWriteFailure).error, AtomicWriteError.io);
         expect(File(target).readAsBytesSync(), [1, 1, 1]);
+        // Lỗi (không phải crash thật) thì writer dọn luôn file tạm.
+        expect(File(tmpOf(target)).existsSync(), isFalse);
         expect(sync.calls, isEmpty);
       });
 

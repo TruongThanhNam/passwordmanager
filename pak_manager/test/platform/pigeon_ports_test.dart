@@ -73,14 +73,14 @@ void main() {
     );
   });
 
-  test('clock_monotonic_ms_returns_host_value', () async {
+  test('ad08_clock_monotonic_ms_returns_host_value', () async {
     final received = mock('monotonicMs', [123456789012]);
 
     expect(await PigeonPlatformPorts().monotonicMs(), 123456789012);
     expect(received, [null]);
   });
 
-  test('clock_boot_id_returns_host_value', () async {
+  test('ad08_clock_boot_id_returns_host_value', () async {
     final received = mock('bootId', ['3f1c-boot']);
 
     expect(await PigeonPlatformPorts().bootId(), '3f1c-boot');
