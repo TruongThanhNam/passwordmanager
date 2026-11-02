@@ -1,0 +1,25 @@
+name: pak_manager
+description: "PAK Manager — trình quản lý mật khẩu offline cho iOS và Android."
+publish_to: 'none'
+
+# build-name theo semver; build-number do CI ghi đè bằng số lần chạy (AD-19).
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.13.0
+
+# AD-12: mọi dependency phải có trong bảng Stack của ARCHITECTURE-SPINE, ghim
+# chính xác. Chỉ thêm khi story cần dùng tới.
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_ui: 1.1.4
+  cupertino_icons: 2.0.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  # Không dùng Material (AD-1): không đóng gói font Material Icons.
+  uses-material-design: false

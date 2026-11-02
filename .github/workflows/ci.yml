@@ -1,0 +1,102 @@
+# CI cho mọi PR và push lên main (AD-19).
+# Workflow PR chỉ đọc repo và không tham chiếu GitHub Secrets (AD-18).
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  # Chỉ hủy lần chạy cũ của PR; mỗi commit trên main đều phải có CI.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  FLUTTER_VERSION: '3.47.8'
+
+defaults:
+  run:
+    shell: bash
+    working-directory: pak_manager
+
+jobs:
+  android:
+    name: Analyze, test, build Android
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Workflow PR không dùng secret
+        working-directory: .
+        run: |
+          # Bắt mọi dạng truy cập context secret: dấu chấm, ngoặc vuông, toJSON(...).
+          if grep -nE 'secret[s]([^A-Za-z0-9_]|$)|pull_request[_]target' .github/workflows/ci.yml; then
+            echo "ci.yml không được tham chiếu secret hay dùng trigger pull-request-target (AD-18)" >&2
+            exit 1
+          fi
+          echo "OK: ci.yml không tham chiếu secret"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Cài Flutter ${{ env.FLUTTER_VERSION }}
+        run: |
+          git clone --depth 1 --branch "$FLUTTER_VERSION" https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
+          echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
+
+      - name: Flutter version
+        run: |
+          flutter config --no-analytics
+          flutter --version
+
+      - name: Pub get (theo pubspec.lock)
+        run: flutter pub get --enforce-lockfile
+
+      - name: Phân tích tĩnh
+        run: flutter analyze --fatal-infos --fatal-warnings
+
+      - name: Luật import (AD-1, AD-2)
+        run: dart run tool/check_imports.dart
+
+      - name: Unit + widget test
+        run: flutter test
+
+      - name: Build APK release (prod)
+        run: flutter build apk --release --flavor prod --build-number "$GITHUB_RUN_NUMBER"
+
+      - name: Kiểm APK (INTERNET, 16 KB)
+        run: bash tool/ci/check_android_apk.sh build/app/outputs/flutter-apk/app-prod-release.apk
+
+  ios:
+    name: Build iOS (no codesign)
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Cài Flutter ${{ env.FLUTTER_VERSION }}
+        run: |
+          git clone --depth 1 --branch "$FLUTTER_VERSION" https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
+          echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
+
+      - name: Flutter version
+        run: |
+          flutter config --no-analytics
+          flutter --version
+
+      - name: Pub get (theo pubspec.lock)
+        run: flutter pub get --enforce-lockfile
+
+      - name: Build iOS release
+        run: flutter build ios --release --no-codesign --build-number "$GITHUB_RUN_NUMBER"

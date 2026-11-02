@@ -1,0 +1,15 @@
+# Repo public (AD-18): không bao giờ commit khóa ký, chứng chỉ hay biến môi trường.
+**/key.properties
+**/*.keystore
+**/*.jks
+**/*.p12
+**/*.mobileprovision
+**/*.cer
+.env
+.env.*
+
+# Hệ điều hành và IDE
+.DS_Store
+Thumbs.db
+.idea/
+*.iml
