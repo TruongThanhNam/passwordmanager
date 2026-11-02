@@ -128,6 +128,7 @@ Code review 2026-11-02 (nhánh `feat/1-2-data-dir-atomic-write` so với `main`,
 - iOS `excludeFromBackup` đọc lại `isExcludedFromBackupKey` sau khi đặt, ném nếu cờ chưa có.
 - Android manifest dùng `tools:replace` cho `allowBackup`/`fullBackupContent`/`dataExtractionRules` để manifest thư viện không ghi đè.
 - Máy dev không có Android SDK/Xcode: Kotlin, Swift, manifest merge và regex `aapt2` trong `check_android_apk.sh` chỉ được kiểm qua CI.
+- **CI (2026-11-03, theo người dùng xác nhận):** cả job Android (gồm bước Pigeon, kiểm `INTERNET`/backup/16 KB) và job iOS đều xanh ở `5657b59`, đáp ứng AC2–AC4.
 
 ## Spec Change Log
 
