@@ -15,10 +15,12 @@ dependencies:
     sdk: flutter
   cupertino_ui: 1.1.4
   cupertino_icons: 2.0.0
+  path_provider: 2.1.6
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  pigeon: 29.0.11
 
 flutter:
   # Không dùng Material (AD-1): không đóng gói font Material Icons.

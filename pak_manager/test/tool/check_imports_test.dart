@@ -100,6 +100,26 @@ void main() {
       expect(violations[5].reason, contains('Random'));
     });
 
+    test('ad02_only_main_may_import_platform_services_stay_above_core', () {
+      final violations = checkTree('$_fixtures/platform_access');
+      const services = 'lib/services/storage.dart';
+      expect(_locations(violations), [
+        'lib/error_policy.dart:1',
+        'lib/l10n/strings.dart:1',
+        '$services:1',
+        '$services:2',
+        '$services:3',
+        '$services:4',
+      ]);
+      expect(violations[0].reason, contains('lib/main.dart'));
+      expect(violations[1].reason, contains('lib/main.dart'));
+      expect(violations[2].reason, contains('lib/services'));
+      expect(violations[2].reason, contains('lib/platform/'));
+      expect(violations[3].reason, contains('lib/platform/'));
+      expect(violations[4].reason, contains('lib/features/'));
+      expect(violations[5].reason, contains('lib/features/'));
+    });
+
     test('ad02_project_lib_is_clean', () {
       expect(checkTree('.'), isEmpty);
     });

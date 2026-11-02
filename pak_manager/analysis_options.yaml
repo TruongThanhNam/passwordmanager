@@ -15,6 +15,9 @@ analyzer:
     - build/**
     - android/**
     - ios/**
+    # Code Pigeon sinh ra (AD-14) không theo lint strict; tool/check_imports.dart
+    # vẫn quét các file này.
+    - lib/**/*.g.dart
     # File mẫu cố ý vi phạm cho test của tool/check_imports.dart.
     - test/fixtures/**
 

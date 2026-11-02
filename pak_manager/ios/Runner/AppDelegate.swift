@@ -12,5 +12,11 @@ import UIKit
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+    // API Pigeon của app (AD-14), đăng ký theo UIScene qua engine ngầm định.
+    if let messenger = engineBridge.pluginRegistry.registrar(forPlugin: "PlatformApiImpl")?
+      .messenger()
+    {
+      PlatformApiSetup.setUp(binaryMessenger: messenger, api: PlatformApiImpl())
+    }
   }
 }
