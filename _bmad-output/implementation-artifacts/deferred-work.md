@@ -5,6 +5,7 @@
   evidence: Story 1.1 chỉ làm flavor Android theo quyết định của người dùng; iOS cần sửa tay `project.pbxproj` và chỉ kiểm được qua CI macOS. Khi có scheme `prod`/`dev` cho iOS thì cân nhắc `flutter: default-flavor: prod` trong `pubspec.yaml` (hiện không dùng được vì làm `flutter build ios` không cờ bị fail).
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-1-khoi-tao-du-an-flutter-structural-seed-ci.md`
+  status: done (story 1.2, `spec-1-2-thu-muc-du-lieu-rieng-ghi-nguyen-tu-loai-khoi-backup.md`) — composition root là `lib/main.dart`; `check_imports` cấm services import `lib/platform/`/`lib/features/` và mọi file ngoài `lib/platform/` trừ `lib/main.dart` import `lib/platform/`.
   summary: Mở rộng `check_imports` để kiểm phân lớp của `lib/services/` và `lib/platform/` (services không import `lib/platform/` hay `lib/features/`), sau khi chốt composition root được phép nối platform vào port.
   evidence: AD-2 nói platform chỉ được gọi qua `core/ports`, nhưng checker hiện chỉ kiểm `features` và `core`; cần quyết định file nào được import `lib/platform/` (xuất hiện ở story 1.2).
 
@@ -35,4 +36,16 @@
 - Bước chặn secret chỉ quét `ci.yml`; khi story 7.2 thêm workflow release dùng secret trên `main`/tag, cần quét mọi workflow có trigger `pull_request` (và cấm `pull_request_target` ở mọi file).
 - Isolate phụ (`Sodium.runIsolated`, `compute`, `Isolate.run`) không thừa hưởng zone nuốt `print`, `debugPrint` no-op và `PlatformDispatcher.onError` của isolate chính; story 1.4 (KDF trong isolate) phải cài chính sách lỗi release bên trong isolate.
 - Bước CI kiểm code Pigeon sinh ra đã cập nhật (AD-19) được dời từ 1.1 sang story 1.2 cùng `pigeons/platform_api.dart`; story 1.2 phải thêm bước này vào `.github/workflows/ci.yml`.
+  status: done (story 1.2, `spec-1-2-thu-muc-du-lieu-rieng-ghi-nguyen-tu-loai-khoi-backup.md`) — bước "Code Pigeon sinh ra đã cập nhật" trong job `android` của `ci.yml`.
 - Kiểm ELF 16 KB cả `.so` 32-bit (đã ghi ở mục review trong build phía trên); xác nhận bằng lần CI đầu.
+
+## Deferred from: build review of spec-1-2-thu-muc-du-lieu-rieng-ghi-nguyen-tu-loai-khoi-backup (2026-11-02)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-2-thu-muc-du-lieu-rieng-ghi-nguyen-tu-loai-khoi-backup.md`
+  summary: Thêm kiểm tra khi chạy thật (`integration_test` trên simulator/máy) cho API Pigeon native: bốn kênh trả lời được, và sau bootstrap thư mục `pak/` trên iOS có `isExcludedFromBackup == true`.
+  evidence: CI chỉ build Android/iOS nên chỉ chứng minh native biên dịch được. Bỏ `PlatformApiSetup.setUp` hoặc `registrar(forPlugin:)` trả nil thì mọi lần khởi động đều `StorageUnavailable`, mà CI vẫn xanh. Nên làm ở story 1.6, khi `SessionGate` dùng kết quả bootstrap.
+
+## Deferred from: code review of spec-1-2-thu-muc-du-lieu-rieng-ghi-nguyen-tu-loai-khoi-backup (2026-11-02)
+
+- `runPakApp` bỏ kết quả `StorageBootstrap.run()`; story 1.6 phải truyền `StorageBootstrapResult` vào `PakApp`/`SessionGate` và chặn mọi đọc/ghi dữ liệu khi nhận `StorageUnavailable` (quyết định fail-closed của story 1.2). Hiện chỉ có comment trong `lib/main.dart` nhắc việc này.
+- Các regex kiểm `allowBackup`/`dataExtractionRules`/`fullBackupContent` mới trong `check_android_apk.sh` chưa có kiểm âm trên output `aapt2` xấu; nếu định dạng output lệch thì kiểm sai trên APK thật (fail oan hoặc lọt). Làm cùng harness kiểm âm của script APK, mục đã ghi từ story 1.1.

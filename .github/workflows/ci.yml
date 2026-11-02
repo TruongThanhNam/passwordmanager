@@ -61,6 +61,19 @@ jobs:
       - name: Pub get (theo pubspec.lock)
         run: flutter pub get --enforce-lockfile
 
+      - name: Code Pigeon sinh ra đã cập nhật (AD-14, AD-19)
+        run: |
+          dart run pigeon --input pigeons/platform_api.dart
+          # Bắt cả file bị sửa tay, bị xóa (thiếu), chưa commit hay output mới.
+          changes="$(git status --porcelain -- lib android ios)"
+          if [[ -n "$changes" ]]; then
+            echo "$changes"
+            git --no-pager diff -- lib android ios
+            echo "Code Pigeon chưa khớp pigeons/platform_api.dart; chạy lại 'dart run pigeon --input pigeons/platform_api.dart' rồi commit" >&2
+            exit 1
+          fi
+          echo "OK: code Pigeon khớp pigeons/platform_api.dart"
+
       - name: Phân tích tĩnh
         run: flutter analyze --fatal-infos --fatal-warnings
 
@@ -73,7 +86,7 @@ jobs:
       - name: Build APK release (prod)
         run: flutter build apk --release --flavor prod --build-number "$GITHUB_RUN_NUMBER"
 
-      - name: Kiểm APK (INTERNET, 16 KB)
+      - name: Kiểm APK (INTERNET, backup, 16 KB)
         run: bash tool/ci/check_android_apk.sh build/app/outputs/flutter-apk/app-prod-release.apk
 
   ios:

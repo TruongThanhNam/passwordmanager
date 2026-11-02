@@ -1,8 +1,15 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
     <application
         android:label="${appLabel}"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:allowBackup="false"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        tools:replace="android:allowBackup,android:fullBackupContent,android:dataExtractionRules">
+        <!-- AD-11, NFR-8: dữ liệu app không vào Google Backup hay chuyển máy.
+             tools:replace để manifest của thư viện không ghi đè các cờ này. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"

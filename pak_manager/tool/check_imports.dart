@@ -149,6 +149,10 @@ void main(List<String> args) {
 // Luật
 
 const _coreAllowedPackages = {'sodium', 'zxcvbnm'};
+// Nơi duy nhất ngoài lib/platform/ nối adapter platform vào port (AD-2).
+const _compositionRoot = 'lib/main.dart';
+// Plugin chỉ được import trong lib/platform/ (và composition root) (AD-2).
+const _platformOnlyPackages = {'path_provider', 'share_plus', 'file_selector'};
 // features chỉ chứa widget cupertino_ui và provider Riverpod; plugin và crypto
 // đi qua services/core/ports (AD-2).
 const _featureAllowedPackages = {
@@ -240,6 +244,48 @@ String? _checkUri(String path, String uri) {
     if (internal != null && !internal.startsWith('lib/core/')) {
       return 'lib/core không được import $internal ngoài lib/core/ (AD-2)';
     }
+  }
+
+  // services chỉ đi xuống core; platform được nối vào port ở composition root
+  // (AD-2).
+  final internal = target.internal;
+  if (path.startsWith('lib/services/') && internal != null) {
+    if (internal.startsWith('lib/platform/')) {
+      return 'lib/services không được import lib/platform/; gọi platform qua '
+          'core/ports (AD-2)';
+    }
+    if (internal.startsWith('lib/features/')) {
+      return 'lib/services không được import lib/features/ (AD-2)';
+    }
+  }
+
+  // platform chỉ cài port, không đi ngược lên services/features (AD-2).
+  if (path.startsWith('lib/platform/') && internal != null) {
+    if (internal.startsWith('lib/services/')) {
+      return 'lib/platform không được import lib/services/ (AD-2)';
+    }
+    if (internal.startsWith('lib/features/')) {
+      return 'lib/platform không được import lib/features/ (AD-2)';
+    }
+  }
+
+  // Plugin chỉ được dùng trong adapter lib/platform/ (và composition root).
+  final package = target.package;
+  if (package != null &&
+      _platformOnlyPackages.contains(package) &&
+      !path.startsWith('lib/platform/') &&
+      path != _compositionRoot) {
+    return 'chỉ lib/platform/ được import package:$package; đi qua core/ports '
+        '(AD-2)';
+  }
+
+  // Ngoài lib/platform/, chỉ composition root lib/main.dart được import
+  // lib/platform/ (AD-2).
+  if (internal != null &&
+      internal.startsWith('lib/platform/') &&
+      !path.startsWith('lib/platform/') &&
+      path != _compositionRoot) {
+    return 'chỉ $_compositionRoot được import lib/platform/ (AD-2)';
   }
   return null;
 }

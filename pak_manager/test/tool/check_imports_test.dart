@@ -100,6 +100,49 @@ void main() {
       expect(violations[5].reason, contains('Random'));
     });
 
+    test('ad02_only_main_may_import_platform_services_stay_above_core', () {
+      final violations = checkTree('$_fixtures/platform_access');
+      const platform = 'lib/platform/pigeon_ports.dart';
+      const services = 'lib/services/storage.dart';
+      // main.dart được import plugin và lib/platform/; lib/platform/ được
+      // import plugin.
+      expect(_locations(violations), [
+        'lib/error_policy.dart:1',
+        'lib/l10n/strings.dart:1',
+        '$platform:3',
+        '$platform:4',
+        '$services:1',
+        '$services:2',
+        '$services:3',
+        '$services:4',
+        '$services:7',
+      ]);
+      expect(violations[0].reason, contains('lib/main.dart'));
+      expect(violations[1].reason, contains('lib/main.dart'));
+      expect(violations[2].reason, contains('lib/platform không được'));
+      expect(violations[2].reason, contains('lib/services/'));
+      expect(violations[3].reason, contains('lib/platform không được'));
+      expect(violations[3].reason, contains('lib/features/'));
+      expect(violations[4].reason, contains('lib/services'));
+      expect(violations[4].reason, contains('lib/platform/'));
+      expect(violations[5].reason, contains('lib/platform/'));
+      expect(violations[6].reason, contains('lib/features/'));
+      expect(violations[7].reason, contains('lib/features/'));
+      expect(violations[8].reason, contains('package:path_provider'));
+    });
+
+    test('ad02_plugin_packages_only_in_platform_or_main', () {
+      for (final package in ['path_provider', 'share_plus', 'file_selector']) {
+        final source = "import 'package:$package/$package.dart';";
+        expect(
+          checkSource('lib/services/a.dart', source).single.reason,
+          contains('package:$package'),
+        );
+        expect(checkSource('lib/platform/a.dart', source), isEmpty);
+        expect(checkSource('lib/main.dart', source), isEmpty);
+      }
+    });
+
     test('ad02_project_lib_is_clean', () {
       expect(checkTree('.'), isEmpty);
     });

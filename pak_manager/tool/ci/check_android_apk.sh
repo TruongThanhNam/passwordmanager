@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Kiểm APK release (AD-12, AD-19):
-#   1. Manifest đã merge không có android.permission.INTERNET.
+#   1. Manifest đã merge không có android.permission.INTERNET; có
+#      allowBackup=false, dataExtractionRules và fullBackupContent (AD-11).
 #   2. zipalign: mọi .so không nén được căn 16 KB trong APK.
 #   3. readelf: mọi segment LOAD của lib/*/*.so có Align >= 0x4000 (16 KB).
 #
@@ -46,6 +47,26 @@ if grep -q 'android.permission.INTERNET' "$work/manifest.txt"; then
 else
   echo "OK: manifest không có android.permission.INTERNET"
 fi
+
+echo
+echo "== Loại khỏi backup (AD-11, NFR-8)"
+# aapt2 in thuộc tính dạng `A: http://schemas.android.com/apk/res/android:allowBackup(0x01010280)=false`;
+# boolean đôi khi in dạng `(type 0x12)0x0`.
+if grep -qE ':allowBackup\(0x[0-9a-fA-F]+\)=(false|\(type 0x12\)0x0)([[:space:]]|$)' "$work/manifest.txt"; then
+  echo "OK: android:allowBackup=false"
+else
+  echo "FAIL: manifest không có android:allowBackup=false"
+  grep -n 'allowBackup' "$work/manifest.txt" || true
+  failed=1
+fi
+for attr in dataExtractionRules fullBackupContent; do
+  if grep -qE ":$attr\(0x[0-9a-fA-F]+\)=@" "$work/manifest.txt"; then
+    echo "OK: android:$attr trỏ tới resource"
+  else
+    echo "FAIL: manifest thiếu android:$attr"
+    failed=1
+  fi
+done
 
 echo
 echo "== zipalign 16 KB (AD-19)"
