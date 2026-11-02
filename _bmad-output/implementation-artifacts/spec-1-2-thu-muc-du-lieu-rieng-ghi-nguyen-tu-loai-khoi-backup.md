@@ -1,0 +1,124 @@
+---
+title: 'Story 1.2 — Thư mục dữ liệu riêng, ghi nguyên tử và loại khỏi backup'
+type: 'feature'
+created: '2026-11-02'
+status: 'in-progress'
+route: 'dispatch'
+baseline_commit: '008af749390a675966ea63b2e9c0c190cc109c0a'
+review_loop_iteration: 0
+context:
+  - '{project-root}/_bmad-output/implementation-artifacts/epic-1-context.md'
+---
+
+<frozen-after-approval reason="human-owned intent — do not modify unless human renegotiates">
+
+## Intent
+
+**Problem:** App chưa có chỗ lưu dữ liệu, chưa có cách ghi chịu được tắt đột ngột, chưa loại dữ liệu khỏi iCloud/Google Backup, và chưa có cầu nối native (đồng hồ, backup, fsync thư mục) mà story 1.3, 1.4, 1.9 và Epic 2 cần.
+
+**Approach:** Định nghĩa port trong `core/ports`, cài đặt bằng một API Pigeon và adapter `path_provider` trong `lib/platform/`; viết `AtomicFileWriter` và bộ dọn `*.tmp` trong `core/io`; khởi động thì tạo `pak/`, đặt cờ loại khỏi backup rồi dọn `*.tmp` trước khi chạy UI; khai báo backup rules trên Android; CI kiểm code Pigeon sinh ra và cờ backup của APK.
+
+## Boundaries & Constraints
+
+**Always:** Mọi file app nằm dưới `ApplicationSupport/pak/`. Pigeon: đúng một file `pigeons/platform_api.dart`, `@HostApi` đồng bộ (không `@async`), kênh mặc định, không bật FFI/JNI; chỉ ba nhóm đồng hồ, backup, `fsyncDirectory` (clipboard để Epic 3). `AtomicFileWriter` không bao giờ tạo thư mục; core/services trả kiểu kết quả sealed, không ném exception qua ranh giới lớp. Chỉ thêm `path_provider: 2.1.6` và dev `pigeon: 29.0.11`, ghim chính xác. Native iOS không dùng API "required reason" (`stat`/`fstat`/`creationDate`/`systemUptime`/`mach_absolute_time`…). Test chỉ dùng fake tự viết.
+
+**Never:** Không ghi gì vào Keychain/Keystore. Không làm codec, `SettingsStore`, `LockoutGuard`, `AccountService`, xóa `pak/tmp/` (story 1.3+, 6.2). Không dùng `Stopwatch`/`DateTime.now()` làm nguồn thời gian. Không dùng action bên thứ ba.
+
+## I/O & Edge-Case Matrix
+
+| Scenario | Input / State | Expected Output / Behavior | Error Handling |
+|----------|--------------|---------------------------|----------------|
+| Ghi mới | thư mục có, file chưa có | file đích = bytes mới; không còn `<tên>.tmp`; `fsyncDirectory(thư mục)` được gọi đúng 1 lần, sau rename | — |
+| Ghi đè | file đích có nội dung cũ | file đích = bytes mới | — |
+| Thiếu thư mục | thư mục cha không tồn tại | trả lỗi `parentMissing`; không tạo thư mục, không tạo file | không ném |
+| Dừng trước rename | dừng ở tạo tmp / ghi / fsync file | file đích còn nguyên bytes cũ (hoặc vẫn chưa tồn tại) | trả lỗi `io` |
+| Lỗi `fsyncDirectory` | port ném sau rename | file đích = bytes mới; trả lỗi `io` | — |
+| Dọn tmp | `pak/a.tmp`, `pak/vault/cards.tmp`, `pak/vault/cards` | xóa mọi `*.tmp` mọi cấp; file khác còn nguyên | lỗi xóa một file không dừng các file khác |
+| Khởi động | `pak/` chưa có | tạo `pak/` → `BackupPort.excludeFromBackup(pak)` → dọn `*.tmp`, theo đúng thứ tự, trước `runApp`; trả `StorageReady` | — |
+| Khởi động lỗi | lấy đường dẫn lỗi, tạo `pak/` lỗi, hoặc `excludeFromBackup` lỗi | trả `StorageUnavailable`; không dọn tmp, không I/O dữ liệu; app vẫn `runApp` | không ném |
+
+## Decisions
+
+- **Git/CI:** nhánh `feat/1-2-data-dir-atomic-write`, commit và push lên `origin` như story 1.1; người dùng tự mở PR để CI kiểm native.
+- **Khởi động lỗi = fail-closed:** bất kỳ bước bootstrap nào lỗi (kể cả cờ backup iOS) → `StorageUnavailable`; story 1.6 không được đọc/ghi dữ liệu khi nhận kết quả này. Vault không bao giờ nằm ngoài cờ loại backup.
+- **Độ dài spec:** giữ một spec (~3.800 token) dù vượt mức 1.600.
+
+</frozen-after-approval>
+
+## Code Map
+
+- `pak_manager/lib/main.dart` -- `main()` gọi `runWithErrorPolicy`; thêm bootstrap async trước `runApp` (cùng zone với `ensureInitialized`).
+- `pak_manager/tool/check_imports.dart:150-235` -- luật features/core; thêm luật services/platform. Test ở `test/tool/check_imports_test.dart` + `test/fixtures/check_imports/**`.
+- `pak_manager/analysis_options.yaml` -- thêm exclude `lib/**/*.g.dart` (code Pigeon sinh ra không theo lint strict); `check_imports` vẫn quét file này.
+- `pak_manager/android/app/src/main/AndroidManifest.xml`, `.../kotlin/io/github/truongthanhnam/pakmanager/MainActivity.kt` -- hiện chỉ là template.
+- `pak_manager/ios/Runner/AppDelegate.swift` -- đã có `didInitializeImplicitFlutterEngine`; đăng ký qua `engineBridge.pluginRegistry.registrar(forPlugin:)?.messenger()`.
+- `pak_manager/ios/Runner.xcodeproj/project.pbxproj` -- nhóm cổ điển (không synchronized group); file Swift mới phải thêm tay `PBXBuildFile`, `PBXFileReference`, con của nhóm Runner, Sources phase (mẫu: `SceneDelegate.swift` dòng 14/52/125/286).
+- `pak_manager/tool/ci/check_android_apk.sh` -- đã có dump `manifest.txt`; thêm kiểm backup cạnh kiểm `INTERNET`.
+- `.github/workflows/ci.yml` -- job `android`; thêm bước Pigeon sau `pub get`.
+- `_bmad-output/implementation-artifacts/deferred-work.md` -- 2 mục được giải quyết ở story này (Pigeon CI, composition root).
+- Không có engine iOS trên máy Windows: Swift/Kotlin chỉ kiểm qua CI.
+
+## Tasks & Acceptance
+
+**Execution:**
+- [x] `pak_manager/pubspec.yaml`, `pubspec.lock` -- thêm `path_provider: 2.1.6`, dev `pigeon: 29.0.11`; ghi lại trong Implementation Notes mọi package bắc cầu có native code (vd `jni`).
+- [x] `pak_manager/lib/core/ports/{clock_port,file_sync_port,backup_port,app_directory_port}.dart` -- interface: `Future<int> monotonicMs()`, `Future<String> bootId()`; `Future<void> fsyncDirectory(String path)`; `Future<void> excludeFromBackup(String dirPath)`; `Future<String> applicationSupportPath()`.
+- [x] `pak_manager/lib/core/io/pak_paths.dart` -- `PakPaths(root)`: `pakDir`, `vaultDir`, `guardFile`, `settingsFile`, `tmpDir` theo AD-11/AD-13.
+- [x] `pak_manager/lib/core/io/atomic_file_writer.dart` -- `Future<AtomicWriteResult> write(String path, List<int> bytes)` theo I/O Matrix; tmp = `<path>.tmp`; fsync file bằng `RandomAccessFile.flush()`; nhận `FileSyncPort` và hook tùy chọn `onStep(AtomicWriteStep)` (chỉ cho test) gọi trước mỗi bước.
+- [x] `pak_manager/lib/core/io/tmp_sweeper.dart` -- `Future<int> sweepTmpFiles(String pakDir)`: xóa đệ quy `*.tmp`, không theo symlink, trả số file đã xóa.
+- [x] `pak_manager/lib/services/storage_bootstrap.dart` -- `Future<StorageBootstrapResult> run()`: lấy đường dẫn → tạo `pak/` (bootstrap được phép tạo) → `excludeFromBackup` → `sweepTmpFiles`; kết quả sealed `StorageReady(PakPaths)` / `StorageUnavailable`.
+- [x] `pak_manager/pigeons/platform_api.dart` -- `PlatformApi`: `String bootId()`, `int monotonicMs()`, `void excludeFromBackup(String dirPath)`, `void fsyncDirectory(String dirPath)`; `@ConfigurePigeon` ra `lib/platform/platform_api.g.dart`, Kotlin `.../pakmanager/PlatformApi.g.kt`, Swift `ios/Runner/PlatformApi.g.swift`.
+- [x] `pak_manager/lib/platform/{pigeon_ports,path_provider_directory}.dart` -- adapter cài port bằng code sinh ra và `getApplicationSupportDirectory()` (không import `dart:io`).
+- [x] `pak_manager/android/.../pakmanager/{PlatformApiImpl.kt,MainActivity.kt}` -- `BOOT_COUNT` (thiếu → `""`), `SystemClock.elapsedRealtime()`, backup no-op (manifest lo), `Os.open(O_RDONLY)`+`Os.fsync`+`Os.close`; đăng ký trong `configureFlutterEngine`.
+- [x] `pak_manager/ios/Runner/{PlatformApiImpl.swift,AppDelegate.swift}`, `project.pbxproj` -- `sysctlbyname("kern.bootsessionuuid")` (lỗi → `""`), `mach_continuous_time` × timebase → ms, `URLResourceValues.isExcludedFromBackup = true`, `open`+`fsync`+`close`; đăng ký trong `didInitializeImplicitFlutterEngine`; thêm 2 file Swift vào target Runner.
+- [x] `pak_manager/android/app/src/main/{AndroidManifest.xml,res/xml/data_extraction_rules.xml,res/xml/backup_rules.xml}` -- `allowBackup="false"`, `dataExtractionRules`, `fullBackupContent`; loại mọi domain (`root`, `file`, `database`, `sharedpref`, `external`, `device_*`) với `path="."` cho `cloud-backup`, `device-transfer` và full-backup.
+- [x] `pak_manager/lib/main.dart` -- `ensureInitialized` → `StorageBootstrap.run()` → `runApp` (kết quả chưa có nơi dùng; story 1.6 nối vào `SessionGate`); đây là composition root duy nhất được import `lib/platform/`.
+- [x] `pak_manager/tool/check_imports.dart` + test/fixture -- `lib/services/` không import `lib/platform/`, `lib/features/`; ngoài `lib/platform/` chỉ `lib/main.dart` được import `lib/platform/`.
+- [x] `pak_manager/tool/ci/check_android_apk.sh` -- fail nếu manifest đã merge không có `allowBackup=false` hoặc thiếu `dataExtractionRules`/`fullBackupContent`.
+- [x] `.github/workflows/ci.yml` -- bước: `dart run pigeon --input pigeons/platform_api.dart` rồi `git status --porcelain` trên các file sinh ra phải rỗng.
+- [x] `pak_manager/test/core/io/{atomic_file_writer,tmp_sweeper}_test.dart`, `test/services/storage_bootstrap_test.dart` -- mỗi dòng I/O Matrix; dừng ở từng `AtomicWriteStep` trước rename (hook ném) → file đích nguyên; bootstrap ghi thứ tự gọi qua fake port. Tên test gắn NFR-8/NFR-11/FR-11.
+- [x] `_bmad-output/implementation-artifacts/deferred-work.md` -- đánh dấu xong mục Pigeon CI và mục composition root.
+
+**Acceptance Criteria:**
+- Given repo sau story, when chạy analyze, `check_imports`, `flutter test`, then tất cả pass và chạy lại Pigeon không đổi file nào.
+- Given code Pigeon sinh ra bị sửa tay hoặc thiếu, when CI chạy, then bước kiểm Pigeon fail.
+- Given APK prod release, when chạy `check_android_apk.sh`, then báo OK cho `INTERNET`, backup rules và 16 KB.
+- Given PR mở, when CI chạy, then job iOS build được với Swift mới (đăng ký trong `FlutterImplicitEngineDelegate`).
+- Given toàn bộ `lib/` và native code, when tìm `Keychain`/`SecItem`/`KeyStore`, then không có kết quả.
+
+## Implementation Notes
+
+- **Package bắc cầu có native code** (từ `path_provider: 2.1.6`, resolve trong `pubspec.lock`):
+  - Android: `path_provider_android 2.3.1` (gọi Android API qua JNI, `dartPluginClass`), `jni 1.1.1` (ffiPlugin, build `libdartjni.so` bằng CMake/NDK → `.so` này phải qua kiểm 16 KB), `jni_flutter 1.0.4+1` (plugin Java).
+  - iOS: `path_provider_foundation 2.6.0` (FFI qua `objective_c`), `objective_c 9.5.0` (build hook native assets biên dịch dylib cho iOS); kèm `ffi 2.2.0`, `hooks 2.0.2`, `code_assets 1.2.1`.
+  - Desktop (không ship): `path_provider_linux`, `path_provider_windows`, `xdg_directories`.
+- `AtomicFileWriter` xóa `<path>.tmp` (best-effort) khi lỗi trước rename; crash thật để lại tmp và `sweepTmpFiles` dọn ở lần khởi động sau.
+- `StorageBootstrap` coi đường dẫn `ApplicationSupport` rỗng là lỗi (`resolvePath`), và lỗi bất ngờ của bước dọn tmp cũng là `StorageUnavailable(sweepTmp)` (fail-closed).
+- `main.dart` tách `runPakApp(StorageBootstrap, releaseMode:)` để widget test chạy cùng đường khởi động bằng port giả (không chạm plugin/hệ thống file thật); `main()` chỉ nối adapter thật.
+- iOS `excludeFromBackup` đọc lại `isExcludedFromBackupKey` sau khi đặt, ném nếu cờ chưa có.
+- Android manifest dùng `tools:replace` cho `allowBackup`/`fullBackupContent`/`dataExtractionRules` để manifest thư viện không ghi đè.
+- Máy dev không có Android SDK/Xcode: Kotlin, Swift, manifest merge và regex `aapt2` trong `check_android_apk.sh` chỉ được kiểm qua CI.
+
+## Spec Change Log
+
+## Review Triage Log
+
+## Design Notes
+
+- **Hook `onStep` thay vì lớp FS giả:** test dùng thư mục tạm thật (`Directory.systemTemp.createTempSync`), hook ném `_SimulatedCrash` ở bước N mô phỏng tiến trình chết; writer không được nuốt crash thành "thành công". Lỗi `fsyncDirectory` sau rename vẫn trả `io` để caller biết độ bền chưa chắc.
+- **Android không cần native cho backup:** manifest đủ; `excludeFromBackup` là no-op để port đồng nhất hai nền tảng.
+- **`bootId` rỗng an toàn:** AD-8 coi `bootId` đổi hoặc `monotonicMs` lùi là bắt đầu lại thời gian chờ; trả `""` khi không đọc được chỉ làm mất phát hiện qua `bootId`, còn phát hiện qua monotonic.
+- **iOS required-reason:** `mach_continuous_time` và `sysctlbyname` không nằm trong danh mục (review-versions V-7); privacy manifest thuộc story 7.2.
+
+## Verification
+
+**Commands (trong `pak_manager/`):**
+- `flutter pub get --enforce-lockfile` -- resolve được.
+- `dart run pigeon --input pigeons/platform_api.dart; git status --porcelain` -- không đổi.
+- `flutter analyze --fatal-infos --fatal-warnings` -- 0 issue.
+- `dart run tool/check_imports.dart` -- exit 0.
+- `flutter test` -- mọi test pass.
+- `bash -n tool/ci/check_android_apk.sh` -- cú pháp hợp lệ.
+
+**Manual checks:**
+- CI trên PR: cả job ubuntu (kể cả bước Pigeon, kiểm backup) và macOS xanh.
