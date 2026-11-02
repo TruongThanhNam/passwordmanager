@@ -55,15 +55,16 @@ List<Violation> checkSource(String relPath, String source) {
     }
   }
 
+  bool inDirective(Match match) => directiveSpans.any(
+    (span) => match.start >= span.$1 && match.start < span.$2,
+  );
+
   if (importsDartIo || importsDartMath) {
     for (final match in _apiToken.allMatches(views.codeOnly)) {
-      final token = match.group(1)!;
-      final inDirective = directiveSpans.any(
-        (span) => match.start >= span.$1 && match.start < span.$2,
-      );
-      if (inDirective) {
+      if (inDirective(match)) {
         continue;
       }
+      final token = match.group(1)!;
       final String reason;
       if (token == 'Random') {
         if (!importsDartMath) {
@@ -74,10 +75,26 @@ List<Violation> checkSource(String relPath, String source) {
         if (!importsDartIo) {
           continue;
         }
-        reason = 'cấm $token của dart:io, app không có mạng (AD-12)';
+        reason = token == 'stdout' || token == 'stderr'
+            ? 'cấm $token của dart:io, không ghi log (AD-18)'
+            : 'cấm $token của dart:io, app không có mạng (AD-12)';
       }
       violations.add(Violation(path, _lineOf(lineStarts, match.start), reason));
     }
+  }
+
+  // API mạng của Flutter không cần import dart:io, nên dò ở mọi file (AD-12).
+  for (final match in _flutterNetworkToken.allMatches(views.codeOnly)) {
+    if (inDirective(match)) {
+      continue;
+    }
+    violations.add(
+      Violation(
+        path,
+        _lineOf(lineStarts, match.start),
+        'cấm ${match.group(1)}, app không có mạng (AD-12)',
+      ),
+    );
   }
 
   violations.sort((a, b) => a.line.compareTo(b.line));
@@ -108,7 +125,7 @@ List<Violation> checkTree(String root) {
 int run(List<String> args, {StringSink? out, StringSink? err}) {
   final o = out ?? stdout;
   final e = err ?? stderr;
-  final root = args.isEmpty ? '.' : args.first;
+  final root = args.isEmpty || args.first.isEmpty ? '.' : args.first;
   final base = _trimTrailingSlash(root.replaceAll(r'\', '/'));
   if (!Directory('$base/lib').existsSync()) {
     e.writeln('check_imports: không tìm thấy $base/lib');
@@ -132,6 +149,15 @@ void main(List<String> args) {
 // Luật
 
 const _coreAllowedPackages = {'sodium', 'zxcvbnm'};
+// features chỉ chứa widget cupertino_ui và provider Riverpod; plugin và crypto
+// đi qua services/core/ports (AD-2).
+const _featureAllowedPackages = {
+  'pak_manager',
+  'flutter',
+  'cupertino_ui',
+  'cupertino_icons',
+  'flutter_riverpod',
+};
 const _featureAllowedCore = [
   'lib/core/model/',
   'lib/core/policy/',
@@ -142,9 +168,13 @@ final _apiToken = RegExp(
   r'(?<![\w$])('
   r'HttpClient|HttpServer|WebSocket|Socket|RawSocket|SecureSocket|'
   r'RawSecureSocket|ServerSocket|RawServerSocket|SecureServerSocket|'
-  r'RawSecureServerSocket|RawDatagramSocket|InternetAddress|'
-  r'NetworkInterface|HttpOverrides|Random'
+  r'RawSecureServerSocket|RawDatagramSocket|RawSynchronousSocket|'
+  r'InternetAddress|NetworkInterface|HttpOverrides|stdout|stderr|Random'
   r')(?![\w$])',
+);
+
+final _flutterNetworkToken = RegExp(
+  r'(?<![\w$])(NetworkImage|NetworkAssetBundle|Image\s*\.\s*network)(?![\w$])',
 );
 
 String? _checkUri(String path, String uri) {
@@ -171,6 +201,11 @@ String? _checkUri(String path, String uri) {
   if (path.startsWith('lib/features/')) {
     if (target.dartLibrary == 'io') {
       return 'lib/features không được import dart:io (AD-2)';
+    }
+    final package = target.package;
+    if (package != null && !_featureAllowedPackages.contains(package)) {
+      return 'lib/features không được import package:$package; plugin và '
+          'crypto đi qua services (AD-2)';
     }
     final internal = target.internal;
     if (internal != null) {
@@ -227,17 +262,24 @@ class _Target {
       final slash = rest.indexOf('/');
       final package = slash < 0 ? rest : rest.substring(0, slash);
       final inner = slash < 0 ? '' : rest.substring(slash + 1);
-      return _Target(
-        package: package,
-        internal: package == 'pak_manager' ? _normalize('lib/$inner') : null,
-      );
+      if (package != 'pak_manager') {
+        return _Target(package: package);
+      }
+      return _Target.internal(package: package, _normalize('lib/$inner'));
     }
     if (RegExp(r'^[a-zA-Z][a-zA-Z0-9+.-]*:').hasMatch(uri) ||
         uri.startsWith('/')) {
       return const _Target(unsupported: true);
     }
-    return _Target(internal: _normalize('${_dirname(fromPath)}/$uri'));
+    return _Target.internal(_normalize('${_dirname(fromPath)}/$uri'));
   }
+
+  /// Đích nằm trong package; leo ra ngoài `lib/` (vd `../../../x/lib/...`)
+  /// thì luật phân lớp không áp được, nên coi là không hỗ trợ.
+  factory _Target.internal(String path, {String? package}) =>
+      path.startsWith('lib/')
+      ? _Target(package: package, internal: path)
+      : const _Target(unsupported: true);
 
   /// `io` cho `dart:io`.
   final String? dartLibrary;

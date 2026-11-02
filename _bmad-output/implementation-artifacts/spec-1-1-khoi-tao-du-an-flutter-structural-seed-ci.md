@@ -73,6 +73,43 @@ context:
 - Given `lib/` sạch, when chạy analyze, `check_imports`, `flutter test`, then tất cả pass; thêm `print(` vào `lib/` thì analyze fail.
 - Given PR mở, when CI chạy, then đủ 2 job xanh và không job nào truy cập secret.
 
+### Review Findings
+
+Code review 2026-11-02 (nhánh `feat/1-1-project-seed-ci` so với `main`, 4 reviewer).
+
+- [x] [Review][Patch] `main()` chọn chính sách release vẫn không có test: đổi thành `!kReleaseMode` thì mọi test vẫn xanh (medium) [pak_manager/lib/main.dart:7]
+- [x] [Review][Patch] `// ignore: avoid_print` bỏ qua được lệnh cấm `print(`; thêm `analyzer: cannot-ignore: [avoid_print]` và đổi test đang dùng ignore sang `Zone.current.print` (medium) [pak_manager/analysis_options.yaml:9]
+- [x] [Review][Patch] API mạng của Flutter (`NetworkImage`, `Image.network`, `NetworkAssetBundle`) không cần import `dart:io` nên lọt `check_imports`; iOS không có cổng quyền mạng (medium) [pak_manager/tool/check_imports.dart:52]
+- [x] [Review][Patch] `lib/features` import thẳng package bên thứ ba/plugin (`sodium`, `path_provider`, `share_plus`, `file_selector`) mà không bị chặn, trái AD-2; cần allowlist package cho features (medium) [pak_manager/tool/check_imports.dart:169]
+- [x] [Review][Patch] Thiếu `RawSynchronousSocket` trong danh sách API mạng cấm (low) [pak_manager/tool/check_imports.dart:142]
+- [x] [Review][Patch] `stdout`/`stderr` của `dart:io` ghi log mà không bị chặn (fixture `net_alias.dart` dùng `io.stdout` không bị báo) (low) [pak_manager/tool/check_imports.dart:142]
+- [x] [Review][Patch] URI tương đối leo ra ngoài `lib/` (`../../../pak_manager/lib/core/crypto/...`) né được luật phân lớp; báo "URI không hỗ trợ" (low) [pak_manager/tool/check_imports.dart:239]
+- [x] [Review][Patch] Đối số root rỗng làm checker quét `/lib` của hệ thống và báo OK (low) [pak_manager/tool/check_imports.dart:111]
+- [x] [Review][Patch] Thiếu thư mục con của Structural Seed: `tool/blocklist/`, `tool/fixtures/`, `test/fixtures/export/`, `test/fixtures/vault/`, `lib/features/shared/{icons,theme}/` (low) [pak_manager/]
+- [x] [Review][Patch] `WebSocket`, `SecureSocket` có trong regex nhưng không có test (low) [pak_manager/test/tool/check_imports_test.dart:85]
+- [x] [Review][Patch] Không test nào giữ xử lý raw string kết thúc bằng `\` (mutation tắt raw vẫn xanh) (low) [pak_manager/test/tool/check_imports_test.dart:106]
+- [x] [Review][Patch] `.gitignore` ở gốc repo rỗng; repo public cần chặn keystore/`key.properties`/`.env`/thư mục IDE ở mọi cấp (low) [.gitignore:1]
+- [x] [Review][Defer] Không có kiểm `applicationId` của APK prod và hậu tố `.dev` của flavor dev [pak_manager/android/app/build.gradle.kts:18] — deferred: làm cùng harness kiểm âm của `check_android_apk.sh` (`aapt2 dump badging`)
+- [x] [Review][Defer] Bước chặn secret không có kiểm âm (`secrets.X`, `secrets['X']`, `toJSON(secrets)`) [.github/workflows/ci.yml:40] — deferred: dùng chung harness kiểm âm với script APK
+- [x] [Review][Defer] Bước chặn secret chỉ quét `ci.yml`; workflow PR mới thêm sau không được kiểm [.github/workflows/ci.yml:40] — deferred: story 7.2 thêm workflow release dùng secret hợp lệ, cần phân biệt workflow PR và main/tag
+- [x] [Review][Defer] Isolate phụ (`Sodium.runIsolated`, `compute`) không thừa hưởng zone nuốt `print`, `debugPrint` no-op và `onError` [pak_manager/lib/error_policy.dart:10] — deferred: chưa có isolate nào; xử lý ở story 1.4 khi KDF chạy trong isolate
+- [x] [Review][Defer] Bước CI kiểm code Pigeon sinh ra bị dời sang 1.2 nhưng chỉ ghi trong Design Notes [.github/workflows/ci.yml] — deferred: theo dõi trong deferred-work cho story 1.2
+- [x] [Review][Defer] Kiểm ELF 16 KB cả `.so` 32-bit có thể làm CI đỏ oan [pak_manager/tool/ci/check_android_apk.sh:70] — deferred: đã ghi từ review trong build (#15); lần CI đầu sẽ rõ
+
+Đã sửa cả 12 patch (2026-11-02). Xác minh: `dart format` sạch, `analyze` 0 issue, `check_imports` OK, `flutter test` 36/36. Thử `print` kèm `// ignore: avoid_print` trong `lib/`: analyze fail (`unignorable_ignore`). Mutant `releaseMode: !kReleaseMode`: `ad18_main_keeps_handlers_outside_release_mode` fail. Test khôi phục handler trước khi assert, để mutant không làm test treo.
+
+**Rejected:**
+- `false` — Spec tự mâu thuẫn "`tool/` là Dart thuần" với script bash: sửa là sửa spec, bị loại theo quy tắc.
+- `false` — Sửa `_bmad-output/` trái Code Map: ý của Code Map là `_bmad/` và tài liệu planning; sửa là sửa spec.
+- `maybe-false` (nếu đúng chỉ low) — Context secret viết hoa (`SECRETS.X`) lọt grep: cần xác nhận GitHub có không phân biệt hoa thường tên context; chỉ xảy ra khi cố ý né.
+- `low` — `readelf` lỗi làm script dừng giữa vòng lặp: script vẫn exit khác 0, CI vẫn fail (fail-closed).
+- `false` — Implementation Notes ghi "21/21": sửa là sửa spec; đã xác minh lại 29/29 sau patch.
+- `false` — Status spec `done` lệch sprint `review`: đúng thiết kế workflow (build xong → sprint `review`).
+- `false` — Design Notes `default-flavor` lệch Implementation Notes: sửa là sửa spec.
+- `low` — Thứ tự vi phạm cùng dòng không ổn định: danh sách nhỏ (insertion sort ổn định), sửa cần thêm khóa sắp xếp.
+- `low` — `sort -V` chọn build-tools bản rc: runner chỉ có bản stable; sửa cần thêm nhánh kiểm version.
+- `false` — `cupertino_icons` chưa dùng: Tasks của spec yêu cầu rõ; bỏ là sửa spec.
+
 ## Implementation Notes
 
 - **`default-flavor` không dùng:** 3.47.8 có hỗ trợ (`FlutterManifest.defaultFlavor`), nhưng giá trị này áp cho mọi nền tảng; iOS chưa có scheme `prod` nên `flutter build ios` sẽ fail (`schemeFor` → `reportFlavorNotFoundAndExit`). Vì vậy mọi lệnh Android ghi rõ `--flavor`, iOS build không cờ. Xem lại khi làm flavor iOS (deferred-work).

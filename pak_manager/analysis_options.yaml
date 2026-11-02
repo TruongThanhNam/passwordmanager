@@ -8,6 +8,9 @@ analyzer:
     strict-raw-types: true
   errors:
     avoid_print: error
+  # Không cho `// ignore: avoid_print` gỡ lệnh cấm (AD-18).
+  cannot-ignore:
+    - avoid_print
   exclude:
     - build/**
     - android/**

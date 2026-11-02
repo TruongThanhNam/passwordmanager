@@ -89,13 +89,15 @@ void main() {
         'lib/services/net.dart:6',
         'lib/services/net_alias.dart:4',
         'lib/services/net_alias.dart:5',
+        'lib/services/net_alias.dart:7',
         'lib/services/rng.dart:4',
       ]);
       expect(violations[0].reason, contains('HttpClient'));
       expect(violations[1].reason, contains('Socket'));
       expect(violations[2].reason, contains('ServerSocket'));
       expect(violations[3].reason, contains('RawSocket'));
-      expect(violations[4].reason, contains('Random'));
+      expect(violations[4].reason, contains('stdout'));
+      expect(violations[5].reason, contains('Random'));
     });
 
     test('ad02_project_lib_is_clean', () {
@@ -176,6 +178,76 @@ import 'dart:math';
 const s = 'Random';
 ''';
       expect(checkSource('lib/services/a.dart', source), isEmpty);
+    });
+
+    test('ad12_every_socket_and_log_api_is_reported', () {
+      const source = '''
+import 'dart:io';
+final a = WebSocket.connect('ws://x');
+final b = SecureSocket.connect('x', 1);
+final c = RawSynchronousSocket.connectSync('x', 1);
+void d() => stderr.writeln('x');
+''';
+      final violations = checkSource('lib/services/a.dart', source);
+      expect(_locations(violations), [
+        'lib/services/a.dart:2',
+        'lib/services/a.dart:3',
+        'lib/services/a.dart:4',
+        'lib/services/a.dart:5',
+      ]);
+      expect(violations[0].reason, contains('WebSocket'));
+      expect(violations[1].reason, contains('SecureSocket'));
+      expect(violations[2].reason, contains('RawSynchronousSocket'));
+      expect(violations[3].reason, contains('stderr'));
+    });
+
+    test('ad12_flutter_network_apis_reported_without_dart_io', () {
+      const source = '''
+import 'package:cupertino_ui/cupertino_ui.dart';
+final a = Image.network('https://x');
+const b = NetworkImage('https://x');
+final c = NetworkAssetBundle(Uri());
+''';
+      expect(_locations(checkSource('lib/features/a.dart', source)), [
+        'lib/features/a.dart:2',
+        'lib/features/a.dart:3',
+        'lib/features/a.dart:4',
+      ]);
+    });
+
+    test('ad02_features_cannot_import_plugin_or_crypto_packages', () {
+      const source = '''
+import 'package:cupertino_ui/cupertino_ui.dart';
+import 'package:flutter/widgets.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:sodium/sodium_sumo.dart';
+import 'package:path_provider/path_provider.dart';
+''';
+      final violations = checkSource('lib/features/a.dart', source);
+      expect(_locations(violations), [
+        'lib/features/a.dart:4',
+        'lib/features/a.dart:5',
+      ]);
+      expect(violations[0].reason, contains('package:sodium'));
+      expect(violations[1].reason, contains('package:path_provider'));
+    });
+
+    test('ad02_relative_uri_escaping_lib_is_unsupported', () {
+      final violations = checkSource(
+        'lib/features/a.dart',
+        "import '../../../pak_manager/lib/core/crypto/kdf.dart';",
+      );
+      expect(violations.single.reason, contains('URI không hỗ trợ'));
+    });
+
+    test('raw_string_with_trailing_backslash_does_not_hide_api', () {
+      const source = r'''
+import 'dart:io';
+final c = [r'\', HttpClient()];
+''';
+      expect(_locations(checkSource('lib/services/a.dart', source)), [
+        'lib/services/a.dart:2',
+      ]);
     });
 
     test('violation_format_is_path_line_reason', () {
@@ -278,6 +350,12 @@ final r = math.Random.secure();
         1,
       );
       expect(err.toString(), contains('lib'));
+    });
+
+    test('empty_root_means_current_directory', () {
+      final out = StringBuffer();
+      expect(run([''], out: out, err: StringBuffer()), 0);
+      expect(out.toString(), contains('check_imports: OK'));
     });
   });
 }

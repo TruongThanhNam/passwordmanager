@@ -54,7 +54,7 @@ void main() {
       try {
         runZoned(
           () => runWithErrorPolicy(() {
-            print('print trong body'); // ignore: avoid_print
+            Zone.current.print('print trong body');
             debugPrint('debugPrint trong body');
           }, releaseMode: releaseMode),
           zoneSpecification: ZoneSpecification(
