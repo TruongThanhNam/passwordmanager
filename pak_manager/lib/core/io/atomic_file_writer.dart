@@ -54,6 +54,11 @@ final class AtomicWriteFailure extends AtomicWriteResult {
 /// để nguyên file đích cũ; `*.tmp` sót lại được dọn khi khởi động.
 ///
 /// Không bao giờ tạo thư mục; không ném exception (trả [AtomicWriteResult]).
+///
+/// Không an toàn khi chạy song song trên cùng một đường dẫn: hai lần `write`
+/// đồng thời dùng chung `<path>.tmp` và giẫm lên nhau. Caller phải tuần tự hóa
+/// mọi lần ghi theo từng đường dẫn (hàng đợi của `VaultSession` và
+/// `SettingsStore` làm việc này).
 final class AtomicFileWriter {
   AtomicFileWriter(this._fileSync, {this._onStep});
 

@@ -63,17 +63,12 @@ jobs:
 
       - name: Code Pigeon sinh ra đã cập nhật (AD-14, AD-19)
         run: |
-          generated=(
-            lib/platform/platform_api.g.dart
-            android/app/src/main/kotlin/io/github/truongthanhnam/pakmanager/PlatformApi.g.kt
-            ios/Runner/PlatformApi.g.swift
-          )
           dart run pigeon --input pigeons/platform_api.dart
-          # Bắt cả file bị sửa tay, bị xóa (thiếu) hay chưa commit.
-          changes="$(git status --porcelain -- "${generated[@]}")"
+          # Bắt cả file bị sửa tay, bị xóa (thiếu), chưa commit hay output mới.
+          changes="$(git status --porcelain -- lib android ios)"
           if [[ -n "$changes" ]]; then
             echo "$changes"
-            git --no-pager diff -- "${generated[@]}"
+            git --no-pager diff -- lib android ios
             echo "Code Pigeon chưa khớp pigeons/platform_api.dart; chạy lại 'dart run pigeon --input pigeons/platform_api.dart' rồi commit" >&2
             exit 1
           fi

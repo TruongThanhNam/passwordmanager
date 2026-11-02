@@ -48,15 +48,19 @@ final class PlatformApiImpl: PlatformApi {
     }
   }
 
-  /// `open(O_RDONLY)` + `fsync` + `close` trên thư mục (AD-13).
+  /// `open(O_RDONLY)` + `fcntl(F_FULLFSYNC)` + `close` trên thư mục (AD-13).
+  /// Trên Darwin `fsync` không xả cache của ổ đĩa, nên dùng `F_FULLFSYNC`;
+  /// chỉ khi `F_FULLFSYNC` trả -1 mới lùi về `fsync`. Cả hai lỗi thì ném.
   func fsyncDirectory(dirPath: String) throws {
     let fd = open(dirPath, O_RDONLY)
     guard fd >= 0 else {
       throw PigeonError(code: "io", message: "open errno \(errno)", details: nil)
     }
     defer { close(fd) }
-    guard fsync(fd) == 0 else {
-      throw PigeonError(code: "io", message: "fsync errno \(errno)", details: nil)
+    if fcntl(fd, F_FULLFSYNC) == -1 {
+      guard fsync(fd) == 0 else {
+        throw PigeonError(code: "io", message: "fsync errno \(errno)", details: nil)
+      }
     }
   }
 }

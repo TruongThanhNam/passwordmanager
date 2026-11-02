@@ -43,6 +43,60 @@ void main() {
     expect(kept, (true, true, true));
   });
 
+  testWidgets('ad18_real_main_builds_app_and_keeps_handlers', (tester) async {
+    final savedDebugPrint = debugPrint;
+    final savedFlutterOnError = FlutterError.onError;
+    final savedPlatformOnError = PlatformDispatcher.instance.onError;
+    // Ghi lại mọi lời gọi Pigeon. Dưới `flutter test` path_provider không có
+    // cài đặt cho máy host, nên bootstrap dừng ở `resolvePath` trước khi tạo
+    // `pak/` hay gọi `excludeFromBackup`: không chạm hệ thống file thật.
+    final pigeonCalls = <String>[];
+    final messenger = tester.binding.defaultBinaryMessenger;
+    const prefix = 'dev.flutter.pigeon.pak_manager.PlatformApi.';
+    const methods = [
+      'bootId',
+      'monotonicMs',
+      'excludeFromBackup',
+      'fsyncDirectory',
+    ];
+    for (final method in methods) {
+      messenger.setMockMessageHandler('$prefix$method', (message) async {
+        pigeonCalls.add(method);
+        return null;
+      });
+    }
+    addTearDown(() {
+      for (final method in methods) {
+        messenger.setMockMessageHandler('$prefix$method', null);
+      }
+    });
+
+    app.main();
+    // Bootstrap chờ kênh plugin bằng async thật, nên chờ ngoài FakeAsync.
+    await tester.runAsync(() async {
+      for (var i = 0; i < 50; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        if (find.byType(CupertinoApp).evaluate().isNotEmpty) {
+          break;
+        }
+      }
+    });
+    await tester.pump();
+
+    final kept = (
+      identical(debugPrint, savedDebugPrint),
+      identical(FlutterError.onError, savedFlutterOnError),
+      identical(PlatformDispatcher.instance.onError, savedPlatformOnError),
+    );
+    debugPrint = savedDebugPrint;
+    FlutterError.onError = savedFlutterOnError;
+    PlatformDispatcher.instance.onError = savedPlatformOnError;
+
+    expect(find.byType(CupertinoApp), findsOneWidget);
+    expect(kept, (true, true, true));
+    expect(pigeonCalls, isEmpty);
+  });
+
   testWidgets('nfr8_run_app_waits_for_storage_bootstrap', (tester) async {
     final directories = _PendingDirectory();
     final backup = _RecordingBackup();

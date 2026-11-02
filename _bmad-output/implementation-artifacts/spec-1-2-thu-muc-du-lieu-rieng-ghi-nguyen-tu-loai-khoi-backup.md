@@ -2,7 +2,7 @@
 title: 'Story 1.2 — Thư mục dữ liệu riêng, ghi nguyên tử và loại khỏi backup'
 type: 'feature'
 created: '2026-11-02'
-status: 'in-progress'
+status: 'done'
 route: 'dispatch'
 baseline_commit: '008af749390a675966ea63b2e9c0c190cc109c0a'
 review_loop_iteration: 0
@@ -102,6 +102,30 @@ context:
 ## Spec Change Log
 
 ## Review Triage Log
+
+| # | Nguồn | Phát hiện | Verdict | Bằng chứng | Route |
+|---|-------|-----------|---------|------------|-------|
+| 1 | blind, edge | iOS `fsync` không đẩy cache ổ đĩa; cần `F_FULLFSYNC` | medium | Darwin `fsync` không flush cache thiết bị; `fsyncDirectory` Swift dùng `fsync` thuần. `F_FULLFSYNC` trên fd thư mục flush toàn bộ cache ổ, gồm cả dữ liệu tmp đã `fsync` trước đó (còn một cửa sổ rất hẹp giữa rename và flush) | patch |
+| 2 | blind | `io` không phân biệt "chưa đổi" với "đã rename nhưng chưa fsync thư mục" | low | Có thật nhưng chỉ khi `fsync` thư mục lỗi sau rename thành công (gần như chỉ EIO); chưa có caller; sửa cần thêm giá trị enum và đổi dòng Matrix đã đóng băng | reject |
+| 3 | blind, edge | Hai `write()` đồng thời cùng path dùng chung `<path>.tmp` | low | Có thật nếu caller gọi song song; kiến trúc quy định `VaultSession`/`SettingsStore` ghi qua hàng đợi tuần tự, nhưng writer không ghi điều kiện này | patch (ghi rõ điều kiện trong doc) |
+| 4 | blind, edge | Bootstrap treo vô hạn nên không bao giờ `runApp` | false | Handler Pigeon native đồng bộ; thiếu handler thì Pigeon trả `channel-error` ngay; `path_provider` gọi đồng bộ qua FFI/JNI; không có đường nào chờ mãi | reject |
+| 5 | blind, edge | `registrar(forPlugin:)` trả nil thì bỏ đăng ký mà không báo gì | low | Chỉ trả nil khi key plugin bị trùng; key `PlatformApiImpl` là duy nhất; sửa phải thêm nhánh | reject |
+| 6 | blind | `StorageUnavailable`/`AtomicWriteFailure` bỏ mất nguyên nhân lỗi | low | Cố ý theo AD-18 (không log, lỗi không kèm thông điệp); bước lỗi vẫn được giữ | reject |
+| 7 | blind, edge | `check_imports` không cấm `lib/platform/` import services/features | low | Xác nhận: không có luật cho path `lib/platform/`; mục deferred yêu cầu cả hai chiều | patch |
+| 8 | edge | services/file ngoài platform import thẳng plugin (`path_provider`, `share_plus`, `file_selector`) | low | Xác nhận: services không có allowlist package; plugin lách qua port | patch |
+| 9 | blind, verif-gap | CI chỉ kiểm thuộc tính backup tồn tại, không kiểm nội dung XML | medium | `check_android_apk.sh` chỉ grep `=@`; xóa khối `<device-transfer>` vẫn xanh; Android 12+ chuyển máy chỉ dựa vào khối này | patch |
+| 10 | blind, edge | Bước Pigeon CI kiểm danh sách file viết cứng | low | Output mới thêm ở Epic 3 sẽ không được kiểm; sửa trực tiếp bằng cách kiểm cả thư mục | patch |
+| 11 | blind | AC5 (Keychain/SecItem/KeyStore) không có bước tự động | low | Đã kiểm tay khi build; grep code tự viết không bắt được plugin; thêm bước CI là thêm độ phức tạp | reject |
+| 12 | blind | Exclude `lib/**/*.g.dart` thừa vì file đã có `ignore_for_file: type=lint` | low | Có `type=lint` ở dòng 4; nhưng strict-casts không phải lint, bỏ exclude có thể sinh lỗi | patch (chỉ bỏ nếu analyze vẫn sạch) |
+| 13 | blind, verif-gap | `main()` không còn test nào chạy | medium | Test ad18 chuyển sang `runPakApp` với fake; đổi `main()` sang `releaseMode: true` hay bỏ bootstrap vẫn xanh | patch |
+| 14 | blind, verif-gap | `PigeonPlatformPorts` không có test; lỗi native có thể bị nuốt | medium | Không test nào dùng adapter; `excludeFromBackup` thành no-op thì bootstrap vẫn trả `StorageReady` | patch |
+| 15 | blind | Hook `onStep` public, không `@visibleForTesting` | low | `package:meta` không có trong Stack (AD-12); doc đã ghi "chỉ cho test" | reject |
+| 16 | blind | Không đặt data protection class iOS cho file | low | Vault đã mã hóa ở tầng app; ngoài intent; mặc định `CompleteUntilFirstUserAuthentication` | reject |
+| 17 | blind, edge | Test chmod 555 fail khi chạy bằng root | low | Runner GitHub không chạy bằng root; sửa cần thêm điều kiện skip | reject |
+| 18 | blind | Status lệch giữa spec và sprint; hai cách đánh dấu xong trong deferred-work | low | Status: đúng thiết kế, bước trình bày sẽ đồng bộ. Định dạng deferred-work không thống nhất: sửa trực tiếp | patch (chỉ phần định dạng) |
+| 19 | edge | Target có đuôi `.tmp` bị sweeper xóa ở lần khởi động sau | low | Mọi file app có tên cố định (`header`, `cards`…); sửa cần thêm guard | reject |
+| 20 | edge | `applicationSupportPath` trả đường dẫn tương đối | low | `path_provider` luôn trả đường dẫn tuyệt đối; sửa cần thêm guard | reject |
+| 21 | verif-gap | Đăng ký native và phần cài native không được kiểm khi chạy thật | medium | CI chỉ build; repo chưa có `integration_test`/simulator; kết quả bootstrap chưa có consumer tới 1.6 | defer |
 
 ## Design Notes
 
