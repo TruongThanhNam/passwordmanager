@@ -118,6 +118,7 @@ Code review 2026-11-02 (nhánh `feat/1-1-project-seed-ci` so với `main`, 4 rev
 - **Không kiểm cục bộ được:** `check_android_apk.sh` và workflow chỉ chạy được trên CI (máy dev không có Android SDK, đúng AD-19); cục bộ chỉ `bash -n`.
 - **Push trước review:** agent triển khai đã commit (`212d279`, `4f77502`) và push nhánh `feat/1-1-project-seed-ci` ngay sau khi làm xong, trước bước review. Sửa đổi từ review sẽ là commit mới trên cùng nhánh.
 - **Xác minh lại (điều phối):** `pub get --enforce-lockfile`, `analyze` 0 issue, `check_imports` OK, `flutter test` 21/21 pass. AC3 (CI xanh) chờ PR.
+- **AC3 đạt (2026-11-02):** người dùng xác nhận CI trên PR của `feat/1-1-project-seed-ci` (HEAD `ab7ba33`) xanh cả job Android (analyze, `check_imports`, test, build APK prod, kiểm `INTERNET` và 16 KB) lẫn job iOS (`--no-codesign`). Mục defer về `.so` 32-bit vì thế đã được xác nhận là không xảy ra.
 
 ## Spec Change Log
 
