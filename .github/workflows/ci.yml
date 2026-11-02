@@ -12,7 +12,8 @@ permissions:
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # Chỉ hủy lần chạy cũ của PR; mỗi commit trên main đều phải có CI.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   FLUTTER_VERSION: '3.47.8'
@@ -35,7 +36,8 @@ jobs:
       - name: Workflow PR không dùng secret
         working-directory: .
         run: |
-          if grep -nE 'secrets[.]|pull_request[_]target' .github/workflows/ci.yml; then
+          # Bắt mọi dạng truy cập context secret: dấu chấm, ngoặc vuông, toJSON(...).
+          if grep -nE 'secret[s]([^A-Za-z0-9_]|$)|pull_request[_]target' .github/workflows/ci.yml; then
             echo "ci.yml không được tham chiếu secret hay dùng trigger pull-request-target (AD-18)" >&2
             exit 1
           fi

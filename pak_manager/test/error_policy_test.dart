@@ -42,4 +42,56 @@ void main() {
       PlatformDispatcher.instance.onError = savedPlatformOnError;
     }
   });
+
+  group('runWithErrorPolicy', () {
+    // Chạy body qua runWithErrorPolicy trong một zone bắt mọi print; khôi
+    // phục handler sau đó. Trả về (dòng đã in, handler có bị thay không).
+    (List<String>, bool, bool, bool) runCapturing({required bool releaseMode}) {
+      final savedDebugPrint = debugPrint;
+      final savedFlutterOnError = FlutterError.onError;
+      final savedPlatformOnError = PlatformDispatcher.instance.onError;
+      final printed = <String>[];
+      try {
+        runZoned(
+          () => runWithErrorPolicy(() {
+            print('print trong body'); // ignore: avoid_print
+            debugPrint('debugPrint trong body');
+          }, releaseMode: releaseMode),
+          zoneSpecification: ZoneSpecification(
+            print: (self, parent, zone, line) => printed.add(line),
+          ),
+        );
+        return (
+          printed,
+          !identical(debugPrint, savedDebugPrint),
+          !identical(FlutterError.onError, savedFlutterOnError),
+          !identical(PlatformDispatcher.instance.onError, savedPlatformOnError),
+        );
+      } finally {
+        debugPrint = savedDebugPrint;
+        FlutterError.onError = savedFlutterOnError;
+        PlatformDispatcher.instance.onError = savedPlatformOnError;
+      }
+    }
+
+    test('ad18_release_mode_silences_print_and_replaces_handlers', () {
+      final (printed, debugPrintChanged, flutterChanged, platformChanged) =
+          runCapturing(releaseMode: true);
+
+      expect(printed, isEmpty);
+      expect(debugPrintChanged, isTrue);
+      expect(flutterChanged, isTrue);
+      expect(platformChanged, isTrue);
+    });
+
+    test('ad18_debug_mode_passes_print_through_and_keeps_handlers', () {
+      final (printed, debugPrintChanged, flutterChanged, platformChanged) =
+          runCapturing(releaseMode: false);
+
+      expect(printed, contains('print trong body'));
+      expect(debugPrintChanged, isFalse);
+      expect(flutterChanged, isFalse);
+      expect(platformChanged, isFalse);
+    });
+  });
 }

@@ -185,6 +185,71 @@ const s = 'Random';
       ).single;
       expect(v.toString(), matches(RegExp(r'^lib/a\.dart:1: .+')));
     });
+
+    test('directive_without_space_before_uri_is_checked', () {
+      const io = '''
+import'dart:io';
+final c = HttpClient();
+''';
+      final ioViolations = checkSource('lib/services/a.dart', io);
+      expect(_locations(ioViolations), ['lib/services/a.dart:2']);
+      expect(ioViolations.single.reason, contains('HttpClient'));
+
+      final http = checkSource(
+        'lib/services/a.dart',
+        "import'package:http/http.dart';",
+      );
+      expect(http.single.reason, contains('package:http'));
+    });
+
+    test('ad12_ad16_export_of_dart_io_or_math_is_reported', () {
+      final io = checkSource(
+        'lib/services/a.dart',
+        "export 'dart:io' show HttpClient;",
+      );
+      expect(io.single.reason, contains('export dart:io'));
+
+      final math = checkSource('lib/core/a.dart', "export 'dart:math';");
+      expect(math.single.reason, contains('export dart:math'));
+    });
+
+    test('ad12_other_dart_io_network_apis_are_reported', () {
+      const source = '''
+import 'dart:io';
+final a = InternetAddress.loopbackIPv4;
+''';
+      final violations = checkSource('lib/services/a.dart', source);
+      expect(_locations(violations), ['lib/services/a.dart:2']);
+      expect(violations.single.reason, contains('InternetAddress'));
+    });
+
+    test('unsupported_uri_scheme_is_reported', () {
+      final violations = checkSource(
+        'lib/features/a.dart',
+        "import 'file:///x/lib/core/crypto/kdf.dart';",
+      );
+      expect(violations.single.reason, contains('URI không hỗ trợ'));
+    });
+
+    test('ad16_prefixed_random_is_reported', () {
+      const source = '''
+import 'dart:math' as math;
+final r = math.Random.secure();
+''';
+      final violations = checkSource('lib/services/a.dart', source);
+      expect(_locations(violations), ['lib/services/a.dart:2']);
+      expect(violations.single.reason, contains('Random'));
+    });
+
+    test('ad02_features_cannot_import_core_guard_or_generator', () {
+      for (final dir in ['guard', 'generator']) {
+        final violations = checkSource(
+          'lib/features/auth/a.dart',
+          "import '../../core/$dir/x.dart';",
+        );
+        expect(violations.single.reason, contains('lib/core/$dir/x.dart'));
+      }
+    });
   });
 
   group('run', () {

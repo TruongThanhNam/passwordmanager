@@ -4,10 +4,7 @@ import 'package:flutter/foundation.dart' show kReleaseMode;
 import 'error_policy.dart';
 
 void main() {
-  if (kReleaseMode) {
-    installReleaseErrorPolicy();
-  }
-  runApp(const PakApp());
+  runWithErrorPolicy(() => runApp(const PakApp()), releaseMode: kReleaseMode);
 }
 
 /// Gốc ứng dụng. Story 1.1 chỉ dựng khung rỗng; `SessionGate`, theme và

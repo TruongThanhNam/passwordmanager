@@ -37,6 +37,12 @@ List<Violation> checkSource(String relPath, String source) {
     directiveSpans.add((directive.start, directive.end));
     final line = _lineOf(lineStarts, directive.start);
     for (final uri in directive.uris) {
+      // Re-export sẽ cho file khác dùng HttpClient/Random mà không import
+      // trực tiếp dart:io/dart:math, nên cấm ở mọi nơi trong lib/.
+      if (directive.isExport && (uri == 'dart:io' || uri == 'dart:math')) {
+        violations.add(Violation(path, line, 'cấm export $uri (AD-12, AD-16)'));
+        continue;
+      }
       if (uri == 'dart:io') {
         importsDartIo = true;
       } else if (uri == 'dart:math') {
@@ -136,7 +142,8 @@ final _apiToken = RegExp(
   r'(?<![\w$])('
   r'HttpClient|HttpServer|WebSocket|Socket|RawSocket|SecureSocket|'
   r'RawSecureSocket|ServerSocket|RawServerSocket|SecureServerSocket|'
-  r'RawSecureServerSocket|RawDatagramSocket|Random'
+  r'RawSecureServerSocket|RawDatagramSocket|InternetAddress|'
+  r'NetworkInterface|HttpOverrides|Random'
   r')(?![\w$])',
 );
 
@@ -249,11 +256,12 @@ class _Target {
 // Phân tích nguồn
 
 class _Directive {
-  _Directive(this.start, this.end, this.uris);
+  _Directive(this.start, this.end, this.uris, {required this.isExport});
 
   final int start;
   final int end;
   final List<String> uris;
+  final bool isExport;
 }
 
 /// Hai bản sao cùng độ dài với nguồn: [noComments] đã xóa comment;
@@ -369,9 +377,7 @@ _Views _lex(String src) {
   return _Views(noComments.toString(), codeOnly.toString());
 }
 
-final _directiveKeyword = RegExp(
-  r'''(?<![\w$.])(?:import|export)\s+(?=['"])''',
-);
+final _directiveKeyword = RegExp(r'''(?<![\w$.])(import|export)\s*(?=['"])''');
 
 Iterable<_Directive> _directives(_Views views) sync* {
   final text = views.noComments;
@@ -391,7 +397,12 @@ Iterable<_Directive> _directives(_Views views) sync* {
         i++;
       }
     }
-    yield _Directive(match.start, i, uris);
+    yield _Directive(
+      match.start,
+      i,
+      uris,
+      isExport: match.group(1) == 'export',
+    );
   }
 }
 
