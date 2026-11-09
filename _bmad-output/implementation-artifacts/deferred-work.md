@@ -35,6 +35,7 @@
 - Kiểm âm cho bước chặn secret của `ci.yml` (`secrets.X`, `secrets['X']`, `toJSON(secrets)`); hiện thu hẹp regex vẫn xanh. Dùng chung harness kiểm âm.
 - Bước chặn secret chỉ quét `ci.yml`; khi story 7.2 thêm workflow release dùng secret trên `main`/tag, cần quét mọi workflow có trigger `pull_request` (và cấm `pull_request_target` ở mọi file).
 - Isolate phụ (`Sodium.runIsolated`, `compute`, `Isolate.run`) không thừa hưởng zone nuốt `print`, `debugPrint` no-op và `PlatformDispatcher.onError` của isolate chính; story 1.4 (KDF trong isolate) phải cài chính sách lỗi release bên trong isolate.
+  status: done (story 1.4, `spec-1-4-ma-hoa-vault-bang-khoa-hai-tang-va-argon2id.md`) — callback KDF của `deriveKek` (`lib/core/crypto/kdf.dart`) chạy trong zone nuốt `print` và `try/catch` mọi lỗi; lỗi báo về bằng khóa rỗng, `deriveKek` trả `null`.
 - Bước CI kiểm code Pigeon sinh ra đã cập nhật (AD-19) được dời từ 1.1 sang story 1.2 cùng `pigeons/platform_api.dart`; story 1.2 phải thêm bước này vào `.github/workflows/ci.yml`.
   status: done (story 1.2, `spec-1-2-thu-muc-du-lieu-rieng-ghi-nguyen-tu-loai-khoi-backup.md`) — bước "Code Pigeon sinh ra đã cập nhật" trong job `android` của `ci.yml`.
 - Kiểm ELF 16 KB cả `.so` 32-bit (đã ghi ở mục review trong build phía trên); xác nhận bằng lần CI đầu.
