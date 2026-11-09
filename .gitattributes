@@ -1,0 +1,2 @@
+# Fixture golden phải giữ nguyên từng byte (không đổi CRLF/LF khi checkout).
+pak_manager/test/fixtures/** -text

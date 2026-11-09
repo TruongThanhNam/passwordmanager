@@ -7,13 +7,16 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pak_manager/core/ports/app_directory_port.dart';
 import 'package:pak_manager/core/ports/backup_port.dart';
+import 'package:pak_manager/core/ports/file_sync_port.dart';
+import 'package:pak_manager/features/shared/pak_app.dart';
 import 'package:pak_manager/main.dart' as app;
 import 'package:pak_manager/platform/platform_api.g.dart';
+import 'package:pak_manager/services/settings_store.dart';
 import 'package:pak_manager/services/storage_bootstrap.dart';
 
 void main() {
   testWidgets('pak_app_builds_cupertino_app', (tester) async {
-    await tester.pumpWidget(const app.PakApp());
+    await tester.pumpWidget(PakApp(settings: SettingsStore.inMemory()));
 
     expect(find.byType(CupertinoApp), findsOneWidget);
     expect(find.byType(CupertinoPageScaffold), findsOneWidget);
@@ -27,7 +30,11 @@ void main() {
 
     // Cùng đường chạy với main() nhưng port giả, để test không chạm plugin
     // hay hệ thống file thật.
-    app.runPakApp(_unavailableStorage(), releaseMode: kReleaseMode);
+    app.runPakApp(
+      _unavailableStorage(),
+      fileSync: _RecordingFileSync(),
+      releaseMode: kReleaseMode,
+    );
     await tester.pump();
 
     // Ghi nhận rồi khôi phục handler trước khi assert: nếu main() lỡ cài chính
@@ -126,14 +133,18 @@ void main() {
     expect(pigeonCalls.single.$2, [pak]);
     expect(Directory(pak).existsSync(), isTrue);
     expect(staleTmp.existsSync(), isFalse);
+    // Chỉ nạp settings (chưa có file): không tạo file `settings`.
+    expect(File('$pak${sep}settings').existsSync(), isFalse);
   });
 
   testWidgets('nfr8_run_app_waits_for_storage_bootstrap', (tester) async {
     final directories = _PendingDirectory();
     final backup = _RecordingBackup();
+    final fileSync = _RecordingFileSync();
 
     app.runPakApp(
       StorageBootstrap(directories: directories, backup: backup),
+      fileSync: fileSync,
       releaseMode: false,
     );
     await tester.pump();
@@ -146,6 +157,8 @@ void main() {
     await tester.pump();
     expect(find.byType(CupertinoApp), findsOneWidget);
     expect(backup.calls, isEmpty);
+    // Lưu trữ lỗi: settings chỉ ở RAM, không đọc/ghi file.
+    expect(fileSync.calls, isEmpty);
   });
 }
 
@@ -169,6 +182,13 @@ class _PendingDirectory implements AppDirectoryPort {
     calls++;
     return completer.future;
   }
+}
+
+class _RecordingFileSync implements FileSyncPort {
+  final calls = <String>[];
+
+  @override
+  Future<void> fsyncDirectory(String path) async => calls.add(path);
 }
 
 class _RecordingBackup implements BackupPort {

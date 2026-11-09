@@ -1,0 +1,7 @@
+{
+  "@@locale": "en",
+  "appName": "PAK Manager",
+  "@appName": {
+    "description": "app.name: large title on S1 and S3; also the window/task title."
+  }
+}

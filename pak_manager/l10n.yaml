@@ -1,0 +1,7 @@
+# Chuỗi giao diện (AD-23): code sinh ra được commit, không bật `generate: true`.
+# CI chạy `flutter gen-l10n` và yêu cầu `lib/l10n` không đổi.
+arb-dir: lib/l10n
+template-arb-file: app_en.arb
+output-dir: lib/l10n
+output-localization-file: app_localizations.dart
+nullable-getter: false
