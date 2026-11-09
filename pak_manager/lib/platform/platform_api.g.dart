@@ -157,4 +157,25 @@ class PlatformApi {
     )
     ;
   }
+
+  /// API level Android (`Build.VERSION.SDK_INT`), để chọn style thanh điều
+  /// hướng theo khả năng của máy. iOS trả `0`.
+  Future<int> androidSdkInt() async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.pak_manager.PlatformApi.androidSdkInt$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: false,
+    )
+    ;
+    return pigeonVar_replyValue! as int;
+  }
 }

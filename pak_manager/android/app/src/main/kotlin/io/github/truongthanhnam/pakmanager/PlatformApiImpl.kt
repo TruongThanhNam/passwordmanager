@@ -1,13 +1,15 @@
 package io.github.truongthanhnam.pakmanager
 
 import android.content.Context
+import android.os.Build
 import android.os.SystemClock
 import android.provider.Settings
 import android.system.Os
 import android.system.OsConstants
 
 /**
- * Cài API Pigeon `PlatformApi` cho Android (AD-14): đồng hồ, backup, fsync thư mục.
+ * Cài API Pigeon `PlatformApi` cho Android (AD-14): đồng hồ, backup, fsync thư mục,
+ * API level.
  * Không lưu bất kỳ dữ liệu hay bí mật nào (FR-11).
  */
 class PlatformApiImpl(context: Context) : PlatformApi {
@@ -39,4 +41,7 @@ class PlatformApiImpl(context: Context) : PlatformApi {
       Os.close(fd)
     }
   }
+
+  /** API level của máy; Dart chọn style thanh điều hướng theo giá trị này. */
+  override fun androidSdkInt(): Long = Build.VERSION.SDK_INT.toLong()
 }

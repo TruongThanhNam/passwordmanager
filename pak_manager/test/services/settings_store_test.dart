@@ -161,6 +161,45 @@ void main() {
       expect(Directory(path).existsSync(), isTrue);
     });
 
+    test('fr47_unreadable_file_uses_defaults', () async {
+      final golden = File('test/fixtures/settings/v1/custom.json')
+          .readAsBytesSync();
+      File(path).writeAsBytesSync(golden);
+      // File thường nhưng đọc lỗi I/O, để chạy qua nhánh bắt lỗi của `load`:
+      // Windows khóa độc quyền (handle khác đọc bị từ chối), POSIX bỏ quyền
+      // đọc.
+      RandomAccessFile? lock;
+      if (Platform.isWindows) {
+        lock = File(path).openSync(mode: FileMode.append)
+          ..lockSync(FileLock.exclusive);
+      } else {
+        Process.runSync('chmod', ['000', path]);
+      }
+      try {
+        try {
+          File(path).readAsBytesSync();
+          markTestSkipped('file vẫn đọc được (chạy bằng root?)');
+          return;
+        } on FileSystemException {
+          // Đúng như mong đợi: file không đọc được.
+        }
+
+        final store = await load(path);
+        addTearDown(store.dispose);
+
+        expect(store.current, Settings.defaults);
+        expect(store.dirty, isFalse);
+        expect(write.writes, isEmpty);
+      } finally {
+        lock
+          ?..unlockSync()
+          ..closeSync();
+        if (!Platform.isWindows) {
+          Process.runSync('chmod', ['600', path]);
+        }
+      }
+    });
+
     test('fr47_missing_parent_uses_defaults', () async {
       final store = await load(
         '${sandbox.path}${Platform.pathSeparator}nope'

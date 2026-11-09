@@ -111,6 +111,9 @@ protocol PlatformApi {
   /// (xả cả cache ổ đĩa), chỉ lùi về `fsync` khi `F_FULLFSYNC` không được hỗ
   /// trợ.
   func fsyncDirectory(dirPath: String) throws
+  /// API level Android (`Build.VERSION.SDK_INT`), để chọn style thanh điều
+  /// hướng theo khả năng của máy. iOS trả `0`.
+  func androidSdkInt() throws -> Int64
 }
 
 /// Generated setup class from Pigeon to handle messages through the `binaryMessenger`.
@@ -184,6 +187,21 @@ class PlatformApiSetup {
       }
     } else {
       fsyncDirectoryChannel.setMessageHandler(nil)
+    }
+    /// API level Android (`Build.VERSION.SDK_INT`), để chọn style thanh điều
+    /// hướng theo khả năng của máy. iOS trả `0`.
+    let androidSdkIntChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.pak_manager.PlatformApi.androidSdkInt\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      androidSdkIntChannel.setMessageHandler { _, reply in
+        do {
+          let result = try api.androidSdkInt()
+          reply(wrapResult(result))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      androidSdkIntChannel.setMessageHandler(nil)
     }
   }
 }

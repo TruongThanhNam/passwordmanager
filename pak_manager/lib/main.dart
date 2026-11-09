@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 
 import 'core/io/atomic_file_writer.dart';
 import 'core/ports/file_sync_port.dart';
+import 'core/ports/system_info_port.dart';
 import 'error_policy.dart';
 import 'features/shared/orientation.dart';
 import 'features/shared/pak_app.dart';
@@ -21,24 +22,29 @@ void main() {
   runPakApp(
     StorageBootstrap(directories: const PathProviderDirectory(), backup: ports),
     fileSync: ports,
+    systemInfo: ports,
     releaseMode: kReleaseMode,
   );
 }
 
 /// Chạy app theo chính sách lỗi (AD-18), cùng zone với `ensureInitialized`.
 ///
-/// Thứ tự: khóa hướng màn hình → khởi động lưu trữ (AD-11) → nạp `settings`
-/// trước frame đầu (AD-13) → `runApp`. Không bước nào ném ra trước `runApp`:
-/// lưu trữ lỗi thì `settings` chỉ ở RAM với giá trị mặc định.
+/// Thứ tự: edge-to-edge → khóa hướng màn hình → khởi động lưu trữ (AD-11) →
+/// nạp `settings` trước frame đầu (AD-13) → đọc API Android → `runApp`. Không
+/// bước nào ném ra trước `runApp`: lưu trữ lỗi thì `settings` chỉ ở RAM với
+/// giá trị mặc định; không đọc được API Android thì dùng `0` (style an toàn
+/// nhất).
 void runPakApp(
   StorageBootstrap storage, {
   required FileSyncPort fileSync,
+  required SystemInfoPort systemInfo,
   required bool releaseMode,
 }) {
   runWithErrorPolicy(() async {
     final binding = WidgetsFlutterBinding.ensureInitialized();
-    // Vẽ sau thanh hệ thống (Android < 15 không tự bật) để thanh trong suốt
-    // lộ nền app thay vì nền cửa sổ. Lỗi bị nuốt, không chặn khởi động.
+    // Vẽ sau thanh hệ thống (Android < 15 không tự bật; chỉ có tác dụng từ
+    // API 29, máy cũ hơn xem `pakSystemUiStyle`) để thanh trong suốt lộ nền
+    // app thay vì nền cửa sổ. Lỗi bị nuốt, không chặn khởi động.
     try {
       unawaited(
         SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge)
@@ -58,6 +64,15 @@ void runPakApp(
       StorageReady(:final paths) => paths.settingsFile,
       StorageUnavailable() => null,
     }, AtomicFileWriter(fileSync));
-    runApp(PakApp(settings: settings));
+    final androidSdkInt = await _readAndroidSdkInt(systemInfo);
+    runApp(PakApp(settings: settings, androidSdkInt: androidSdkInt));
   }, releaseMode: releaseMode);
+}
+
+Future<int> _readAndroidSdkInt(SystemInfoPort systemInfo) async {
+  try {
+    return await systemInfo.androidSdkInt();
+  } on Object {
+    return 0;
+  }
 }

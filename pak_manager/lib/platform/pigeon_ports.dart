@@ -1,10 +1,13 @@
 import '../core/ports/backup_port.dart';
 import '../core/ports/clock_port.dart';
 import '../core/ports/file_sync_port.dart';
+import '../core/ports/system_info_port.dart';
 import 'platform_api.g.dart';
 
-/// Cài [ClockPort], [FileSyncPort], [BackupPort] bằng API Pigeon (AD-14).
-final class PigeonPlatformPorts implements ClockPort, FileSyncPort, BackupPort {
+/// Cài [ClockPort], [FileSyncPort], [BackupPort], [SystemInfoPort] bằng API
+/// Pigeon (AD-14).
+final class PigeonPlatformPorts
+    implements ClockPort, FileSyncPort, BackupPort, SystemInfoPort {
   PigeonPlatformPorts({PlatformApi? api}) : _api = api ?? PlatformApi();
 
   final PlatformApi _api;
@@ -21,4 +24,7 @@ final class PigeonPlatformPorts implements ClockPort, FileSyncPort, BackupPort {
   @override
   Future<void> excludeFromBackup(String dirPath) =>
       _api.excludeFromBackup(dirPath);
+
+  @override
+  Future<int> androidSdkInt() => _api.androidSdkInt();
 }

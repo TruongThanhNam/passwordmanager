@@ -10,6 +10,7 @@ import 'package:pak_manager/core/model/settings.dart';
 import 'package:pak_manager/core/ports/app_directory_port.dart';
 import 'package:pak_manager/core/ports/backup_port.dart';
 import 'package:pak_manager/core/ports/file_sync_port.dart';
+import 'package:pak_manager/core/ports/system_info_port.dart';
 import 'package:pak_manager/features/shared/content_column.dart';
 import 'package:pak_manager/features/shared/pak_app.dart';
 import 'package:pak_manager/main.dart' as app;
@@ -19,7 +20,9 @@ import 'package:pak_manager/services/storage_bootstrap.dart';
 
 void main() {
   testWidgets('pak_app_builds_cupertino_app', (tester) async {
-    await tester.pumpWidget(PakApp(settings: SettingsStore.inMemory()));
+    await tester.pumpWidget(
+      PakApp(settings: SettingsStore.inMemory(), androidSdkInt: 35),
+    );
 
     expect(find.byType(CupertinoApp), findsOneWidget);
     expect(find.byType(CupertinoPageScaffold), findsOneWidget);
@@ -36,6 +39,7 @@ void main() {
     app.runPakApp(
       _unavailableStorage(),
       fileSync: _RecordingFileSync(),
+      systemInfo: _FakeSystemInfo(35),
       releaseMode: kReleaseMode,
     );
     await tester.pump();
@@ -89,23 +93,24 @@ void main() {
     });
     addTearDown(() => messenger.setMockMethodCallHandler(pathProvider, null));
 
-    // Ghi lại mọi lời gọi Pigeon kèm tham số; trả lời thành công (`[null]`).
+    // Ghi lại mọi lời gọi Pigeon kèm tham số; trả lời thành công.
     final pigeonCalls = <(String, Object?)>[];
     const prefix = 'dev.flutter.pigeon.pak_manager.PlatformApi.';
-    const methods = [
-      'bootId',
-      'monotonicMs',
-      'excludeFromBackup',
-      'fsyncDirectory',
-    ];
-    for (final method in methods) {
+    const replies = <String, Object?>{
+      'bootId': '',
+      'monotonicMs': 0,
+      'excludeFromBackup': null,
+      'fsyncDirectory': null,
+      'androidSdkInt': 28,
+    };
+    for (final MapEntry(key: method, value: reply) in replies.entries) {
       final channel = BasicMessageChannel<Object?>(
         '$prefix$method',
         PlatformApi.pigeonChannelCodec,
       );
       messenger.setMockDecodedMessageHandler<Object?>(channel, (message) async {
         pigeonCalls.add((method, message));
-        return [null];
+        return [reply];
       });
       addTearDown(
         () => messenger.setMockDecodedMessageHandler<Object?>(channel, null),
@@ -137,23 +142,29 @@ void main() {
     expect(find.byType(CupertinoApp), findsOneWidget);
     expect(kept, (true, true, true));
     // main() nối adapter Pigeon thật vào bootstrap: cờ backup được đặt trên
-    // `pak/`, rồi `*.tmp` sót bị dọn bằng sweeper mặc định.
-    expect(pigeonCalls.first.$1, 'excludeFromBackup');
+    // `pak/`, rồi `*.tmp` sót bị dọn bằng sweeper mặc định. Khởi động chỉ
+    // gọi Pigeon đúng hai lần: cờ backup, rồi đọc API Android. Nạp
+    // `settings` không ghi nên không có `fsyncDirectory`.
+    expect(pigeonCalls.map((c) => c.$1), [
+      'excludeFromBackup',
+      'androidSdkInt',
+    ]);
     expect(pigeonCalls.first.$2, [pak]);
     expect(Directory(pak).existsSync(), isTrue);
     expect(staleTmp.existsSync(), isFalse);
 
     // main() nạp `settings` từ `pak/` đã bootstrap và áp vào app; chỉ nạp
-    // thì không ghi lại file.
+    // thì không ghi lại file. API Android đi qua cùng PigeonPlatformPorts.
     final inside = tester.element(find.byType(ContentColumn));
     expect(Localizations.localeOf(inside).languageCode, 'vi');
     expect(CupertinoTheme.brightnessOf(inside), Brightness.dark);
-    expect(pigeonCalls.map((c) => c.$1), isNot(contains('fsyncDirectory')));
     expect(settingsFile.readAsBytesSync(), settingsBytes);
+    final pakApp = tester.widget<PakApp>(find.byType(PakApp));
+    expect(pakApp.androidSdkInt, 28);
 
     // Đổi cài đặt rồi cho app ẩn: store ghi ngay qua `fileSync` của main(),
     // tức chính PigeonPlatformPorts (fsync thư mục `pak/`).
-    final store = tester.widget<PakApp>(find.byType(PakApp)).settings;
+    final store = pakApp.settings;
     expect(
       store.update((s) => s.copyWith(appearance: Appearance.light)),
       isTrue,
@@ -178,7 +189,7 @@ void main() {
     expect(store.current.appearance, Appearance.light);
   });
 
-  testWidgets('ad1_run_app_enables_edge_to_edge_without_blocking', (
+  testWidgets('ad01_run_app_enables_edge_to_edge_without_blocking', (
     tester,
   ) async {
     final calls = <MethodCall>[];
@@ -198,6 +209,7 @@ void main() {
     app.runPakApp(
       _unavailableStorage(),
       fileSync: _RecordingFileSync(),
+      systemInfo: _FakeSystemInfo(35),
       releaseMode: false,
     );
     await tester.pump();
@@ -220,16 +232,36 @@ void main() {
     final directories = _PendingDirectory();
     final backup = _RecordingBackup();
     final fileSync = _RecordingFileSync();
+    final orientations = <Object?>[];
+    final messenger = tester.binding.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      if (call.method == 'SystemChrome.setPreferredOrientations') {
+        orientations.add(call.arguments);
+      }
+      return null;
+    });
+    addTearDown(
+      () => messenger.setMockMethodCallHandler(SystemChannels.platform, null),
+    );
+    // Màn hình điện thoại (390 × 844 logic).
+    tester.view.display
+      ..devicePixelRatio = 3
+      ..size = const Size(1170, 2532);
+    addTearDown(tester.view.display.reset);
 
     app.runPakApp(
       StorageBootstrap(directories: directories, backup: backup),
       fileSync: fileSync,
+      systemInfo: _FakeSystemInfo(35),
       releaseMode: false,
     );
     await tester.pump();
-    // Bootstrap chưa xong: chưa runApp.
+    // Bootstrap chưa xong: chưa runApp, nhưng điện thoại đã khóa dọc (AD-1).
     expect(find.byType(CupertinoApp), findsNothing);
     expect(directories.calls, 1);
+    expect(orientations, [
+      ['DeviceOrientation.portraitUp'],
+    ]);
 
     // Khởi động lỗi vẫn runApp (fail-closed ở tầng dữ liệu, không ở UI).
     directories.completer.completeError(StateError('không có thư mục'));
@@ -239,6 +271,41 @@ void main() {
     // Lưu trữ lỗi: settings chỉ ở RAM, không đọc/ghi file.
     expect(fileSync.calls, isEmpty);
   });
+
+  testWidgets('nfr13_run_app_passes_android_sdk_and_falls_back_to_0', (
+    tester,
+  ) async {
+    app.runPakApp(
+      _unavailableStorage(),
+      fileSync: _RecordingFileSync(),
+      systemInfo: _FakeSystemInfo(27),
+      releaseMode: false,
+    );
+    await tester.pump();
+    expect(tester.widget<PakApp>(find.byType(PakApp)).androidSdkInt, 27);
+
+    // Đọc lỗi không chặn khởi động; `0` cho style an toàn nhất.
+    app.runPakApp(
+      _unavailableStorage(),
+      fileSync: _RecordingFileSync(),
+      systemInfo: _FakeSystemInfo(null),
+      releaseMode: false,
+    );
+    await tester.pump();
+    expect(tester.widget<PakApp>(find.byType(PakApp)).androidSdkInt, 0);
+    expect(tester.takeException(), isNull);
+  });
+}
+
+/// API Android giả; `null` thì ném như kênh Pigeon lỗi.
+class _FakeSystemInfo implements SystemInfoPort {
+  _FakeSystemInfo(this.sdkInt);
+
+  final int? sdkInt;
+
+  @override
+  Future<int> androidSdkInt() async =>
+      sdkInt ?? (throw PlatformException(code: 'unavailable'));
 }
 
 StorageBootstrap _unavailableStorage() => StorageBootstrap(

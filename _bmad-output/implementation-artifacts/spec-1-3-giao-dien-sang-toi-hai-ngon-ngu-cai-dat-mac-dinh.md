@@ -158,6 +158,34 @@ context:
 - Given `MediaQuery` có `textScaler` 2.0, when build `PakApp`, then hệ số chữ bên trong app ≤ 1,3.
 - Given màn rộng 1000, when đặt `ContentColumn`, then con rộng 672, nằm giữa theo chiều ngang và sát mép trên; màn rộng 375 thì con rộng hết màn.
 
+### Review Findings
+
+Code review 2026-11-09 (diff `9105be7..3ea75c6`; 4 lớp: blind, edge, verif-gap, acceptance). Tổng kết: 1 decision, 5 patch, 1 defer, 14 rejected.
+
+- [x] [Review][Patch] (Decision đã chốt 2026-11-09: sửa triệt để — thêm `androidSdkInt` vào Pigeon; API ≥ 29 trong suốt, 26–28 đặc màu `surface-base`, 24–25 thanh đen icon trắng) Thanh điều hướng trong suốt làm nút điều hướng khó thấy hoặc không thấy trên Android < 29 — `SystemChrome.setEnabledSystemUIMode(edgeToEdge)` chỉ có tác dụng từ API 29 (`PlatformPlugin.java:360-361` của Flutter 3.47.8), nên ở API 24–28 app không vẽ sau thanh điều hướng. `systemNavigationBarColor` trong suốt lộ `windowBackground` của `NormalTheme` (`Theme.Light`, thực tế luôn sáng vì API < 29 gần như không có chế độ tối của hệ thống). Hệ quả: API 26–28 với `appearance` tối cho icon sáng trên nền sáng; API 24–25 bỏ qua `systemNavigationBarIconBrightness` (cần API 26) nên icon luôn trắng trên nền trắng. Trước diff này thanh điều hướng mặc định là đen nên không bị. Matrix ("thanh hệ thống trong suốt") không tính tới API < 29, vì vậy cần chọn hướng sửa. (medium; blind + edge)
+- [x] [Review][Patch] Khôi phục assert chính xác các lời gọi Pigeon khi khởi động: `pigeonCalls.map(...) == ['excludeFromBackup']` và `pigeonCalls.single.$2 == [pak]`, đặt trước `store.update`; bỏ dòng `isNot(contains('fsyncDirectory'))` vì thừa [pak_manager/test/app_test.dart:141] (medium; acceptance + verif-gap + blind + edge)
+- [x] [Review][Patch] Thêm test cho thấy `runPakApp` khóa hướng dọc **trước** khi bootstrap lưu trữ xong: display cỡ điện thoại, lưu trữ còn treo, `setPreferredOrientations([portraitUp])` đã gửi trong khi chưa có `CupertinoApp` [pak_manager/test/app_test.dart:219] (medium; verif-gap)
+- [x] [Review][Patch] Đổi tiền tố test `ad1_` thành `ad01_` cho khớp quy ước có sẵn (`ad01_`, `ad02_`, `ad08_`…), áp cho 13 test trong `orientation_test`, `pak_app_test`, `app_test`, `ios_plist_test` [pak_manager/test/features/shared/orientation_test.dart:43] (low; acceptance)
+- [x] [Review][Patch] Thêm test cho dòng Matrix "Đọc lỗi — lỗi I/O": file `settings` không đọc được (`chmod 000` trên POSIX, skip trên Windows) thì `load` trả mặc định và không ném; nhánh `on Object` của `_readCapped` hiện chưa test nào chạy tới [pak_manager/lib/services/settings_store.dart:189] (low; acceptance)
+- [x] [Review][Patch] `resolveAppLocale` trả `const Locale('vi')` / `const Locale('en')` thay vì `pakSupportedLocales[1]` / `[0]`, để đổi thứ tự danh sách không đảo ngôn ngữ [pak_manager/lib/features/shared/pak_app.dart:35] (low; blind)
+- [x] [Review][Defer] Máy gập: `display.size` có thể không đổi sau khi gập/mở nên chính sách hướng giữ theo trạng thái cũ [pak_manager/lib/features/shared/orientation.dart:40] — deferred: maybe-false, nếu đúng là medium. Cần xác nhận trên máy gập Android thật (hoặc emulator foldable) rằng `FlutterView.display.size` cập nhật khi gập; làm cùng mục deferred về `display.size` ở story 7.1.
+
+**Rejected:**
+- (acceptance) Thứ tự khởi động có thêm bước `edgeToEdge` nhưng spec chưa cập nhật — sửa là sửa spec đang review; bước này là patch #8 của build review.
+- (acceptance) Decision đóng băng bị sửa mà Spec Change Log trống; `status: done` lệch sprint `review` — sửa là sửa spec; status được đồng bộ ở bước cuối của review này.
+- (blind) Trạng thái spec mâu thuẫn (`done`/`review`/`review_loop_iteration`) — sửa là sửa spec.
+- (blind) Implementation Notes/Verification chưa cập nhật sau patch của build review — sửa là sửa spec.
+- (blind) iOS: vuốt sang app switcher (`inactive`) rồi kill trước 300 ms làm mất thay đổi — low: app `inactive` vẫn chạy nên timer 300 ms vẫn kích; không ai kill app kịp trong 300 ms sau khi đổi cài đặt.
+- (blind) Regex ARB bỏ sót `‼`, `⏰`, mũi tên… — low: khó gặp trong microcopy; chọn dải nào cần phán đoán (`⌃⌄`, `→` có thể là chuỗi hợp lệ), không phải sửa thẳng.
+- (blind) Chưa test nhánh hàm ghi ném lỗi — low: `AtomicFileWriter.write` tự bắt mọi lỗi (`on Object` ở L77/100/114), nên khi chạy thật không tới được nhánh này.
+- (blind) Chưa test file có BOM — low: file nằm trong thư mục riêng của app, chỉ `encode` ghi, mà `encode` không bao giờ thêm BOM.
+- (blind) `load` bắt buộc có `AtomicFileWriter` cả khi chỉ dùng RAM — low: không gây hại cụ thể cho ai; sửa phải đổi API công khai.
+- (blind) `flush()` sau `dispose()` vẫn ghi — low: store sống suốt vòng đời app, không caller nào dispose rồi flush (giống triage build #10).
+- (edge) `update()` sau `dispose()` → assert của `ChangeNotifier` — low: không ai gọi tới được (giống triage build #10); sửa phải thêm guard.
+- (edge) Khẳng định "không bao giờ ném" sai khi `update` sau `dispose` — low: cùng lý do với dòng trên.
+- (blind) Test `main()` chờ bằng vòng lặp thời gian thật — low: thay bằng `store.flush()` thì không còn kiểm được việc `onHide` có flush; giới hạn 2 giây là đủ.
+- (blind) Chưa test theme đổi theo chế độ tối của máy lúc đang chạy — low: `brightness: null` nghĩa là `CupertinoApp` đọc `MediaQuery.platformBrightness` và tự build lại; khó bị hồi quy.
+
 ## Implementation Notes
 
 - **Lệch Decisions (người dùng đã duyệt 2026-11-09, Decision đã sửa):** Flutter 3.47.8 từ chối `flutter gen-l10n` khi pubspec thiếu `flutter: generate: true` (`flutter_tools/lib/src/localizations/gen_l10n.dart` ném `Attempted to generate localizations code without having the flutter: generate flag turned on`), kể cả khi `output-dir` không phải package ảo. Để bước gen-l10n của Verification và CI chạy được, `pubspec.yaml` bật `generate: true`. Phần còn lại của quyết định vẫn giữ: code sinh ra nằm trong `lib/l10n/` và được commit, CI chạy `flutter gen-l10n` trước Pigeon và fail nếu `lib/l10n` đổi. Hệ quả: `flutter run`/`build` cũng sinh lại `lib/l10n` từ ARB (cùng nội dung nếu đã commit đúng).

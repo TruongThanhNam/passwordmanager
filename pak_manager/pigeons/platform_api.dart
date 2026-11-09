@@ -2,8 +2,9 @@
 //   dart run pigeon --input pigeons/platform_api.dart
 // CI chạy lại lệnh trên và fail nếu file sinh ra khác bản đã commit.
 //
-// `@HostApi` đồng bộ, kênh mặc định, không FFI/JNI. Chỉ ba nhóm: đồng hồ,
-// backup, fsync thư mục. Clipboard thêm ở Epic 3.
+// `@HostApi` đồng bộ, kênh mặc định, không FFI/JNI. Các nhóm: đồng hồ,
+// backup, fsync thư mục, API level Android (style thanh hệ thống). Clipboard
+// thêm ở Epic 3.
 import 'package:pigeon/pigeon.dart';
 
 @ConfigurePigeon(
@@ -38,4 +39,8 @@ abstract class PlatformApi {
   /// (xả cả cache ổ đĩa), chỉ lùi về `fsync` khi `F_FULLFSYNC` không được hỗ
   /// trợ.
   void fsyncDirectory(String dirPath);
+
+  /// API level Android (`Build.VERSION.SDK_INT`), để chọn style thanh điều
+  /// hướng theo khả năng của máy. iOS trả `0`.
+  int androidSdkInt();
 }

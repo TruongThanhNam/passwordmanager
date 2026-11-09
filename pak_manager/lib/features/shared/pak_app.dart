@@ -9,6 +9,7 @@ import '../../l10n/app_localizations.dart';
 import '../../services/settings_store.dart';
 import 'content_column.dart';
 import 'orientation.dart';
+import 'theme/pak_colors.dart';
 import 'theme/pak_theme.dart';
 
 /// Ngôn ngữ app hỗ trợ; English đứng đầu là ngôn ngữ dự phòng.
@@ -32,22 +33,48 @@ Locale resolveAppLocale(
       ? null
       : preferred.first;
   return primary?.languageCode == 'vi'
-      ? pakSupportedLocales[1]
-      : pakSupportedLocales[0];
+      ? const Locale('vi')
+      : const Locale('en');
 }
 
-/// Kiểu thanh hệ thống theo độ sáng của theme app: thanh trong suốt, icon
-/// tương phản với nền.
-SystemUiOverlayStyle pakSystemUiStyle(Brightness brightness) {
+/// API Android thấp nhất mà `SystemUiMode.edgeToEdge` có tác dụng: từ đây app
+/// vẽ sau thanh điều hướng nên thanh trong suốt lộ nền app.
+const pakEdgeToEdgeMinSdk = 29;
+
+/// API Android thấp nhất tôn trọng `systemNavigationBarIconBrightness`.
+const pakNavIconBrightnessMinSdk = 26;
+
+/// Kiểu thanh hệ thống theo độ sáng của theme app và API Android của máy.
+///
+/// Thanh trạng thái luôn trong suốt, icon tương phản với nền. Thanh điều
+/// hướng theo [androidSdkInt] (`0` = iOS hoặc không đọc được):
+/// - ≥ [pakEdgeToEdgeMinSdk]: trong suốt, lộ nền app.
+/// - ≥ [pakNavIconBrightnessMinSdk]: app không vẽ sau thanh, nên thanh trong
+///   suốt sẽ lộ nền cửa sổ (`Theme.Light`) thay vì nền app. Vì vậy thanh đặc
+///   màu `surface-base` của theme app.
+/// - thấp hơn: icon luôn trắng nên thanh đặc màu đen. iOS bỏ qua các trường
+///   thanh điều hướng.
+SystemUiOverlayStyle pakSystemUiStyle(
+  Brightness brightness, {
+  required int androidSdkInt,
+}) {
   final dark = brightness == Brightness.dark;
   final icons = dark ? Brightness.light : Brightness.dark;
+  final (navColor, navIcons) = switch (androidSdkInt) {
+    >= pakEdgeToEdgeMinSdk => (const Color(0x00000000), icons),
+    >= pakNavIconBrightnessMinSdk => (
+      dark ? PakColors.surfaceBase.darkColor : PakColors.surfaceBase.color,
+      icons,
+    ),
+    _ => (const Color(0xFF000000), Brightness.light),
+  };
   return SystemUiOverlayStyle(
     statusBarColor: const Color(0x00000000),
-    systemNavigationBarColor: const Color(0x00000000),
+    systemNavigationBarColor: navColor,
     // iOS: độ sáng của nền thanh trạng thái; Android: độ sáng của icon.
     statusBarBrightness: brightness,
     statusBarIconBrightness: icons,
-    systemNavigationBarIconBrightness: icons,
+    systemNavigationBarIconBrightness: navIcons,
     // Android 10+: không phủ lớp mờ lên thanh điều hướng trong suốt.
     systemNavigationBarContrastEnforced: false,
   );
@@ -59,9 +86,17 @@ SystemUiOverlayStyle pakSystemUiStyle(Brightness brightness) {
 /// Đồng thời ghi ngay cài đặt chưa lưu khi app ẩn và áp lại chính sách hướng
 /// màn hình mỗi khi metrics đổi (xoay, gập máy).
 class PakApp extends StatefulWidget {
-  const PakApp({super.key, required this.settings});
+  const PakApp({
+    super.key,
+    required this.settings,
+    required this.androidSdkInt,
+  });
 
   final SettingsStore settings;
+
+  /// API Android của máy (`0` = iOS hoặc không đọc được), xem
+  /// [pakSystemUiStyle].
+  final int androidSdkInt;
 
   @override
   State<PakApp> createState() => _PakAppState();
@@ -129,7 +164,10 @@ class _PakAppState extends State<PakApp> with WidgetsBindingObserver {
           builder: (context, child) => MediaQuery.withClampedTextScaling(
             maxScaleFactor: pakMaxTextScale,
             child: AnnotatedRegion<SystemUiOverlayStyle>(
-              value: pakSystemUiStyle(CupertinoTheme.brightnessOf(context)),
+              value: pakSystemUiStyle(
+                CupertinoTheme.brightnessOf(context),
+                androidSdkInt: widget.androidSdkInt,
+              ),
               child: child ?? const SizedBox.shrink(),
             ),
           ),

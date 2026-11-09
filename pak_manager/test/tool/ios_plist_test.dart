@@ -25,13 +25,13 @@ List<String>? _stringArray(String key) {
 }
 
 void main() {
-  test('ad1_iphone_supports_portrait_only', () {
+  test('ad01_iphone_supports_portrait_only', () {
     expect(_stringArray('UISupportedInterfaceOrientations'), [
       'UIInterfaceOrientationPortrait',
     ]);
   });
 
-  test('ad1_ipad_supports_every_orientation', () {
+  test('ad01_ipad_supports_every_orientation', () {
     expect(_stringArray('UISupportedInterfaceOrientations~ipad')?.toSet(), {
       'UIInterfaceOrientationPortrait',
       'UIInterfaceOrientationPortraitUpsideDown',

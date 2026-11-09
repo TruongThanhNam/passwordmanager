@@ -41,6 +41,7 @@ Future<void> _pumpApp(
   Settings settings = Settings.defaults,
   List<Locale>? deviceLocales,
   Brightness? deviceBrightness,
+  int androidSdkInt = 35,
 }) async {
   if (deviceLocales != null) {
     tester.platformDispatcher.localesTestValue = deviceLocales;
@@ -52,7 +53,9 @@ Future<void> _pumpApp(
   }
   final store = SettingsStore.inMemory(settings);
   addTearDown(store.dispose);
-  await tester.pumpWidget(PakApp(settings: store));
+  await tester.pumpWidget(
+    PakApp(settings: store, androidSdkInt: androidSdkInt),
+  );
 }
 
 SystemUiOverlayStyle _overlay(WidgetTester tester) => tester
@@ -187,6 +190,63 @@ void main() {
       expect(_overlay(tester).statusBarIconBrightness, Brightness.light);
     });
 
+    test('nfr13_nav_bar_is_transparent_from_api_29', () {
+      for (final brightness in Brightness.values) {
+        for (final sdk in [29, 35]) {
+          final style = pakSystemUiStyle(brightness, androidSdkInt: sdk);
+          expect(style.systemNavigationBarColor, const Color(0x00000000));
+          expect(
+            style.systemNavigationBarIconBrightness,
+            brightness == Brightness.dark ? Brightness.light : Brightness.dark,
+          );
+        }
+      }
+    });
+
+    test('nfr13_nav_bar_uses_surface_base_on_api_26_to_28', () {
+      // Edge-to-edge không có tác dụng: thanh trong suốt sẽ lộ nền cửa sổ
+      // sáng, nên thanh đặc màu nền app, icon tương phản.
+      for (final sdk in [26, 28]) {
+        final light = pakSystemUiStyle(Brightness.light, androidSdkInt: sdk);
+        expect(light.systemNavigationBarColor, PakColors.surfaceBase.color);
+        expect(light.systemNavigationBarIconBrightness, Brightness.dark);
+
+        final dark = pakSystemUiStyle(Brightness.dark, androidSdkInt: sdk);
+        expect(dark.systemNavigationBarColor, PakColors.surfaceBase.darkColor);
+        expect(dark.systemNavigationBarIconBrightness, Brightness.light);
+      }
+    });
+
+    test('nfr13_nav_bar_is_black_below_api_26_or_unknown', () {
+      // Icon thanh điều hướng luôn trắng dưới API 26; `0` = không rõ.
+      for (final brightness in Brightness.values) {
+        for (final sdk in [0, 24, 25]) {
+          final style = pakSystemUiStyle(brightness, androidSdkInt: sdk);
+          expect(style.systemNavigationBarColor, const Color(0xFF000000));
+          expect(style.systemNavigationBarIconBrightness, Brightness.light);
+          // Thanh trạng thái không đổi theo API.
+          expect(style.statusBarColor, const Color(0x00000000));
+          expect(
+            style.statusBarIconBrightness,
+            brightness == Brightness.dark ? Brightness.light : Brightness.dark,
+          );
+        }
+      }
+    });
+
+    testWidgets('nfr13_app_applies_nav_bar_style_for_device_api', (
+      tester,
+    ) async {
+      await _pumpApp(
+        tester,
+        deviceBrightness: Brightness.dark,
+        androidSdkInt: 27,
+      );
+      final overlay = _overlay(tester);
+      expect(overlay.systemNavigationBarColor, PakColors.surfaceBase.darkColor);
+      expect(overlay.systemNavigationBarIconBrightness, Brightness.light);
+    });
+
     testWidgets('fr47_store_change_rebuilds_theme_and_locale', (tester) async {
       tester.platformDispatcher.localesTestValue = const [Locale('en')];
       addTearDown(tester.platformDispatcher.clearLocalesTestValue);
@@ -194,7 +254,7 @@ void main() {
       addTearDown(tester.platformDispatcher.clearPlatformBrightnessTestValue);
       final store = SettingsStore.inMemory();
       addTearDown(store.dispose);
-      await tester.pumpWidget(PakApp(settings: store));
+      await tester.pumpWidget(PakApp(settings: store, androidSdkInt: 35));
 
       store.update(
         (s) =>
@@ -208,7 +268,7 @@ void main() {
     });
   });
 
-  testWidgets('ad1_text_scale_is_clamped_to_1_3', (tester) async {
+  testWidgets('ad01_text_scale_is_clamped_to_1_3', (tester) async {
     tester.platformDispatcher.textScaleFactorTestValue = 2.0;
     addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
     await _pumpApp(tester);
@@ -218,7 +278,7 @@ void main() {
     expect(scaler.scale(10), closeTo(13, 1e-9));
   });
 
-  testWidgets('ad1_home_sits_in_content_column', (tester) async {
+  testWidgets('ad01_home_sits_in_content_column', (tester) async {
     await _pumpApp(tester);
 
     expect(find.byType(CupertinoApp), findsOneWidget);
@@ -226,7 +286,7 @@ void main() {
     expect(find.byType(ContentColumn), findsOneWidget);
   });
 
-  testWidgets('ad1_metrics_change_reapplies_orientation_policy', (
+  testWidgets('ad01_metrics_change_reapplies_orientation_policy', (
     tester,
   ) async {
     final calls = <Object?>[];
@@ -270,7 +330,7 @@ void main() {
       ),
     );
     addTearDown(store!.dispose);
-    await tester.pumpWidget(PakApp(settings: store));
+    await tester.pumpWidget(PakApp(settings: store, androidSdkInt: 35));
 
     store.update((s) => s.copyWith(autolockMin: 10));
     await tester.pump();

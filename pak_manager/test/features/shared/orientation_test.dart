@@ -40,7 +40,7 @@ void _setDisplay(WidgetTester tester, Size physical, double ratio) {
 
 void main() {
   group('preferredOrientationsFor', () {
-    test('ad1_phone_is_portrait_only', () {
+    test('ad01_phone_is_portrait_only', () {
       expect(preferredOrientationsFor(const Size(390, 844)), [
         DeviceOrientation.portraitUp,
       ]);
@@ -53,12 +53,12 @@ void main() {
       ]);
     });
 
-    test('ad1_tablet_allows_every_orientation', () {
+    test('ad01_tablet_allows_every_orientation', () {
       expect(preferredOrientationsFor(const Size(600, 960)), _all);
       expect(preferredOrientationsFor(const Size(1366, 1024)), _all);
     });
 
-    test('ad1_empty_size_is_not_locked_yet', () {
+    test('ad01_empty_size_is_not_locked_yet', () {
       expect(preferredOrientationsFor(Size.zero), isNull);
       expect(preferredOrientationsFor(const Size(0, 800)), isNull);
       expect(preferredOrientationsFor(const Size(390, 0)), isNull);
@@ -67,7 +67,7 @@ void main() {
   });
 
   group('applyOrientationPolicy', () {
-    testWidgets('ad1_policy_uses_logical_display_size', (tester) async {
+    testWidgets('ad01_policy_uses_logical_display_size', (tester) async {
       final calls = _recordOrientationCalls(tester);
 
       // 1170×2532 @3x = 390×844: điện thoại.
@@ -89,7 +89,7 @@ void main() {
       ]);
     });
 
-    testWidgets('ad1_policy_follows_display_not_window', (tester) async {
+    testWidgets('ad01_policy_follows_display_not_window', (tester) async {
       final calls = _recordOrientationCalls(tester);
       // Tablet chạy split-screen: cửa sổ hẹp nhưng màn hình vẫn là tablet.
       _setDisplay(tester, const Size(2048, 2732), 2);
@@ -104,7 +104,7 @@ void main() {
       expect(calls.single, hasLength(4));
     });
 
-    testWidgets('ad1_zero_display_size_waits_for_metrics', (tester) async {
+    testWidgets('ad01_zero_display_size_waits_for_metrics', (tester) async {
       final calls = _recordOrientationCalls(tester);
       _setDisplay(tester, Size.zero, 3);
 
@@ -114,7 +114,7 @@ void main() {
       expect(calls, isEmpty);
     });
 
-    testWidgets('ad1_system_chrome_errors_are_swallowed', (tester) async {
+    testWidgets('ad01_system_chrome_errors_are_swallowed', (tester) async {
       final calls = _recordOrientationCalls(tester, fail: true);
       _setDisplay(tester, const Size(1170, 2532), 3);
 
