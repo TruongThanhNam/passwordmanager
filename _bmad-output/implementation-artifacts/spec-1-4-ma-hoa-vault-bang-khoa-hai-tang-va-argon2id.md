@@ -93,6 +93,36 @@ context:
 - Given `deriveKek` thật, when gọi với mật khẩu/salt/params fixture, then ra KEK có kcv khớp header fixture, và callback chạy trên isolate khác isolate gọi.
 - Given `VaultCard`/`RecentEntry`, when `toString()`, then không chứa title, username, password hay note.
 
+### Review Findings
+
+Code review 2026-11-09. Diff: `24abe79..51e55a6`, chế độ full, 4 lớp (blind, edge, verif-gap, acceptance). Đã chạy lại tại `51e55a6`: `flutter analyze` 0 issue; `flutter test` 257 pass, 1 skip; script fixture chạy lại không đổi byte.
+
+- [x] [Review][Patch] `check_android_apk.sh` chỉ kiểm `libsodium.so` cho `arm64-v8a`. APK release là bản fat (`flutter build apk --release`, không có `--split-per-abi`), nên thiếu `libsodium.so` ở `armeabi-v7a`/`x86_64` thì CI vẫn xanh, trong khi máy yếu 32-bit sẽ lỗi ở `SodiumSumoInit`. Sửa: mọi thư mục ABI có `.so` đều phải có `libsodium.so` [pak_manager/tool/ci/check_android_apk.sh:93]
+- [x] [Review][Patch] Đồng hồ mặc định (`Stopwatch`) của `calibrateVaultKdf` chưa test nào chạy: harness luôn truyền `nowMs` giả. Hồi quy kiểu quên `..start()` (mọi máy ra ops 10) hay dùng `elapsedMicroseconds` (mọi máy rơi xuống sàn) vẫn xanh. Sửa: thêm test không truyền `nowMs`, `derive` giả chờ 800 ms, kiểm kết quả là `KdfParams.start` sau đúng 1 lần [pak_manager/lib/core/crypto/kdf_calibration.dart:45]
+- [x] [Review][Patch] `ad05_default_deriver_runs_real_kdf` chỉ kiểm độ dài KEK, nên `kekDeriver` đảo `password`/`salt` hay truyền sai params vẫn pass. Sửa: gọi `kekDeriver` với đầu vào fixture rồi kiểm `kcvMatches` với header fixture [pak_manager/test/core/crypto/kdf_calibration_test.dart:267]
+- [x] [Review][Defer] Chưa có bằng chứng CI xanh cho build native: libsodium cho từng ABI Android, căn 16 KB, build iOS. Lockfile nâng `objective_c` 9.5.0→9.6.3 (iOS của `path_provider`) và `code_assets`/`hooks`/`record_use` lên major mới [pak_manager/pubspec.lock] — deferred: maybe-false, nếu đúng là medium. Kết luận được khi job ubuntu (APK) và job macOS (iOS) của CI trên nhánh này xanh. Commit `51e55a6` chưa push.
+
+**Rejected:**
+- (false) Spec `done` lệch sprint `review` (blind, edge, acceptance): bước 6 của code review đồng bộ trạng thái sau khi review xong. Đây là cổng review, không phải lỗi.
+- (false) Verification ghi trước commit sửa `0956478`, chưa chạy lại (blind, acceptance): review này đã chạy lại analyze, test và fixture tại HEAD, đều xanh.
+- (low) AC2 "derive không được gọi" chỉ chứng minh helper `unlock()` trong test (blind): `HeaderCorrupt` vẫn được kiểm. Chuỗi mở khóa thật thuộc story 1.7 (`AccountService` nằm ở Never).
+- (false) Chưa quyết định mật khẩu chính không ASCII (blind): epic-1 chốt mật khẩu chính chỉ ASCII in được 0x20–0x7E, story 1.5 thi hành.
+- (false) Nguồn và toàn vẹn libsodium không rõ (blind): tarball `libsodium-1.0.22` nằm sẵn trong `sodium-4.1.2/3rdparty/` (kèm khóa ký minisign); lockfile do `pub get` sinh, đúng spec.
+- (low) Thời gian probe gồm cả spawn isolate và lần cấp 64 MiB đầu (blind): vài ms so với ~1000 ms. Sửa phải thêm lần chạy làm nóng.
+- (low) Hiệu chỉnh nhận lần chạy 2 quá nhanh, trần 64 MiB trên máy nhanh (blind): đúng Design Notes bước 2–3; muốn đổi phải sửa spec.
+- (false) Nhánh kiểm độ dài nonce không chạy tới được (blind): không có hậu quả xấu. Đây là guard cho luật không ném.
+- (low) Thiếu test lỗi của `create`/`kcvMatches`/`unwrapDek` với khóa đã dispose (blind): tất cả rơi vào cùng `on Object` đã có test (giống triage #20).
+- (false/low) Luật wipe AD-22 không có test; KEK qua `runIsolated` (blind): KEK về dưới dạng native handle (đã đọc mã nguồn sodium 4.1.2). Wipe buffer không quan sát được từ test.
+- (false) Mục defer "probe lỗi" không có chủ (blind): mục đó đã ghi rõ story 1.6 và máy mốc cần đo.
+- (low) CI build lại libsodium mỗi lần, không cache (blind): chỉ tốn thời gian; thêm cache là thêm cấu hình.
+- (low) `==`/`hashCode` của model dùng password (blind): spec yêu cầu `==`/`hashCode`; không có kẻ đo thời gian trong tiến trình.
+- (low) Guard thư mục của script fixture lỏng (blind): người chạy sai chỗ thì thấy ngay; sửa phải thêm kiểm `name:`.
+- (low) `kcvMatches` với KEK đã dispose trả `false` = sai mật khẩu (edge): chưa có caller nào; tri-state sẽ thêm public surface.
+- (low) `unwrapDek` với KEK đã dispose trả `corrupt` (edge): như trên.
+- (reject) Spec Change Log trống dù chữ ký lệch Tasks (acceptance): sửa là sửa spec; các lệch đã ghi ở Implementation Notes.
+- (low) `nowMs` ném sau `derive` làm lộ KEK chưa dispose (acceptance): chỉ đồng hồ inject (test) mới ném được, `Stopwatch` không ném.
+- (false) `VaultHeader` thiếu `version`/`kdfAlg` (acceptance): v1 là hằng; decode đã từ chối giá trị khác nên không mất thông tin.
+
 ## Implementation Notes
 
 - **Môi trường:** Flutter 3.47.8 clone vào `C:\src\flutter`, `bin` thêm vào PATH user; VS 2022 Build Tools + workload `VCTools` cài qua winget. Build hook của `sodium` build libsodium cho Windows cả trong `flutter test` lẫn `dart run tool/fixtures/gen_vault_v1.dart`.

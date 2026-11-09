@@ -66,3 +66,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-4-ma-hoa-vault-bang-khoa-hai-tang-va-argon2id.md`
   summary: (Chưa xác minh, nếu đúng thì high) Hiệu chỉnh KDF trả `null` khi lần probe (3, 64 MiB) lỗi, không lùi về sàn (2, 19 MiB), nên máy không cấp được 64 MiB sẽ không tạo được tài khoản (story 1.6).
   evidence: Đúng Design Notes bước 4 của story 1.4. Cần chạy `calibrateVaultKdf` trên máy mốc yếu nhất (Android 7, RAM 2 GB; iPhone 6s/SE đời 1) để biết Argon2id 64 MiB có cấp được bộ nhớ không. Nếu không, thêm lần thử ở sàn sau khi probe lỗi.
+
+## Deferred from: code review of spec-1-4-ma-hoa-vault-bang-khoa-hai-tang-va-argon2id (2026-11-09)
+
+- (Chưa xác minh, nếu đúng thì medium) Chưa có bằng chứng CI xanh cho build native của story 1.4: libsodium cho từng ABI Android, căn 16 KB, và build iOS. `pubspec.lock` nâng `objective_c` 9.5.0→9.6.3 (iOS của `path_provider`) và nâng `code_assets`/`hooks`/`record_use` lên major mới. Kết luận được khi job ubuntu (APK) và job macOS (iOS) của CI trên nhánh `feat/1-4-vault-crypto` xanh. Nếu đỏ thì sửa trước khi merge.
