@@ -70,3 +70,4 @@
 ## Deferred from: code review of spec-1-4-ma-hoa-vault-bang-khoa-hai-tang-va-argon2id (2026-11-09)
 
 - (Chưa xác minh, nếu đúng thì medium) Chưa có bằng chứng CI xanh cho build native của story 1.4: libsodium cho từng ABI Android, căn 16 KB, và build iOS. `pubspec.lock` nâng `objective_c` 9.5.0→9.6.3 (iOS của `path_provider`) và nâng `code_assets`/`hooks`/`record_use` lên major mới. Kết luận được khi job ubuntu (APK) và job macOS (iOS) của CI trên nhánh `feat/1-4-vault-crypto` xanh. Nếu đỏ thì sửa trước khi merge.
+  status: done (CI tại `1c7d4e4`: job ubuntu và job macOS đều xanh, theo người dùng báo 2026-11-09) — `check_android_apk.sh` đã kiểm `libsodium.so` trong mọi ABI và căn 16 KB; build iOS cùng bản `objective_c` mới qua.
