@@ -57,35 +57,35 @@ final class VaultFileCodec {
   );
 
   /// `nonce‖ct` của [cards]; `null` khi không mã hóa được (DEK sai độ dài
-  /// hoặc đã dispose).
+  /// hoặc đã dispose) hoặc khi có card mà [decodeCards] sẽ từ chối (id không
+  /// phải UUIDv4 chữ thường, `createdAt` âm).
   Uint8List? encodeCards(List<VaultCard> cards, SecureKey dek) => _encrypt(
-    <String, Object?>{
-      'v': version,
-      'cards': [
-        for (final c in cards)
-          <String, Object?>{
-            'id': c.id,
-            'title': c.title,
-            'username': c.username,
-            'password': c.password,
-            'note': c.note,
-            'createdAt': c.createdAt,
-          },
-      ],
-    },
+    'cards',
+    [
+      for (final c in cards)
+        <String, Object?>{
+          'id': c.id,
+          'title': c.title,
+          'username': c.username,
+          'password': c.password,
+          'note': c.note,
+          'createdAt': c.createdAt,
+        },
+    ],
+    _card,
     _adCards,
     dek,
   );
 
-  /// `nonce‖ct` của [items]; `null` khi không mã hóa được.
+  /// `nonce‖ct` của [items]; `null` khi không mã hóa được hoặc khi có mục
+  /// mà [decodeRecent] sẽ từ chối (`recordedAt` âm).
   Uint8List? encodeRecent(List<RecentEntry> items, SecureKey dek) => _encrypt(
-    <String, Object?>{
-      'v': version,
-      'items': [
-        for (final e in items)
-          <String, Object?>{'password': e.password, 'recordedAt': e.recordedAt},
-      ],
-    },
+    'items',
+    [
+      for (final e in items)
+        <String, Object?>{'password': e.password, 'recordedAt': e.recordedAt},
+    ],
+    _recent,
     _adRecent,
     dek,
   );
@@ -100,10 +100,23 @@ final class VaultFileCodec {
     SecureKey dek,
   ) => _decrypt(bytes, dek, _adRecent, 'items', _recent);
 
-  Uint8List? _encrypt(Map<String, Object?> json, Uint8List ad, SecureKey dek) {
+  /// Mỗi mục phải qua đúng luật của bản decode ([check] ≠ `null`), để không
+  /// ghi ra file mà lần mở khóa sau đọc thành `corrupt`.
+  Uint8List? _encrypt(
+    String listKey,
+    List<Map<String, Object?>> entries,
+    Object? Function(Object?) check,
+    Uint8List ad,
+    SecureKey dek,
+  ) {
+    if (entries.any((e) => check(e) == null)) {
+      return null;
+    }
     Uint8List? plain;
     try {
-      plain = utf8.encode(jsonEncode(json));
+      plain = utf8.encode(
+        jsonEncode(<String, Object?>{'v': version, listKey: entries}),
+      );
       final nonce = _random.bytes(_nonceBytes);
       if (nonce.length != _nonceBytes) {
         return null;

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:isolate';
 import 'dart:typed_data';
 
@@ -10,6 +11,16 @@ import '../vault_fixture.dart';
 
 /// Chỉ isolate test đặt giá trị này; isolate KDF mới tạo thấy giá trị mặc định.
 int _isolateMarker = 0;
+
+/// Hook gửi sang isolate KDF. Tạo ở hàm riêng để closure chỉ mang
+/// [port] (closure tạo trong `derive` sẽ kéo theo `Completer`, không gửi
+/// qua isolate được).
+void Function() _hook(SendPort port, {required bool throwInIsolate}) => () {
+  port.send(null);
+  if (throwInIsolate) {
+    throw StateError('boom');
+  }
+};
 
 void main() {
   late SodiumSumo sodium;
@@ -42,29 +53,35 @@ void main() {
 
   group('deriveKek', () {
     /// Chạy [deriveKek] với hook đếm số lần callback isolate được gọi.
+    ///
+    /// [expectRun]: chờ (có timeout) tới khi tin nhắn của hook tới nơi. Khi
+    /// tham số/salt sai thì không isolate nào được tạo, nên đếm ngay.
     Future<(Object?, int)> derive(
       KdfParams params, {
       Uint8List? salt,
       bool throwInIsolate = false,
+      bool expectRun = true,
     }) async {
       final port = ReceivePort();
       final sendPort = port.sendPort;
       var calls = 0;
-      final sub = port.listen((_) => calls++);
+      final ran = Completer<void>();
+      final sub = port.listen((_) {
+        calls++;
+        if (!ran.isCompleted) {
+          ran.complete();
+        }
+      });
       final kek = await deriveKek(
         sodium,
         fixturePassword(),
         salt ?? fixtureSalt(),
         params,
-        debugInIsolate: () {
-          sendPort.send(null);
-          if (throwInIsolate) {
-            throw StateError('boom');
-          }
-        },
+        debugInIsolate: _hook(sendPort, throwInIsolate: throwInIsolate),
       );
-      // Cho tin nhắn còn trên cổng kịp tới.
-      await Future<void>.delayed(const Duration(milliseconds: 50));
+      if (expectRun) {
+        await ran.future.timeout(const Duration(seconds: 30));
+      }
       await sub.cancel();
       port.close();
       return (kek, calls);
@@ -77,7 +94,7 @@ void main() {
         const KdfParams(2, 19 * mib - 1),
         const KdfParams(2, 128 * mib + 1),
       ]) {
-        final (kek, calls) = await derive(params);
+        final (kek, calls) = await derive(params, expectRun: false);
 
         expect(kek, isNull, reason: '$params');
         expect(calls, 0, reason: '$params');
@@ -86,7 +103,11 @@ void main() {
 
     test('ad05_salt_not_16_bytes_returns_null_without_running_kdf', () async {
       for (final salt in [seq(0, 15), seq(0, 17), Uint8List(0)]) {
-        final (kek, calls) = await derive(fixtureParams, salt: salt);
+        final (kek, calls) = await derive(
+          fixtureParams,
+          salt: salt,
+          expectRun: false,
+        );
 
         expect(kek, isNull);
         expect(calls, 0);

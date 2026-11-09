@@ -148,6 +148,49 @@ void main() {
       expect(codec.encodeCards(fixtureCards, short), isNull);
       expect(codec.encodeRecent(fixtureRecent, short), isNull);
     });
+
+    test('ad20_encode_rejects_entries_decode_would_reject', () {
+      final good = fixtureCards.first;
+      VaultCard card({String? id, int? createdAt}) => VaultCard(
+        id: id ?? good.id,
+        title: good.title,
+        username: good.username,
+        password: good.password,
+        note: good.note,
+        createdAt: createdAt ?? good.createdAt,
+      );
+      for (final bad in [
+        card(id: good.id.toUpperCase()),
+        card(id: '3f2b8c1e-5d4a-1e6f-9a7b-1c2d3e4f5a6b'),
+        card(id: 'not-a-uuid'),
+        card(id: ''),
+        card(createdAt: -1),
+      ]) {
+        expect(
+          codec.encodeCards([...fixtureCards, bad], dek),
+          isNull,
+          reason: '$bad',
+        );
+      }
+      expect(
+        codec.encodeRecent([
+          ...fixtureRecent,
+          const RecentEntry(password: 'x', recordedAt: -1),
+        ], dek),
+        isNull,
+      );
+      // Biên hợp lệ vẫn mã hóa được và đọc lại đúng.
+      final zero = codec.encodeCards([card(createdAt: 0)], dek)!;
+      expect((codec.decodeCards(zero, dek) as VaultFileOk).value, [
+        card(createdAt: 0),
+      ]);
+      final recentZero = codec.encodeRecent(const [
+        RecentEntry(password: '', recordedAt: 0),
+      ], dek)!;
+      expect((codec.decodeRecent(recentZero, dek) as VaultFileOk).value, const [
+        RecentEntry(password: '', recordedAt: 0),
+      ]);
+    });
   });
 
   group('file hỏng → corrupt', () {

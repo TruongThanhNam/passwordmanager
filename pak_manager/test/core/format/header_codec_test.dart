@@ -314,10 +314,23 @@ void main() {
   });
 
   test('ad22_header_to_string_has_no_key_material', () {
-    final text = decodeOk(golden()).toString();
+    final header = decodeOk(golden());
+    final text = header.toString();
+    String hex(List<int> bytes) =>
+        bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
 
-    expect(text, isNot(contains('salt')));
-    expect(text, isNot(contains('kcv')));
+    for (final word in ['salt', 'kcv', 'wrappedDek', 'wrapNonce']) {
+      expect(text, isNot(contains(word)), reason: word);
+    }
+    for (final bytes in [
+      header.salt,
+      header.wrapNonce,
+      header.wrappedDek,
+      header.kcv,
+    ]) {
+      expect(text, isNot(contains(bytes.toString())));
+      expect(text.toLowerCase(), isNot(contains(hex(bytes))));
+    }
     expect(text, contains('KdfParams'));
   });
 }

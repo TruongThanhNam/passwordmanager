@@ -2,7 +2,7 @@
 title: 'Story 1.4 — Mã hóa vault bằng khóa hai tầng và Argon2id'
 type: 'feature'
 created: '2026-11-09'
-status: 'in-progress'
+status: 'in-review'
 route: 'dispatch'
 baseline_commit: '24abe79df9c0082e9c12d014b6e95a5826da8349'
 review_loop_iteration: 0
@@ -95,12 +95,12 @@ context:
 
 ## Implementation Notes
 
-- **Môi trường:** Flutter 3.47.8 clone vào `C:\srclutter`, `bin` thêm vào PATH user; VS 2022 Build Tools + workload `VCTools` cài qua winget. Build hook của `sodium` build libsodium cho Windows cả trong `flutter test` lẫn `dart run tool/fixtures/gen_vault_v1.dart`.
+- **Môi trường:** Flutter 3.47.8 clone vào `C:\src\flutter`, `bin` thêm vào PATH user; VS 2022 Build Tools + workload `VCTools` cài qua winget. Build hook của `sodium` build libsodium cho Windows cả trong `flutter test` lẫn `dart run tool/fixtures/gen_vault_v1.dart`.
 - **`SodiumSumoInit.init()` về mặt tĩnh là `FutureOr<SodiumSumo>`:** analyzer chọn nhánh fallback của conditional export, nên code luôn `await SodiumSumoInit.init()` (script fixture, helper test `initSodium()`); lúc chạy trên FFI nó vẫn đồng bộ.
 - **`runIsolated` không trả được `SecureKey?`:** `IsolateResult` assert `T == SecureKey` (bản debug ném, bản release thì không), nên callback có kiểu `SodiumIsolateCallback<SecureKey>`. Khi callback bắt lỗi, nó trả khóa rỗng (`secureAlloc(0)`) thay cho `null`; `deriveKek` thấy độ dài ≠ 32 thì `dispose` rồi trả `null`. Lỗi do chính isolate (spawn/transfer) bị `try/catch` ở isolate gọi bắt, cũng trả `null`. `deriveKek` không chép thêm mật khẩu ở isolate gọi: closure bị chép sang isolate KDF và bản đó bị wipe trong `finally`.
 - **`deriveKek(…, {debugInIsolate})`:** hook chỉ cho test, chạy trong isolate KDF trước KDF. Test dùng nó để chứng minh callback chạy ở isolate khác (biến top-level chỉ isolate test đặt), KDF không chạy khi tham số/salt sai, và lỗi trong isolate → `null`. Không test được việc nuốt `print` vì lint `avoid_print` cấm `print` cả trong test.
-- **`calibrateVaultKdf` nhận `derive` bắt buộc:** `deriveKek` cần `SodiumSumo`, nên mặc định production là `kekDeriver(sodium)` (bao `deriveKek`), test truyền fake. `nowMs` mặc định là `Stopwatch` tạo trong hàm. Bước 3 tổng quát hóa bước 2 quanh tham số hiện tại: t' = max(2, floor(t·f)), m' = clamp(floor(m·t·f/t') MiB, 19, 128 MiB). T ≤ 0 (đồng hồ giả) được xem như f lớn → t = 10. `derive` ném cũng trả `null`.
-- **Không ném nên vài kiểu trả về nullable:** `HeaderCodec.create` trả `VaultHeader?` (salt/DEK/KEK sai độ dài, tham số ngoài khoảng, khóa đã dispose → `null`); `VaultFileCodec.encodeCards/encodeRecent` trả `Uint8List?`. `VaultHeader` có constructor private nên chỉ codec tạo được, mọi trường luôn đúng độ dài; các `Uint8List` trong đó là bản sao chỉ đọc. `HeaderCodec.encode` vì thế không cần nhánh lỗi.
+- **`calibrateVaultKdf` nhận `derive` bắt buộc:** `deriveKek` cần `SodiumSumo`, nên mặc định production là `kekDeriver(sodium)` (bao `deriveKek`), test truyền fake. `nowMs` mặc định là `Stopwatch` tạo trong hàm. Bước 3 tổng quát hóa bước 2 quanh tham số hiện tại: t' = max(2, floor(t·f)), m' = clamp(floor(m·t·f/t') MiB, 19 MiB, m) (chỉ giảm, bộ nhớ không bao giờ tăng). T ≤ 0 (đồng hồ giả) được xem như f lớn → t = 10. `derive` ném cũng trả `null`.
+- **Không ném nên vài kiểu trả về nullable:** `HeaderCodec.create` trả `VaultHeader?` (salt/DEK/KEK sai độ dài, tham số ngoài khoảng, khóa đã dispose → `null`); `VaultFileCodec.encodeCards/encodeRecent` trả `Uint8List?`, kể cả khi có mục mà decode sẽ từ chối (id không phải UUIDv4 chữ thường, thời gian âm; dùng chung hàm kiểm của decode). `VaultHeader` có constructor private nên chỉ codec tạo được, mọi trường luôn đúng độ dài; các `Uint8List` trong đó là bản sao chỉ đọc. `HeaderCodec.encode` vì thế không cần nhánh lỗi.
 - **Wipe:** `create` bọc DEK bằng `dek.runUnlockedSync` (không chép DEK ra heap Dart); `unwrapDek` wipe buffer DEK tạm sau `secureCopy`; codec file dữ liệu wipe plaintext UTF-8 trong `finally` cả khi encode lẫn decode. Chuỗi Dart sinh ra từ `jsonEncode`/`utf8.decode` không ghi đè được (giới hạn của Dart, giống mật khẩu dạng `String`).
 - **Decode file dữ liệu:** `v` phải là `int` 1 (`1.0` → `corrupt`); thời gian phải là `int` ≥ 0; danh sách trả về là unmodifiable. Không kiểm id trùng lặp (AD-20 không yêu cầu). `recordedAt` ở tương lai không bị codec xét (thuộc tầng dùng Recent).
 - **Fixture:** script ghi cả `README.md` (bảng đầu vào hex + bản rõ JSON) để README không lệch byte; chạy hai lần ra cùng SHA-256, và bản `.dart` có CRLF (checkout Windows) cũng ra cùng byte. Hằng đầu vào được lặp lại trong `test/core/vault_fixture.dart` (test không import `tool/`).
@@ -110,6 +110,34 @@ context:
 ## Spec Change Log
 
 ## Review Triage Log
+
+Review 2026-11-09 (diff `24abe79..2381d6a`, bỏ spec; 3 lớp: blind, edge, verif-gap).
+
+| # | Nguồn | Phát hiện | Verdict | Bằng chứng | Route |
+|---|-------|-----------|---------|------------|-------|
+| 1 | blind | `_reduce` tăng `m` ở lần chạy thứ 3: (10, 64 MiB) + 2200 ms → (4, 72 MiB); (6, 64 MiB) + 2100 ms → (2, 91 MiB) | medium | `kdf_calibration.dart:98`: m' = m·t·f/t' > m khi floor làm t' < t·f. Trái Design Notes bước 3 "chỉ giảm"; máy vừa đo là chậm lại bị cấp thêm bộ nhớ | patch |
+| 2 | blind | Test hiệu chỉnh không bắt được #1 (thiếu ca [300, 2200, x], không kiểm chi phí giảm dần) | medium | Cùng gốc #1; `ad05_every_calibrated_params_is_allowed` chỉ kiểm `isAllowed` | patch (gộp #1) |
+| 3 | edge, blind | `encodeCards`/`encodeRecent` ghi được dữ liệu mà decode từ chối (id không phải UUIDv4 chữ thường, thời gian âm) → cả vault thành `corrupt` | medium | `vault_file_codec.dart:61-91` không kiểm; `_card`/`_recent` từ chối. Một card sai từ caller khóa toàn bộ dữ liệu ở lần mở sau | patch |
+| 4 | edge, blind | Probe (3, 64 MiB) lỗi (vd. không cấp được bộ nhớ) → hiệu chỉnh trả `null`, không lùi về sàn, không tạo được tài khoản | maybe-false | Đúng Design Notes bước 4. Cần chạy trên máy mốc yếu nhất (Android 7, RAM 2 GB) để biết 64 MiB có cấp được không; nếu đúng là high | defer |
+| 5 | verif-gap | Test `VaultHeader.toString` chỉ dò chữ `salt`/`kcv`, không dò byte thật | low | `header_codec_test.dart:316-322`; in `$kcv` vẫn xanh. Sửa trực tiếp trong test | patch |
+| 6 | verif-gap | Nhánh `derive` ném trong `calibrateVaultKdf` chưa test nào chạy | low | Harness chỉ trả `null`. Thêm một ca là sửa trực tiếp | patch |
+| 7 | verif-gap, blind | Zone nuốt `print` trong isolate KDF không có test, mà `deferred-work.md` ghi done | low | Gỡ `runZoned` vẫn xanh. Không code nào trong isolate gọi `print`; sửa dòng status cho đúng sự thật | patch |
+| 8 | edge, blind | Helper `derive` trong `kdf_test` chờ cố định 50 ms rồi đọc `calls` | low | Hai cổng khác nhau, không bảo đảm thứ tự; runner CI chậm có thể làm `calls == 1` fail. Sửa trong test | patch |
+| 9 | blind | `check_android_apk.sh` không kiểm `libsodium.so` có trong APK; build hook không đóng gói thì CI vẫn xanh | medium | Script chỉ cần có ít nhất một `.so`. Hook đặt tên `libraryFileName('sodium')` → `libsodium.so` | patch |
+| 10 | verif-gap | Test lỗi trong isolate không phân biệt catch trong isolate với catch ở `deriveKek` | low | Kết quả với caller như nhau | reject |
+| 11 | edge | `uuidV4` ném `RangeError` khi `RandomSource` trả thiếu byte | false | Hợp đồng `RandomSource.bytes(n)` trả đúng n byte; `SodiumRandomSource` luôn đúng; fake sai là lỗi test, ném to là đúng | reject |
+| 12 | edge | Mật khẩu là view unmodifiable → `wipe` trong `finally` ném, KEK bị bỏ không dispose | low | Caller (1.6) dùng `ascii.encode` (modifiable); kết quả vẫn là `null` an toàn. Sửa cần thêm nhánh | reject |
+| 13 | edge | Surrogate lẻ bị `utf8.encode` thay bằng U+FFFD | low | Ô nhập của Flutter không sinh surrogate lẻ; sửa cần thêm guard | reject |
+| 14 | edge | Không từ chối id trùng khi decode | low | AD-20 không yêu cầu; id do `uuidV4` sinh. Sửa cần thêm luật | reject |
+| 15 | edge | Sửa `kcv` rồi tính lại checksum → báo sai mật khẩu thay vì hỏng | false | Đúng thiết kế AD-4: checksum bắt hỏng ngẫu nhiên; ai tính lại được checksum là có chủ đích, AD-8 chấp nhận rủi ro root | reject |
+| 16 | edge | `List<int>` có giá trị ngoài 0–255 bị cắt | low | Đầu vào là bytes đọc từ file (`Uint8List`); không caller nào truyền khác | reject |
+| 17 | edge | `vault_fixture.dart` đọc đường dẫn tương đối theo cwd | false | `flutter test` luôn chạy ở gốc package; các test có sẵn (`theme_test`) dùng cùng cách | reject |
+| 18 | edge | `derive` bắt buộc, trái "mặc định `deriveKek`" | low | Lệch đã ghi Implementation Notes (`deriveKek` cần `SodiumSumo`); sửa là sửa spec | reject |
+| 19 | edge | "Wipe plaintext" nhưng chuỗi Dart còn trên heap | false | Spec chỉ yêu cầu `Uint8List` (Always, Design Notes nói rõ chuỗi không ghi đè được) | reject |
+| 20 | blind | Thiếu test cho vài nhánh lỗi của codec (khóa đã dispose, nonce sai độ dài, KEK sai mật khẩu khi `unwrapDek`) | low | Đều rơi vào cùng một `on Object` đã có test chạm tới; ít khả năng gặp | reject |
+| 21 | blind | Sprint `in-progress` lệch spec `in-review` | false | Đúng thiết kế: bước trình bày đồng bộ sprint-status | reject |
+| 22 | blind | File `cards`/`recent` không chống tráo bản cũ (AD không gắn header/bộ đếm) | low | Thiết kế AD-6/AD-20 đã chốt; kẻ ghi được `vault/` là root/jailbreak, AD-8 chấp nhận rủi ro. Sửa là đổi kiến trúc | reject |
+| 23 | blind | `debugInIsolate` là tham số public của `lib/core` | low | Caller nào cũng đã có mật khẩu; không có hại cụ thể. Sửa cần thêm cơ chế | reject |
 
 ## Design Notes
 

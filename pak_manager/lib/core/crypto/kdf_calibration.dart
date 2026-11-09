@@ -90,7 +90,8 @@ KdfParams _rescale(KdfParams current, int elapsedMs) {
 }
 
 /// Giảm chi phí (∝ t·m) theo hệ số f < 1: t = max(2, floor(t·f)), phần
-/// còn lại dồn vào m = max(19 MiB, floor(m·t·f/t')) làm tròn xuống theo MiB.
+/// còn lại dồn vào m = floor(m·t·f/t') làm tròn xuống theo MiB, kẹp trong
+/// [19 MiB, m hiện tại]: chỉ giảm, bộ nhớ không bao giờ tăng.
 KdfParams _reduce(KdfParams current, double f) {
   final scaled = current.opsLimit * f;
   final floored = scaled.floor();
@@ -100,6 +101,6 @@ KdfParams _reduce(KdfParams current, double f) {
     ops,
     mem < KdfParams.memMinBytes
         ? KdfParams.memMinBytes
-        : (mem > KdfParams.memMaxBytes ? KdfParams.memMaxBytes : mem),
+        : (mem > current.memLimitBytes ? current.memLimitBytes : mem),
   );
 }

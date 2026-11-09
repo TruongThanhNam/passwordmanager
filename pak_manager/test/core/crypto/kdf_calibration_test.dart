@@ -39,9 +39,12 @@ final class _FakeKey implements SecureKey {
 }
 
 /// `derive` giả trên đồng hồ giả: lần chạy thứ i tốn `durations[i]` ms.
-/// `null` trong [durations] = KDF lỗi.
+/// `null` trong [durations] = KDF lỗi; [_throw] trong [durations] = `derive`
+/// ném.
 final class _Harness {
   _Harness(this.durations);
+
+  static const int _throw = -1;
 
   final List<int?> durations;
   final List<KdfParams> calls = [];
@@ -61,6 +64,9 @@ final class _Harness {
     final cost = durations[calls.length - 1];
     if (cost == null) {
       return null;
+    }
+    if (cost == _throw) {
+      throw StateError('derive lỗi');
     }
     _now += cost;
     final key = _FakeKey(calls.length);
@@ -207,6 +213,54 @@ void main() {
 
       expect(result, isNull);
       expect(h.keys.every((k) => k.disposed), isTrue);
+    }
+  });
+
+  test('ad05_derive_throwing_on_any_run_returns_null_and_disposes', () async {
+    for (final durations in [
+      <int?>[_Harness._throw],
+      <int?>[300, _Harness._throw],
+      <int?>[2000, 2500, _Harness._throw],
+    ]) {
+      final h = _Harness(durations);
+
+      final result = await h.run();
+
+      expect(result, isNull, reason: '$durations');
+      expect(h.calls, hasLength(durations.length));
+      expect(h.keys.every((k) => k.disposed), isTrue, reason: '$durations');
+    }
+  });
+
+  test('ad05_reduction_after_slow_run_never_raises_memory', () async {
+    // (10, 64) chậm 2200 ms → (4, 64), không phải (4, 72);
+    // (6, 64) chậm 2100 ms → (2, 64), không phải (2, 91).
+    for (final (durations, expected) in [
+      ([300, 2200, 9000], const KdfParams(4, 64 * mib)),
+      ([499, 2100, 9000], const KdfParams(2, 64 * mib)),
+    ]) {
+      final h = _Harness(durations);
+
+      final result = await h.run();
+
+      expect(h.calls, hasLength(3), reason: '$durations');
+      expect(h.calls.last, expected, reason: '$durations');
+      expect(result!.params, expected);
+      for (var i = 2; i < h.calls.length; i++) {
+        final prev = h.calls[i - 1];
+        final next = h.calls[i];
+        expect(
+          next.memLimitBytes,
+          lessThanOrEqualTo(prev.memLimitBytes),
+          reason: '$durations lần ${i + 1}',
+        );
+        expect(
+          next.opsLimit * next.memLimitBytes,
+          lessThan(prev.opsLimit * prev.memLimitBytes),
+          reason: '$durations lần ${i + 1}',
+        );
+      }
+      h.expectOnlyReturnedAlive(result);
     }
   });
 
