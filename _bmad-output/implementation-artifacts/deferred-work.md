@@ -49,3 +49,13 @@
 
 - `runPakApp` bỏ kết quả `StorageBootstrap.run()`; story 1.6 phải truyền `StorageBootstrapResult` vào `PakApp`/`SessionGate` và chặn mọi đọc/ghi dữ liệu khi nhận `StorageUnavailable` (quyết định fail-closed của story 1.2). Hiện chỉ có comment trong `lib/main.dart` nhắc việc này.
 - Các regex kiểm `allowBackup`/`dataExtractionRules`/`fullBackupContent` mới trong `check_android_apk.sh` chưa có kiểm âm trên output `aapt2` xấu; nếu định dạng output lệch thì kiểm sai trên APK thật (fail oan hoặc lọt). Làm cùng harness kiểm âm của script APK, mục đã ghi từ story 1.1.
+
+## Deferred from: build review of spec-1-3-giao-dien-sang-toi-hai-ngon-ngu-cai-dat-mac-dinh (2026-11-09)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-3-giao-dien-sang-toi-hai-ngon-ngu-cai-dat-mac-dinh.md`
+  summary: Xác nhận trên máy Android thật rằng `FlutterView.display.size` khác 0 lúc khởi động (hoặc có metrics ngay sau đó), để điện thoại luôn bị khóa dọc; nếu không thì fallback sang `view.physicalSize`.
+  evidence: maybe-false, nếu đúng là medium. `applyOrientationPolicy` bỏ qua khi size rỗng và chờ `didChangeMetrics`; chưa kiểm được trên máy thật (máy dev không có Android SDK). Làm ở story 7.1 (bộ nghiệm thu trên máy thật).
+
+## Deferred from: code review of spec-1-3-giao-dien-sang-toi-hai-ngon-ngu-cai-dat-mac-dinh (2026-11-09)
+
+- (Chưa xác minh; nếu đúng thì medium) Trên máy gập, `FlutterView.display.size` có thể không cập nhật khi gập hoặc mở. Khi đó `applyOrientationPolicy` trong `didChangeMetrics` (`pak_manager/lib/features/shared/orientation.dart:40`) vẫn giữ chính sách phone/tablet cũ. Cần kiểm trên máy gập Android thật hoặc emulator foldable. Nếu `display.size` không đổi thì tính lại từ `view.physicalSize / devicePixelRatio`. Làm cùng mục `display.size` ở trên (story 7.1).

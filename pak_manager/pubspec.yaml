@@ -13,6 +13,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_localizations:
+    sdk: flutter
   cupertino_ui: 1.1.4
   cupertino_icons: 2.0.0
   path_provider: 2.1.6
@@ -25,3 +27,6 @@ dev_dependencies:
 flutter:
   # Không dùng Material (AD-1): không đóng gói font Material Icons.
   uses-material-design: false
+  # Flutter 3.47 từ chối `flutter gen-l10n` khi thiếu cờ này. Code sinh ra vẫn
+  # nằm trong lib/l10n và được commit (l10n.yaml); CI kiểm nó khớp ARB.
+  generate: true

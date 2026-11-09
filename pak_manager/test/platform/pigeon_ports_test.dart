@@ -86,4 +86,11 @@ void main() {
     expect(await PigeonPlatformPorts().bootId(), '3f1c-boot');
     expect(received, [null]);
   });
+
+  test('nfr13_android_sdk_int_returns_host_value', () async {
+    final received = mock('androidSdkInt', [28]);
+
+    expect(await PigeonPlatformPorts().androidSdkInt(), 28);
+    expect(received, [null]);
+  });
 }

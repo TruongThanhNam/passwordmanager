@@ -1,7 +1,8 @@
 import Darwin
 import Foundation
 
-/// Cài API Pigeon `PlatformApi` cho iOS (AD-14): đồng hồ, backup, fsync thư mục.
+/// Cài API Pigeon `PlatformApi` cho iOS (AD-14): đồng hồ, backup, fsync thư mục,
+/// API level Android (luôn 0).
 ///
 /// Không dùng API "required reason" (`stat`/`fstat`, `creationDate`,
 /// `systemUptime`, `mach_absolute_time`…) và không lưu bí mật nào (FR-11).
@@ -62,5 +63,10 @@ final class PlatformApiImpl: PlatformApi {
         throw PigeonError(code: "io", message: "fsync errno \(errno)", details: nil)
       }
     }
+  }
+
+  /// Không phải Android: luôn `0`.
+  func androidSdkInt() throws -> Int64 {
+    return 0
   }
 }

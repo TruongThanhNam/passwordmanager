@@ -61,6 +61,19 @@ jobs:
       - name: Pub get (theo pubspec.lock)
         run: flutter pub get --enforce-lockfile
 
+      - name: Code gen-l10n đã cập nhật (AD-23, AD-19)
+        run: |
+          flutter gen-l10n
+          # Bắt cả file sinh ra bị sửa tay, bị xóa hay chưa commit.
+          changes="$(git status --porcelain -- lib/l10n)"
+          if [[ -n "$changes" ]]; then
+            echo "$changes"
+            git --no-pager diff -- lib/l10n
+            echo "Code gen-l10n chưa khớp lib/l10n/*.arb; chạy lại 'flutter gen-l10n' rồi commit lib/l10n" >&2
+            exit 1
+          fi
+          echo "OK: code gen-l10n khớp lib/l10n/*.arb"
+
       - name: Code Pigeon sinh ra đã cập nhật (AD-14, AD-19)
         run: |
           dart run pigeon --input pigeons/platform_api.dart

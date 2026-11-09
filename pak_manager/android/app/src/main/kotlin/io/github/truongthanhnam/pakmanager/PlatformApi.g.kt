@@ -80,6 +80,11 @@ interface PlatformApi {
    * trợ.
    */
   fun fsyncDirectory(dirPath: String)
+  /**
+   * API level Android (`Build.VERSION.SDK_INT`), để chọn style thanh điều
+   * hướng theo khả năng của máy. iOS trả `0`.
+   */
+  fun androidSdkInt(): Long
 
   companion object {
     /** The codec used by PlatformApi. */
@@ -147,6 +152,21 @@ interface PlatformApi {
             val wrapped: List<Any?> = try {
               api.fsyncDirectory(dirPathArg)
               listOf(null)
+            } catch (exception: Throwable) {
+              PlatformApiPigeonUtils.wrapError(exception)
+            }
+            reply.reply(wrapped)
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.pak_manager.PlatformApi.androidSdkInt$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { _, reply ->
+            val wrapped: List<Any?> = try {
+              listOf(api.androidSdkInt())
             } catch (exception: Throwable) {
               PlatformApiPigeonUtils.wrapError(exception)
             }
