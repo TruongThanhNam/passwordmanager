@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pak_manager/core/crypto/kdf.dart';
 import 'package:pak_manager/core/crypto/kdf_calibration.dart';
+import 'package:pak_manager/core/format/header_codec.dart';
 import 'package:sodium/sodium_sumo.dart';
 
 import '../vault_fixture.dart';
@@ -264,6 +265,29 @@ void main() {
     }
   });
 
+  test('ad05_default_clock_measures_real_elapsed_time', () async {
+    // Không truyền nowMs: đồng hồ mặc định (Stopwatch) phải đo thời gian
+    // thật. 800 ms nằm giữa cửa sổ nhận [500, 1500], chừa dư cho CI chậm.
+    final keys = <_FakeKey>[];
+    final calls = <KdfParams>[];
+
+    final result = await calibrateVaultKdf(
+      password: fixturePassword(),
+      salt: fixtureSalt(),
+      derive: (password, salt, params) async {
+        calls.add(params);
+        await Future<void>.delayed(const Duration(milliseconds: 800));
+        final key = _FakeKey(calls.length);
+        keys.add(key);
+        return key;
+      },
+    );
+
+    expect(calls, [KdfParams.start]);
+    expect(result!.params, KdfParams.start);
+    expect(identical(result.kek, keys.single), isTrue);
+  });
+
   test('ad05_default_deriver_runs_real_kdf', () async {
     final sodium = await initSodium();
     final kek = await kekDeriver(sodium)(
@@ -274,5 +298,9 @@ void main() {
     addTearDown(() => kek?.dispose());
 
     expect(kek?.length, kekBytes);
+    // Đúng mật khẩu, salt, params → kcv khớp header fixture.
+    final codec = HeaderCodec(sodium);
+    final header = (codec.decode(vaultFixture('header')) as HeaderOk).header;
+    expect(codec.kcvMatches(header, kek!), isTrue);
   });
 }

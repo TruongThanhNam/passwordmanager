@@ -4,7 +4,7 @@
 #      allowBackup=false, dataExtractionRules và fullBackupContent (AD-11).
 #   2. zipalign: mọi .so không nén được căn 16 KB trong APK.
 #   3. readelf: mọi segment LOAD của lib/*/*.so có Align >= 0x4000 (16 KB);
-#      APK phải có lib/arm64-v8a/libsodium.so.
+#      APK phải có lib/arm64-v8a/, và mọi lib/<abi>/ phải có libsodium.so.
 #
 # Dùng: tool/ci/check_android_apk.sh <đường-dẫn-apk>
 # Cần: ANDROID_HOME (hoặc ANDROID_SDK_ROOT) có build-tools (aapt2, zipalign),
@@ -89,13 +89,21 @@ if ((${#libs[@]} == 0)); then
   echo "FAIL: APK không có lib/*/*.so"
   failed=1
 fi
-# Build hook của sodium đặt tên asset theo libraryFileName('sodium').
-if [[ -f "$work/apk/lib/arm64-v8a/libsodium.so" ]]; then
-  echo "OK: APK có lib/arm64-v8a/libsodium.so"
-else
-  echo "FAIL: APK thiếu lib/arm64-v8a/libsodium.so (build hook của sodium không chạy?)"
+# Build hook của sodium đặt tên asset theo libraryFileName('sodium'). APK
+# release là bản fat: mọi ABI có .so đều phải có libsodium.so.
+if [[ ! -d "$work/apk/lib/arm64-v8a" ]]; then
+  echo "FAIL: APK thiếu lib/arm64-v8a/"
   failed=1
 fi
+for abi_dir in "$work"/apk/lib/*/; do
+  abi="$(basename "$abi_dir")"
+  if [[ -f "$abi_dir/libsodium.so" ]]; then
+    echo "OK: APK có lib/$abi/libsodium.so"
+  else
+    echo "FAIL: APK thiếu lib/$abi/libsodium.so (build hook của sodium không chạy?)"
+    failed=1
+  fi
+done
 for so in "${libs[@]}"; do
   rel="${so#"$work/apk/"}"
   aligns="$(readelf -lW "$so" | awk '$1 == "LOAD" { print $NF }')"
