@@ -87,6 +87,19 @@ jobs:
           fi
           echo "OK: code Pigeon khớp pigeons/platform_api.dart"
 
+      - name: Fixture vault khớp script (AD-20)
+        run: |
+          # Script tự build libsodium qua build hook của sodium (gcc/make có sẵn).
+          dart run tool/fixtures/gen_vault_v1.dart
+          changes="$(git status --porcelain -- test/fixtures/vault)"
+          if [[ -n "$changes" ]]; then
+            echo "$changes"
+            git --no-pager diff --stat -- test/fixtures/vault
+            echo "Fixture vault chưa khớp tool/fixtures/gen_vault_v1.dart; chạy lại script rồi commit test/fixtures/vault" >&2
+            exit 1
+          fi
+          echo "OK: fixture vault khớp script"
+
       - name: Phân tích tĩnh
         run: flutter analyze --fatal-infos --fatal-warnings
 
