@@ -5,9 +5,12 @@ import 'package:cupertino_ui/cupertino_ui.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:pak_manager/core/format/settings_codec.dart';
+import 'package:pak_manager/core/model/settings.dart';
 import 'package:pak_manager/core/ports/app_directory_port.dart';
 import 'package:pak_manager/core/ports/backup_port.dart';
 import 'package:pak_manager/core/ports/file_sync_port.dart';
+import 'package:pak_manager/features/shared/content_column.dart';
 import 'package:pak_manager/features/shared/pak_app.dart';
 import 'package:pak_manager/main.dart' as app;
 import 'package:pak_manager/platform/platform_api.g.dart';
@@ -69,6 +72,12 @@ void main() {
     Directory('$pak${sep}vault').createSync(recursive: true);
     final staleTmp = File('$pak${sep}vault${sep}cards.tmp')
       ..writeAsBytesSync([1]);
+    // `settings` có sẵn, khác mặc định ở ngôn ngữ (vi) và giao diện (dark).
+    final settingsFile = File('$pak${sep}settings')
+      ..writeAsBytesSync(
+        File('test/fixtures/settings/v1/custom.json').readAsBytesSync(),
+      );
+    final settingsBytes = settingsFile.readAsBytesSync();
 
     final messenger = tester.binding.defaultBinaryMessenger;
     const pathProvider = MethodChannel('plugins.flutter.io/path_provider');
@@ -129,12 +138,82 @@ void main() {
     expect(kept, (true, true, true));
     // main() nối adapter Pigeon thật vào bootstrap: cờ backup được đặt trên
     // `pak/`, rồi `*.tmp` sót bị dọn bằng sweeper mặc định.
-    expect(pigeonCalls.map((c) => c.$1), ['excludeFromBackup']);
-    expect(pigeonCalls.single.$2, [pak]);
+    expect(pigeonCalls.first.$1, 'excludeFromBackup');
+    expect(pigeonCalls.first.$2, [pak]);
     expect(Directory(pak).existsSync(), isTrue);
     expect(staleTmp.existsSync(), isFalse);
-    // Chỉ nạp settings (chưa có file): không tạo file `settings`.
-    expect(File('$pak${sep}settings').existsSync(), isFalse);
+
+    // main() nạp `settings` từ `pak/` đã bootstrap và áp vào app; chỉ nạp
+    // thì không ghi lại file.
+    final inside = tester.element(find.byType(ContentColumn));
+    expect(Localizations.localeOf(inside).languageCode, 'vi');
+    expect(CupertinoTheme.brightnessOf(inside), Brightness.dark);
+    expect(pigeonCalls.map((c) => c.$1), isNot(contains('fsyncDirectory')));
+    expect(settingsFile.readAsBytesSync(), settingsBytes);
+
+    // Đổi cài đặt rồi cho app ẩn: store ghi ngay qua `fileSync` của main(),
+    // tức chính PigeonPlatformPorts (fsync thư mục `pak/`).
+    final store = tester.widget<PakApp>(find.byType(PakApp)).settings;
+    expect(
+      store.update((s) => s.copyWith(appearance: Appearance.light)),
+      isTrue,
+    );
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+    for (var i = 0; i < 100 && store.dirty; i++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 20)),
+      );
+      await tester.pump();
+    }
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+
+    expect(store.dirty, isFalse);
+    expect(
+      pigeonCalls.where((c) => c.$1 == 'fsyncDirectory').map((c) => c.$2),
+      anyElement(equals([pak])),
+    );
+    expect(SettingsCodec.decode(settingsFile.readAsBytesSync()), store.current);
+    expect(store.current.appearance, Appearance.light);
+  });
+
+  testWidgets('ad1_run_app_enables_edge_to_edge_without_blocking', (
+    tester,
+  ) async {
+    final calls = <MethodCall>[];
+    final messenger = tester.binding.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      calls.add(call);
+      // Lỗi của lời gọi edge-to-edge không được chặn khởi động.
+      if (call.method == 'SystemChrome.setEnabledSystemUIMode') {
+        throw PlatformException(code: 'unavailable');
+      }
+      return null;
+    });
+    addTearDown(
+      () => messenger.setMockMethodCallHandler(SystemChannels.platform, null),
+    );
+
+    app.runPakApp(
+      _unavailableStorage(),
+      fileSync: _RecordingFileSync(),
+      releaseMode: false,
+    );
+    await tester.pump();
+
+    expect(
+      calls.where((c) => c.method == 'SystemChrome.setEnabledSystemUIMode'),
+      [
+        isA<MethodCall>().having(
+          (c) => c.arguments,
+          'arguments',
+          'SystemUiMode.edgeToEdge',
+        ),
+      ],
+    );
+    expect(find.byType(CupertinoApp), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('nfr8_run_app_waits_for_storage_bootstrap', (tester) async {

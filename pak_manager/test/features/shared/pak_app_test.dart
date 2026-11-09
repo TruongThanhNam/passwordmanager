@@ -147,6 +147,7 @@ void main() {
       expect(overlay.statusBarBrightness, Brightness.dark);
       expect(overlay.statusBarIconBrightness, Brightness.light);
       expect(overlay.systemNavigationBarIconBrightness, Brightness.light);
+      expect(overlay.systemNavigationBarContrastEnforced, isFalse);
     });
 
     testWidgets('nfr13_system_appearance_on_light_device_uses_light_tokens', (
@@ -160,9 +161,12 @@ void main() {
         PakColors.accent.color.toARGB32(),
       );
       final overlay = _overlay(tester);
+      expect(overlay.statusBarColor, const Color(0x00000000));
+      expect(overlay.systemNavigationBarColor, const Color(0x00000000));
       expect(overlay.statusBarBrightness, Brightness.light);
       expect(overlay.statusBarIconBrightness, Brightness.dark);
       expect(overlay.systemNavigationBarIconBrightness, Brightness.dark);
+      expect(overlay.systemNavigationBarContrastEnforced, isFalse);
     });
 
     testWidgets('fr47_explicit_appearance_ignores_device', (tester) async {

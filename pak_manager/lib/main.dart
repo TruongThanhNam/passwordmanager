@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:cupertino_ui/cupertino_ui.dart';
 import 'package:flutter/foundation.dart' show kReleaseMode;
+import 'package:flutter/services.dart';
 
 import 'core/io/atomic_file_writer.dart';
 import 'core/ports/file_sync_port.dart';
@@ -34,6 +37,16 @@ void runPakApp(
 }) {
   runWithErrorPolicy(() async {
     final binding = WidgetsFlutterBinding.ensureInitialized();
+    // Vẽ sau thanh hệ thống (Android < 15 không tự bật) để thanh trong suốt
+    // lộ nền app thay vì nền cửa sổ. Lỗi bị nuốt, không chặn khởi động.
+    try {
+      unawaited(
+        SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge)
+            .catchError((Object _) {}),
+      );
+    } on Object {
+      // Giữ chế độ mặc định của hệ thống.
+    }
     final view = binding.platformDispatcher.implicitView;
     if (view != null) {
       applyOrientationPolicy(view);

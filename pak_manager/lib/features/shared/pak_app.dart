@@ -48,6 +48,8 @@ SystemUiOverlayStyle pakSystemUiStyle(Brightness brightness) {
     statusBarBrightness: brightness,
     statusBarIconBrightness: icons,
     systemNavigationBarIconBrightness: icons,
+    // Android 10+: không phủ lớp mờ lên thanh điều hướng trong suốt.
+    systemNavigationBarContrastEnforced: false,
   );
 }
 

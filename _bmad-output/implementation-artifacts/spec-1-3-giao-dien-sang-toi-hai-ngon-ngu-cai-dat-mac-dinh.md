@@ -2,7 +2,7 @@
 title: 'Story 1.3 — Giao diện sáng/tối, hai ngôn ngữ và cài đặt mặc định'
 type: 'feature'
 created: '2026-11-05'
-status: 'in-progress'
+status: 'done'
 route: 'dispatch'
 baseline_commit: '9105be75db6a0ac9501601fbbdc344ca6ba13006'
 review_loop_iteration: 0
@@ -69,7 +69,7 @@ context:
 - **Git/CI:** làm trên nhánh `feat/1-3-theme-l10n-settings`, commit rồi push lên `origin` như story 1.2. Người dùng tự mở PR và tự kiểm CI.
 - **`language=null` theo máy liên tục:** khi locale máy đổi thì resolve lại theo locale chính, tức phần tử đầu. Không ghi giá trị đã resolve vào file.
 - **Tablet xoay mọi hướng** theo AD-1 và epics, bỏ qua dòng "tablet dọc" trong DESIGN.md. Thiết bị được phân loại theo kích thước màn hình (display), không theo cửa sổ, nên tablet vẫn là tablet khi chạy split-screen.
-- **Code gen-l10n được commit:** không bật `generate: true`. CI chạy `flutter gen-l10n` trước bước Pigeon và yêu cầu `lib/l10n` không đổi.
+- **Code gen-l10n được commit:** bật `generate: true` vì Flutter 3.47.8 bắt buộc (người dùng duyệt 2026-11-09). CI chạy `flutter gen-l10n` trước bước Pigeon và yêu cầu `lib/l10n` không đổi.
 - **Ngoài phạm vi:** không xử lý file `v` > 1 (trường hợp hạ cấp app) và không xử lý `gen` tắt cả 4 loại. Ràng buộc "phải bật ít nhất một loại" thuộc story 4.1.
 
 </frozen-after-approval>
@@ -160,7 +160,7 @@ context:
 
 ## Implementation Notes
 
-- **Lệch Decisions (cần người duyệt):** Flutter 3.47.8 từ chối `flutter gen-l10n` khi pubspec thiếu `flutter: generate: true` (`flutter_tools/lib/src/localizations/gen_l10n.dart` ném `Attempted to generate localizations code without having the flutter: generate flag turned on`), kể cả khi `output-dir` không phải package ảo. Để bước gen-l10n của Verification và CI chạy được, `pubspec.yaml` bật `generate: true`. Phần còn lại của quyết định vẫn giữ: code sinh ra nằm trong `lib/l10n/` và được commit, CI chạy `flutter gen-l10n` trước Pigeon và fail nếu `lib/l10n` đổi. Hệ quả: `flutter run`/`build` cũng sinh lại `lib/l10n` từ ARB (cùng nội dung nếu đã commit đúng).
+- **Lệch Decisions (người dùng đã duyệt 2026-11-09, Decision đã sửa):** Flutter 3.47.8 từ chối `flutter gen-l10n` khi pubspec thiếu `flutter: generate: true` (`flutter_tools/lib/src/localizations/gen_l10n.dart` ném `Attempted to generate localizations code without having the flutter: generate flag turned on`), kể cả khi `output-dir` không phải package ảo. Để bước gen-l10n của Verification và CI chạy được, `pubspec.yaml` bật `generate: true`. Phần còn lại của quyết định vẫn giữ: code sinh ra nằm trong `lib/l10n/` và được commit, CI chạy `flutter gen-l10n` trước Pigeon và fail nếu `lib/l10n` đổi. Hệ quả: `flutter run`/`build` cũng sinh lại `lib/l10n` từ ARB (cùng nội dung nếu đã commit đúng).
 - `flutter_localizations` từ transitive thành `direct main` trong `pubspec.lock`; `intl` vẫn transitive. File sinh ra import `intl` nhưng có `// ignore_for_file: type=lint` nên `depend_on_referenced_packages` không báo.
 - `SettingsCodec` là lớp tĩnh (`SettingsCodec.decode/encode`) trong `lib/core/format/settings_codec.dart`. Miền hợp lệ dùng chung hằng trong `core/model/settings.dart` (`settingsMinuteChoices`, `genLengthMin/Max`) để `Settings.isValid` và codec không lệch nhau. `utf8.decode` của Dart bỏ BOM đầu file, nên file có BOM vẫn đọc được (không coi là hỏng).
 - `SettingsStore.load(path, writer, {createTimer, write})`: `createTimer` và `write` là điểm inject cho test (`write` mặc định `writer.write`, vì `AtomicFileWriter` là `final class`). Đọc file: kiểm `FileSystemEntity.type == file` rồi đọc tối đa 64 KB + 1 byte; file đúng 64 KB vẫn đọc. Cờ `dirty` tắt chỉ khi lần ghi thành công **và** không có thay đổi mới trong lúc ghi (đếm `revision`). Store ở RAM (`path == null`) không bao giờ bật `dirty`.
@@ -174,6 +174,29 @@ context:
 ## Spec Change Log
 
 ## Review Triage Log
+
+Review 2026-11-09 (diff `9105be7..` + cây làm việc; 3 lớp: blind, edge, verif-gap).
+
+| # | Nguồn | Phát hiện | Verdict | Bằng chứng | Route |
+|---|-------|-----------|---------|------------|-------|
+| 1 | verif-gap | Không test nào cho thấy `runPakApp`/`main()` nạp file `settings` đã lưu và áp lên app | medium | Gap đã kiểm sẵn: test `main()` thật không có file `settings`; thay `paths.settingsFile` bằng `null` hoặc nối `fileSync` no-op thì vẫn xanh | patch |
+| 2 | blind | Đọc lỗi tạm thời → mặc định, `update` kế tiếp ghi đè file thật | low | Có thật, nhưng chỉ khi đọc lỗi tạm thời (iOS data protection không áp với app ở tiền cảnh); file hỏng thì ghi đè là đúng. Muốn sửa phải thêm nhánh và trạng thái | reject |
+| 3 | blind, edge | `didChangeMetrics` gọi `setPreferredOrientations` ở mỗi frame bàn phím | low | Có thật (lời gọi kênh thừa, cùng giá trị); không lỗi hành vi. Sửa cần thêm cache | reject |
+| 4 | blind | `pakTheme` không nối `barBackgroundColor`, nav/tab text style | low | Spec chỉ yêu cầu brightness, primary, nền, body; story này chưa có nav/tab bar (1.6 nối) | reject |
+| 5 | blind | `pakSupportedLocales` chép tay; `resolveAppLocale` bỏ qua `supported` | low | PRD chỉ có vi/en; thêm ngôn ngữ thứ ba không nằm trong kế hoạch | reject |
+| 6 | blind | Spec `in-review` lệch sprint `in-progress` | false | Đúng thiết kế: bước trình bày đồng bộ sprint-status | reject |
+| 7 | blind | Android thiếu khóa hướng trong manifest và `localeConfig` | low | Manifest không phân biệt được phone/tablet; chính sách áp trước bootstrap. `localeConfig` không có trong yêu cầu (app có cài đặt ngôn ngữ riêng ở Epic 5) | reject |
+| 8 | blind | Thanh điều hướng Android < 15 không thật sự trong suốt | medium | Không bật `SystemUiMode.edgeToEdge` thì nền dưới thanh là `windowBackground` của `NormalTheme` (theo chế độ tối của máy, `values-night/styles.xml`), không theo theme app; lệch dòng Matrix "Giao diện" | patch |
+| 9 | blind, edge | Lỗi ghi bị nuốt, không tự thử lại; flush khi `hidden` có thể bị OS treo | low | Đúng thiết kế: AD-18 không log; Matrix chỉ yêu cầu ghi lại ở `flush`/`update` kế tiếp; ghi nguyên tử nên bị kill giữa chừng không hỏng file | reject |
+| 10 | blind, edge | `update` sau `dispose` → assert của `ChangeNotifier` | low | Store sống suốt vòng đời app, không có caller nào dispose rồi update; sửa cần thêm guard | reject |
+| 11 | blind, edge | `theme_test` đọc DESIGN.md ngoài package; `indexOf` −1 khi thiếu `typography:` | low | CI checkout cả repo nên đường dẫn ổn; chỉ ra lỗi khó hiểu khi DESIGN đổi cấu trúc; sửa cần thêm guard | reject |
+| 12 | blind | `fr47_hidden_app_flushes_pending_settings` chờ 20 ms thật | low | Hàm ghi trong test là fake chạy trong bộ nhớ, 20 ms dư cho microtask; không có I/O thật | reject |
+| 13 | blind | Không có gì chặn việc dùng hằng `localizationsDelegates` sinh ra; `intl` bắc cầu | low | Quyết định trong spec (Always); `intl` được `flutter_localizations` ghim theo SDK | reject |
+| 14 | blind | Bóng FAB không phụ thuộc dark mode | low | Mâu thuẫn nằm trong DESIGN.md; FAB chưa dùng (story 3.1) | reject |
+| 15 | blind | Code Map của spec lỗi thời | low | Sửa là sửa spec của build này | reject |
+| 16 | edge | Hàm `change` truyền vào `update` ném | false | Lỗi của caller, ném to là hành vi đúng | reject |
+| 17 | edge | `raf.read` trả thiếu byte với file thường | low | File cục bộ < 64 KB đọc một lần là đủ; sửa cần thêm vòng lặp | reject |
+| 18 | edge | (đã ghi deferred-work) `display.size` bằng 0 và không có metrics sau đó → phone không bị khóa dọc | maybe-false | Cần chạy trên máy Android thật để xem `display.size` lúc khởi động; `didChangeDependencies` và `didChangeMetrics` đều áp lại; nếu đúng thì medium | defer |
 
 ## Design Notes
 
