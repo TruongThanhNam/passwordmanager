@@ -60,3 +60,9 @@
 ## Deferred from: code review of spec-1-3-giao-dien-sang-toi-hai-ngon-ngu-cai-dat-mac-dinh (2026-11-09)
 
 - (Chưa xác minh; nếu đúng thì medium) Trên máy gập, `FlutterView.display.size` có thể không cập nhật khi gập hoặc mở. Khi đó `applyOrientationPolicy` trong `didChangeMetrics` (`pak_manager/lib/features/shared/orientation.dart:40`) vẫn giữ chính sách phone/tablet cũ. Cần kiểm trên máy gập Android thật hoặc emulator foldable. Nếu `display.size` không đổi thì tính lại từ `view.physicalSize / devicePixelRatio`. Làm cùng mục `display.size` ở trên (story 7.1).
+
+## Deferred from: build review of spec-1-4-ma-hoa-vault-bang-khoa-hai-tang-va-argon2id (2026-11-09)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-4-ma-hoa-vault-bang-khoa-hai-tang-va-argon2id.md`
+  summary: (Chưa xác minh, nếu đúng thì high) Hiệu chỉnh KDF trả `null` khi lần probe (3, 64 MiB) lỗi, không lùi về sàn (2, 19 MiB), nên máy không cấp được 64 MiB sẽ không tạo được tài khoản (story 1.6).
+  evidence: Đúng Design Notes bước 4 của story 1.4. Cần chạy `calibrateVaultKdf` trên máy mốc yếu nhất (Android 7, RAM 2 GB; iPhone 6s/SE đời 1) để biết Argon2id 64 MiB có cấp được bộ nhớ không. Nếu không, thêm lần thử ở sàn sau khi probe lỗi.

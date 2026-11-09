@@ -2,7 +2,7 @@
 title: 'Story 1.4 — Mã hóa vault bằng khóa hai tầng và Argon2id'
 type: 'feature'
 created: '2026-11-09'
-status: 'in-review'
+status: 'done'
 route: 'dispatch'
 baseline_commit: '24abe79df9c0082e9c12d014b6e95a5826da8349'
 review_loop_iteration: 0
