@@ -36,7 +36,8 @@ void main() {
         0,
         128,
       );
-      // Hai lần liên tiếp với chuỗi 128 ký tự (lần đầu dựng từ điển xếp hạng).
+      // Hai lần liên tiếp với chuỗi 128 ký tự (từ điển đã dựng trong
+      // constructor).
       expect(fresh.estimate(input), PasswordStrength.high);
       expect(fresh.estimate(input), PasswordStrength.high);
 
@@ -44,29 +45,53 @@ void main() {
       // Thay vào đó cô lập chi phí dựng từ điển: một lần gọi (chuỗi ngắn) sau
       // khi đã có cache phải rẻ hơn hẳn một lần dựng từ điển `en`. Cả hai đo
       // trên cùng máy, lấy min nhiều lần để giảm nhiễu.
-      int minMicros(int runs, void Function() body) {
-        var best = 1 << 62;
-        for (var i = 0; i < runs; i++) {
-          final sw = Stopwatch()..start();
-          body();
-          sw.stop();
-          if (sw.elapsedMicroseconds < best) {
-            best = sw.elapsedMicroseconds;
-          }
-        }
-        return best;
-      }
-
-      final cachedCall = minMicros(5, () => fresh.estimate('short probe 1'));
-      final rebuild = minMicros(
-        3,
-        () => Options(dictionaries: en.dictionaries).rankedDictionaries,
-      );
+      final cachedCall = _minMicros(5, () => fresh.estimate('short probe 1'));
+      final rebuild = _rebuildMicros();
       expect(
         cachedCall,
         lessThan(rebuild ~/ 4),
         reason: 'gọi có cache: $cachedCall µs, dựng từ điển: $rebuild µs',
       );
     });
+
+    test('ad15_constructor_warms_dictionaries', () {
+      // Lần gọi ĐẦU TIÊN sau khi dựng instance cũng phải rẻ: từ điển xếp hạng
+      // đã được dựng trong constructor, không để dồn vào lần gõ phím đầu.
+      final firstCall = _minMicrosEach(3, () {
+        final warmed = StrengthEstimator();
+        return () => warmed.estimate('short probe 2');
+      });
+      final rebuild = _rebuildMicros();
+      expect(
+        firstCall,
+        lessThan(rebuild ~/ 4),
+        reason: 'lần gọi đầu: $firstCall µs, dựng từ điển: $rebuild µs',
+      );
+    });
   });
 }
+
+/// Thời gian nhỏ nhất (µs) qua [runs] lần; mỗi lần gọi [prepare] (không tính
+/// giờ) để lấy phần thân cần đo.
+int _minMicrosEach(int runs, void Function() Function() prepare) {
+  var best = 1 << 62;
+  for (var i = 0; i < runs; i++) {
+    final body = prepare();
+    final sw = Stopwatch()..start();
+    body();
+    sw.stop();
+    if (sw.elapsedMicroseconds < best) {
+      best = sw.elapsedMicroseconds;
+    }
+  }
+  return best;
+}
+
+int _minMicros(int runs, void Function() body) =>
+    _minMicrosEach(runs, () => body);
+
+/// Chi phí dựng từ điển xếp hạng `en` trên một `Options` mới.
+int _rebuildMicros() => _minMicros(
+  3,
+  () => Options(dictionaries: en.dictionaries).rankedDictionaries,
+);

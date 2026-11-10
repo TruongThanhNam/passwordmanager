@@ -1,7 +1,8 @@
 // Sinh blocklist mật khẩu phổ biến (AD-15):
 //   assets/blocklist.bloom          Bloom filter định dạng `PAKB` v1
 //   assets/blocklist.FORMAT.md      mô tả định dạng, tham số và nguồn
-//   test/fixtures/blocklist/sample.txt  500 mục mẫu chọn tất định
+//   test/fixtures/blocklist/sample.txt  500 mục mẫu chọn tất định, bỏ mục
+//                                       trông như dữ liệu cá nhân
 //
 // Nguồn (repo, commit ghim, đường dẫn) đọc từ tool/blocklist/SOURCE. Chỉ giữ
 // dòng ASCII in được (0x20–0x7E) dài 15–128 sau khi bỏ `\r` cuối dòng, chuyển
@@ -288,13 +289,33 @@ Uint8List buildBloom(List<String> entries) {
 double expectedFalsePositiveRate(int n, int mBits) =>
     math.pow(1 - math.exp(-hashCount * n / mBits), hashCount).toDouble();
 
-/// 500 mục mẫu: mục thứ `i·⌊n/500⌋` của [sorted], `i` = 0…499.
+/// Dấu hiệu dữ liệu cá nhân: `@` (email, kể cả email cụt), URL (`://`,
+/// `www.`), tên miền nhà cung cấp email, hoặc dãy ≥ 10 chữ số liền nhau (số
+/// điện thoại, số giấy tờ).
+final _personalDataPattern = RegExp(
+  r'@|://|www\.|(mail|yahoo|msn|aol|outlook)\.|[0-9]{10,}',
+);
+
+/// `true` nếu [entry] trông như dữ liệu cá nhân lộ ra từ nguồn. Chỉ dùng để
+/// loại khỏi mẫu kiểm thử (test chỉ dùng dữ liệu giả); Bloom vẫn chứa đủ.
+bool looksLikePersonalData(String entry) =>
+    _personalDataPattern.hasMatch(entry);
+
+/// 500 mục mẫu: bỏ mọi mục [looksLikePersonalData] khỏi [sorted] (giữ thứ
+/// tự), rồi lấy mục thứ `i·⌊m/500⌋` của m mục còn lại, `i` = 0…499.
 List<String> pickSample(List<String> sorted) {
-  if (sorted.length < sampleSize) {
-    throw StateError('chỉ có ${sorted.length} mục, cần ít nhất $sampleSize');
+  final eligible = [
+    for (final entry in sorted)
+      if (!looksLikePersonalData(entry)) entry,
+  ];
+  if (eligible.length < sampleSize) {
+    throw StateError(
+      'chỉ có ${eligible.length} mục không giống dữ liệu cá nhân, '
+      'cần ít nhất $sampleSize',
+    );
   }
-  final step = sorted.length ~/ sampleSize;
-  return [for (var i = 0; i < sampleSize; i++) sorted[i * step]];
+  final step = eligible.length ~/ sampleSize;
+  return [for (var i = 0; i < sampleSize; i++) eligible[i * step]];
 }
 
 // ---------------------------------------------------------------------------
@@ -335,6 +356,7 @@ String _formatDoc({
   required int n,
   required int mBits,
   required int assetBytes,
+  required int eligible,
 }) {
   final fp = (expectedFalsePositiveRate(n, mBits) * 100).toStringAsFixed(4);
   final sources = [for (final (path, count) in counts) '| `$path` | $count |']
@@ -390,8 +412,10 @@ $sources
 
 Tổng sau khử trùng: $n mục.
 
-Mẫu kiểm thử `test/fixtures/blocklist/sample.txt`: $sampleSize mục, mục thứ
-`i·⌊n/$sampleSize⌋` của danh sách đã sắp xếp.
+Mẫu kiểm thử `test/fixtures/blocklist/sample.txt`: $sampleSize mục. Bỏ khỏi
+danh sách đã sắp xếp mọi mục trông như dữ liệu cá nhân (chứa `@`, `://`,
+`www.`, tên miền nhà cung cấp email, hoặc dãy ≥ 10 chữ số liền nhau), còn
+$eligible mục; lấy mục thứ `i·⌊$eligible/$sampleSize⌋`, `i` = 0…${sampleSize - 1}.
 ''';
 }
 
@@ -433,6 +457,7 @@ Future<int> run() async {
     n: sorted.length,
     mBits: mBits,
     assetBytes: bloom.length,
+    eligible: sorted.where((e) => !looksLikePersonalData(e)).length,
   );
 
   _writeAtomically(bloomPath, bloom);

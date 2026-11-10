@@ -50,5 +50,7 @@ sau khi bỏ `\r` cuối dòng, chuyển chữ thường, khử trùng.
 
 Tổng sau khử trùng: 647380 mục.
 
-Mẫu kiểm thử `test/fixtures/blocklist/sample.txt`: 500 mục, mục thứ
-`i·⌊n/500⌋` của danh sách đã sắp xếp.
+Mẫu kiểm thử `test/fixtures/blocklist/sample.txt`: 500 mục. Bỏ khỏi
+danh sách đã sắp xếp mọi mục trông như dữ liệu cá nhân (chứa `@`, `://`,
+`www.`, tên miền nhà cung cấp email, hoặc dãy ≥ 10 chữ số liền nhau), còn
+553467 mục; lấy mục thứ `i·⌊553467/500⌋`, `i` = 0…499.

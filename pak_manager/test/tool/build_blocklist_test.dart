@@ -192,7 +192,8 @@ void main() {
   group('mẫu', () {
     test('ad15_sample_picks_every_floor_n_over_500th', () {
       final sorted = [
-        for (var i = 0; i < 1234; i++) i.toString().padLeft(15, '0'),
+        for (var i = 0; i < 1234; i++)
+          'entry ${i.toString().padLeft(4, '0')} padding',
       ];
       final sample = tool.pickSample(sorted);
       expect(sample, hasLength(500));
@@ -200,6 +201,48 @@ void main() {
       expect(sample[1], sorted[2]);
       expect(sample.last, sorted[499 * 2]);
       expect(() => tool.pickSample(sorted.sublist(0, 499)), throwsStateError);
+    });
+
+    test('ad15_personal_data_patterns', () {
+      for (final pii in [
+        'someone_01@hotmail.com',
+        'chaz2501@fsmail.',
+        'name757hotmail.com',
+        'http://www.example.org/x',
+        'call0897586476now',
+        '1234567890123456',
+      ]) {
+        expect(tool.looksLikePersonalData(pii), isTrue, reason: pii);
+      }
+      for (final ok in [
+        'correct horse battery staple',
+        'iloveyou12345678',
+        '123456789qwerty',
+        'abcdefghijklmno',
+      ]) {
+        expect(tool.looksLikePersonalData(ok), isFalse, reason: ok);
+      }
+    });
+
+    test('ad15_sample_skips_personal_data_before_stepping', () {
+      final sorted = [
+        for (var i = 0; i < 1000; i++)
+          i.isEven
+              ? 'entry ${i.toString().padLeft(4, '0')} padding'
+              : 'user${i.toString().padLeft(4, '0')}@mail.test',
+      ]..sort();
+      final sample = tool.pickSample(sorted);
+      expect(sample, hasLength(500));
+      expect(sample.where(tool.looksLikePersonalData), isEmpty);
+      final eligible = sorted.where((e) => !tool.looksLikePersonalData(e));
+      expect(sample, eligible.toList());
+      // Bỏ 2 mục hợp lệ đầu: còn 499 mục hợp lệ (dù tổng vẫn 998) → ném.
+      expect(() => tool.pickSample(sorted.sublist(2)), throwsStateError);
+    });
+
+    test('ad15_committed_sample_has_no_personal_data', () {
+      final offending = blocklistSample().where(tool.looksLikePersonalData);
+      expect(offending, isEmpty);
     });
   });
 }

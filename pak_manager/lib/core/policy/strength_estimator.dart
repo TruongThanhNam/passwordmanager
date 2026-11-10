@@ -21,9 +21,10 @@ PasswordStrength strengthForScore(int score) {
 
 /// Đánh giá độ mạnh bằng `zxcvbnm` với từ điển `en` (đã gồm `common`).
 ///
-/// Dùng lại một instance [Zxcvbnm]; từ điển xếp hạng được dựng một lần ở lần
-/// gọi đầu rồi giữ trong cache (xem [_ReusableOptions]). Không giữ chuỗi mật
-/// khẩu sau khi trả kết quả.
+/// Dùng lại một instance [Zxcvbnm]; từ điển xếp hạng được dựng ngay trong
+/// constructor (≈25–31 ms trên máy dev) rồi giữ trong cache (xem
+/// [_ReusableOptions]), nên dựng instance sớm là làm nóng, lần gõ đầu không
+/// phải chờ. Không giữ chuỗi mật khẩu sau khi trả kết quả.
 final class StrengthEstimator {
   StrengthEstimator() : _zxcvbnm = Zxcvbnm(options: _ReusableOptions());
 
@@ -39,7 +40,10 @@ final class StrengthEstimator {
 /// là `null` (không có userInputs), trả chính instance này để giữ cache
 /// `rankedDictionaries`.
 final class _ReusableOptions extends Options {
-  _ReusableOptions() : super(dictionaries: en.dictionaries);
+  _ReusableOptions() : super(dictionaries: en.dictionaries) {
+    // `rankedDictionaries` là getter lười: đọc một lần để dựng cache ngay.
+    final _ = rankedDictionaries;
+  }
 
   @override
   Options copyWith({
