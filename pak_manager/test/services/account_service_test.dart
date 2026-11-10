@@ -12,6 +12,7 @@ import 'package:pak_manager/core/io/atomic_file_writer.dart';
 import 'package:pak_manager/core/io/pak_paths.dart';
 import 'package:pak_manager/core/ports/file_sync_port.dart';
 import 'package:pak_manager/services/account_service.dart';
+import 'package:pak_manager/services/vault_session.dart';
 import 'package:sodium/sodium_sumo.dart';
 
 import '../core/vault_fixture.dart';
@@ -262,10 +263,10 @@ void main() {
       );
 
       final session = (result as CreateSuccess).session;
-      expect(session.isDisposed, isFalse);
-      expect(session.cards, isEmpty);
-      expect(session.recent, isEmpty);
-      session.dispose();
+      expect(session.isLocked, isFalse);
+      expect((session.readCards() as SessionOk).value, isEmpty);
+      expect((session.readRecent() as SessionOk).value, isEmpty);
+      session.lock();
       expect(await s.bootstrap(), isA<BootstrapHasAccount>());
     });
 
@@ -283,7 +284,7 @@ void main() {
       expect(result, isA<CreateSuccess>());
       expect(vaultNames(), ['cards', 'header', 'recent']);
       expect(File(paths.cardsFile).readAsBytesSync(), isNot([1]));
-      (result as CreateSuccess).session.dispose();
+      (result as CreateSuccess).session.lock();
     });
 
     test('ad07_create_refuses_when_header_exists', () async {
@@ -380,7 +381,7 @@ void main() {
         expect(seen, hasLength(_password.length));
         expect(seen, everyElement(0));
         if (result is CreateSuccess) {
-          result.session.dispose();
+          result.session.lock();
         }
         if (Directory(paths.vaultDir).existsSync()) {
           Directory(paths.vaultDir).deleteSync(recursive: true);
@@ -410,7 +411,7 @@ void main() {
       final result = await first;
       expect(result, isA<CreateSuccess>());
       expect(derives, 1);
-      (result as CreateSuccess).session.dispose();
+      (result as CreateSuccess).session.lock();
     });
   });
 
@@ -490,12 +491,12 @@ void main() {
 
       expect(result, isA<UnlockSuccess>());
       final session = (result as UnlockSuccess).session;
-      expect(session.cards, fixtureCards);
-      expect(session.recent, fixtureRecent);
+      expect((session.readCards() as SessionOk).value, fixtureCards);
+      expect((session.readRecent() as SessionOk).value, fixtureRecent);
       expect(derives, 1);
       expectKeksDisposed();
       expect(snapshot(), before);
-      session.dispose();
+      session.lock();
     });
 
     test('fr03_ad05_wrong_password_is_wrong_not_corrupt', () async {
@@ -591,7 +592,7 @@ void main() {
       for (final pw in seen) {
         expect(pw, everyElement(0));
       }
-      (ok as UnlockSuccess).session.dispose();
+      (ok as UnlockSuccess).session.lock();
     });
 
     test('ux_dr42_concurrent_unlock_returns_running_result', () async {
@@ -620,12 +621,12 @@ void main() {
       expect(count, 1);
       expect(a, isA<UnlockSuccess>());
       expect(b, same(a));
-      (a as UnlockSuccess).session.dispose();
+      (a as UnlockSuccess).session.lock();
 
       // Xong rồi thì lần sau chạy lại bình thường.
       final third = await s.unlock(fixturePw);
       expect(count, 2);
-      (third as UnlockSuccess).session.dispose();
+      (third as UnlockSuccess).session.lock();
     });
   });
 }

@@ -137,7 +137,7 @@ class _CreateAccountScreenState extends ConsumerState<CreateAccountScreen> {
     final result = await service.create(_main.text);
     if (!mounted) {
       if (result is CreateSuccess) {
-        result.session.dispose();
+        result.session.lock();
       }
       return;
     }

@@ -91,7 +91,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final result = await service.unlock(_password.text);
     if (!mounted) {
       if (result is UnlockSuccess) {
-        result.session.dispose();
+        result.session.lock();
       }
       return;
     }
@@ -99,7 +99,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       case UnlockSuccess(:final session):
         final onUnlocked = widget.onUnlocked;
         if (onUnlocked == null) {
-          session.dispose();
+          session.lock();
           setState(() => _busy = false);
         } else {
           onUnlocked(session);
