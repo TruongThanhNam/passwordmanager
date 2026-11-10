@@ -96,6 +96,42 @@ Người dùng chọn 2026-11-10:
 - Given widget test `SecretField`, then các thuộc tính AD-14 đúng, menu ngữ cảnh không có Copy/Cut nhưng có Paste.
 - Given toàn repo, then `flutter analyze --fatal-infos --fatal-warnings` 0 issue và `dart tool/check_imports.dart` exit 0.
 
+### Review Findings
+
+Review lần 2, 2026-11-10 (diff `7659be6..f4cef6a`, chỉ `pak_manager/`, bỏ code l10n sinh ra và `pubspec.lock`; 4 lớp: blind (B), edge (E), verif-gap (V), acceptance (A); 32 phát hiện → 1 decision, 5 patch, 0 defer, 23 reject). Hai nghi vấn được kiểm bằng widget test tạm (đã xóa): bấm đúp S1 không đẩy 2 màn S2; node ngữ nghĩa của `PakPrimaryButton` có `isButton` nhưng không có action `tap`, còn nút mắt bị gộp vào node của ô nhập (nhãn "Mật khẩu chính", không có node riêng).
+
+- [x] [Review][Patch] (Decision 2026-11-10: chọn (a)) Nút mắt của `SecretField` không tới được bằng trình đọc màn hình (E, B) — `Semantics(button, excludeSemantics)` không có `onTap`, nhãn `revealLabel`/`hideLabel` = `null` ở S2, và node bị gộp vào node của `CupertinoTextField` nên VoiceOver/TalkBack không chọn được nút để hiện/ẩn mật khẩu. Triage #11 trước đã reject vì cần microcopy mới; bằng chứng mới: nút không chỉ thiếu nhãn mà không có node riêng. Lựa chọn: (a) thêm key ARB `pw.reveal`/`pw.hide` (vi/en), `Semantics(container: true, onTap: …)` + test; (b) giữ nguyên, ghi deferred tới story trợ năng. [pak_manager/lib/features/shared/secret_field.dart:128]
+- [x] [Review][Patch] `PakPrimaryButton` không có action `tap` trong cây ngữ nghĩa: `excludeSemantics: true` bỏ action của `CupertinoButton`, `Semantics` không đặt `onTap` → TalkBack không coi nút "Tạo tài khoản" là bấm được, kích hoạt chỉ còn nhờ chạm giả lập của OS. Sửa: `onTap: enabled ? onPressed : null`; test `tester.semantics.tap`/`hasAction(SemanticsAction.tap)` cho thường/vô hiệu/bận. [pak_manager/lib/features/shared/pak_buttons.dart:46]
+- [x] [Review][Patch] `didPopRoute` kiểm `navigator.canPop()` của navigator gốc trước khi `maybePop()`, nên bỏ qua `NavigatorPopHandler` mà `CupertinoTabView` (cupertino_ui 1.1.4 `tab_view.dart:196`) đăng ký: khi tab đã push trang (3.1 trở đi) Back hệ thống thoát app thay vì về trang trước. Sửa: `return navigator.maybePop();` (S1 gốc vẫn trả `false`, S2 bận vẫn bị `PopScope` chặn) + test với tab có route con. [pak_manager/lib/features/shared/session_gate.dart:69]
+- [x] [Review][Patch] Không test nào kiểm override `accountServiceProvider`/`passwordPolicyProvider` của `main.dart` tới S2: bỏ một override thì S2 không bao giờ bật nút mà CI vẫn xanh. Thêm vào test `main()` thật (nhánh có libsodium): mở S2, gõ mật khẩu hợp lệ hai ô, nút bật. [pak_manager/test/app_test.dart:186]
+- [x] [Review][Patch] Nhánh `!mounted` hủy phiên khi `create` xong sau khi S2/gate bị gỡ chưa có test: bỏ `result.session.dispose()` (hoặc `session.dispose()` trong `_onCreated`) thì DEK không bị hủy mà CI vẫn xanh. Thêm test: bấm tạo → `pumpWidget(SizedBox.shrink())` → `completeCreate(CreateSuccess(fakeSession(dek)))` → `dek.disposed`. [pak_manager/lib/features/auth/create_account_screen.dart:138]
+- [x] [Review][Patch] `navTitleTextStyle`/`tabLabelTextStyle` mới trong `pakTheme` không có assertion; bỏ một trong hai thì tiêu đề/nhãn tab về font mặc định mà không test nào đỏ. Thêm vào `theme_test`. [pak_manager/lib/features/shared/theme/pak_theme.dart]
+
+**Đã sửa (2026-11-10):** cả 6 patch. `PakPrimaryButton` đặt `Semantics.onTap`; `SecretField` nút mắt là node `container` có `onTap`, nhãn từ key ARB mới `pwReveal`/`pwHide` (vi "Hiện mật khẩu"/"Ẩn mật khẩu", en "Show password"/"Hide password", gen-l10n); `didPopRoute` trả thẳng `navigator.maybePop()`. Test mới: `ux_dr10_primary_button_semantics_tap_only_when_enabled`, `ux_dr19_eye_is_own_screen_reader_button_with_label`, `ux_dr50_android_back_pops_page_inside_tab_first`, `ad22_create_finishing_after_tree_is_gone_disposes_session`, `ux_dr29_theme_nav_title_and_tab_label_use_tokens`, và bước mở S2 trong `ad18_nfr8_real_main_bootstraps_storage_then_builds_app` (chỉ chạy khi có libsodium → chờ CI). Đột biến: hoàn bản sửa của pak_buttons/session_gate/secret_field thì test tương ứng đỏ. Kiểm lại: analyze 0 issue, `check_imports` OK, `flutter test` không hook `sodium`: 306 pass, 1 skip, 7 lỗi `setUpAll` cần libsodium (như trước).
+
+**Rejected:**
+- B `_sodiumAvailable()` không await `init()` — false: `SodiumSumoInit.init()` bản FFI là đồng bộ (`sodium-4.1.2/lib/src/ffi/sodium_sumo_ffi_init.dart:17`), lỗi nạp thư viện ném ngay trong `try`.
+- B, E Phiên bị hủy ngoài gate giữ epoch/`GlobalKey` → tab còn hiện — low: chỉ gate gọi `dispose` (trùng triage #6, bẫy cho 1.8).
+- B Gate đọc `bootstrapResultProvider` cũ sau khi tạo — false ở 1.6: không có đường quay lại cây chưa đăng nhập (trùng #7).
+- B Ước lượng độ mạnh không giới hạn độ dài dán — false: `zxcvbnm` cắt ở 256 (trùng #8).
+- B, V KDF chạy trước khi kiểm `header` có sẵn — low: chỉ tới được khi `header` có mà bootstrap báo `NoAccount` (đường #1/#2); sửa thêm chốt.
+- B Inline-message không là live region — low: trùng #15.
+- B Số 15/128 viết cứng trong ARB — low: chuỗi chép đúng EXPERIENCE.md; luật không đổi trong phạm vi hiện tại.
+- B Khởi động chạy tuần tự; `StrengthEstimator()` lỗi làm fail closed — low: Sodium FFI init đồng bộ, asset nhỏ; constructor estimator ném là bất thường.
+- B Lỗi fail closed bị nuốt không log — low: thêm log cần quyết định theo chính sách lỗi AD-18, không phải sửa trực tiếp.
+- B `SecretField` không `clear()` controller cũ khi đổi — low: trùng #10.
+- B `policy.check` hai lần, `ref.read` trong build — low: trùng #19.
+- B Thiếu test (gỡ giữa chừng, dán dài, tiếng Anh) — phần gỡ giữa chừng gộp vào patch DEK ở trên; phần còn lại trùng #8, #20.
+- E Có tài khoản nhưng Sodium/blocklist lỗi → S1 nút vô hiệu thay vì S3 — reject: đúng dòng Matrix "Lưu trữ/Sodium/blocklist hỏng → S1"; đổi là sửa spec.
+- E Bấm đúp S1 đẩy 2 màn S2 — false: widget test tạm bấm lần hai sau 16 ms, chỉ có 1 `CreateAccountScreen` (Navigator hủy pointer khi push).
+- E `service.create` ném → `_busy` kẹt — false: `create` bọc mọi bước trong `on Object` và trả `CreateFailure`; hợp đồng lớp là không ném.
+- E Ghi `header` lỗi sau rename và xóa cũng lỗi — low: trùng #1.
+- A Hằng số 120/48/6/2/15/22 không phải token — false: `PakSpacing` phản chiếu đúng bảng token frontmatter DESIGN.md (`theme_test` kiểm `PakSpacing.all`); các số này là giá trị màn ở DESIGN.md:553-554, không có token tương ứng.
+- A `pw.mismatch` dùng `>=` thay vì "bằng" — reject: đã ghi lý do ở Implementation Notes; sửa là sửa spec.
+- A `bootstrapResultProvider` không theo hợp đồng "`null` = unavailable" — reject: vẫn fail closed (`BootstrapUnavailable`); sửa là sửa spec.
+- A Tên test `pak_app_builds_cupertino_app` không gắn FR/AD/UX-DR — low: tên có từ trước story 1.6, chỉ thân test đổi.
+- A Không kiểm S1/S2 tiếng Anh — low: trùng #20.
+
 ## Implementation Notes
 
 - **Build (2026-11-10).** Ngoài Code Map: `features/shared/inline_message.dart` (inline-message/strength-meter dùng chung), `pak_theme.dart` thêm `navTitleTextStyle`/`tabLabelTextStyle` từ token, test dùng chung `test/support/account_fakes.dart`, xóa `.gitkeep` của `features/auth` và `features/shared/icons`.

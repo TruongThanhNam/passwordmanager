@@ -16,6 +16,7 @@ import 'package:pak_manager/core/ports/system_info_port.dart';
 import 'package:pak_manager/features/auth/login_screen.dart';
 import 'package:pak_manager/features/shared/content_column.dart';
 import 'package:pak_manager/features/shared/pak_app.dart';
+import 'package:pak_manager/features/shared/pak_buttons.dart';
 import 'package:pak_manager/main.dart' as app;
 import 'package:pak_manager/platform/platform_api.g.dart';
 import 'package:pak_manager/services/settings_store.dart';
@@ -187,6 +188,29 @@ void main() {
       tester.widget<LoginScreen>(find.byType(LoginScreen)).unavailable,
       !_sodiumAvailable(),
     );
+    if (_sodiumAvailable()) {
+      // main() override đủ dịch vụ và luật cho S2: mật khẩu hợp lệ, khớp →
+      // nút bật (không bấm: không chạy KDF thật).
+      await tester.tap(find.text('Tạo tài khoản'));
+      await tester.pumpAndSettle();
+      const password = 'Wq7#vLp2!zR9@kT4mX';
+      await tester.enterText(
+        find.byKey(const ValueKey('create.field.main')),
+        password,
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('create.field.confirm')),
+        password,
+      );
+      await tester.pump();
+      expect(
+        tester.widget<PakPrimaryButton>(find.byType(PakPrimaryButton)).enabled,
+        isTrue,
+      );
+      expect(await tester.binding.handlePopRoute(), isTrue);
+      await tester.pumpAndSettle();
+      expect(find.byType(LoginScreen), findsOneWidget);
+    }
 
     // Đổi cài đặt rồi cho app ẩn: store ghi ngay qua `fileSync` của main(),
     // tức chính PigeonPlatformPorts (fsync thư mục `pak/`).

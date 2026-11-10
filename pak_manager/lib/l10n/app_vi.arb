@@ -20,5 +20,7 @@
   "pwPattern": "Không dùng một ký tự lặp lại hoặc một dãy liên tiếp.",
   "pwMismatch": "Hai mật khẩu không khớp.",
   "createUnavailable": "Không mở được dữ liệu của app. Hãy khởi động lại app.",
-  "createFailed": "Không tạo được tài khoản. Hãy thử lại."
+  "createFailed": "Không tạo được tài khoản. Hãy thử lại.",
+  "pwReveal": "Hiện mật khẩu",
+  "pwHide": "Ẩn mật khẩu"
 }

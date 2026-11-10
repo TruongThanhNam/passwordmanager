@@ -93,5 +93,13 @@
   "createFailed": "Couldn't create the account. Try again.",
   "@createFailed": {
     "description": "create.failed: S2, under the button when AccountService.create failed."
+  },
+  "pwReveal": "Show password",
+  "@pwReveal": {
+    "description": "pw.reveal: screen-reader label of the eye button while the password is hidden."
+  },
+  "pwHide": "Hide password",
+  "@pwHide": {
+    "description": "pw.hide: screen-reader label of the eye button while the password is shown."
   }
 }

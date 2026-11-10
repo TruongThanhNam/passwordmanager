@@ -1,4 +1,5 @@
 import 'package:cupertino_ui/cupertino_ui.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pak_manager/features/shared/pak_buttons.dart';
 import 'package:pak_manager/features/shared/theme/pak_colors.dart';
@@ -97,6 +98,42 @@ void main() {
       expect(taps, 0);
     },
   );
+
+  testWidgets('ux_dr10_primary_button_semantics_tap_only_when_enabled', (
+    tester,
+  ) async {
+    final handle = tester.ensureSemantics();
+    var taps = 0;
+    SemanticsData data() => tester
+        .getSemantics(find.bySemanticsLabel('Tạo tài khoản'))
+        .getSemanticsData();
+
+    await _pump(
+      tester,
+      PakPrimaryButton(label: 'Tạo tài khoản', onPressed: () => taps++),
+    );
+    expect(data().hasAction(SemanticsAction.tap), isTrue);
+    tester.semantics.tap(find.semantics.byLabel('Tạo tài khoản'));
+    expect(taps, 1);
+
+    await _pump(
+      tester,
+      const PakPrimaryButton(label: 'Tạo tài khoản', onPressed: null),
+    );
+    expect(data().hasAction(SemanticsAction.tap), isFalse);
+
+    await _pump(
+      tester,
+      PakPrimaryButton(
+        label: 'Tạo tài khoản',
+        busy: true,
+        onPressed: () => taps++,
+      ),
+    );
+    expect(data().hasAction(SemanticsAction.tap), isFalse);
+    expect(taps, 1);
+    handle.dispose();
+  });
 
   testWidgets('ux_dr11_text_button_uses_accent_and_ink_disabled', (
     tester,

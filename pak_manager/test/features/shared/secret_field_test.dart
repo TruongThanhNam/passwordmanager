@@ -1,4 +1,5 @@
 import 'package:cupertino_ui/cupertino_ui.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pak_manager/features/shared/secret_field.dart';
@@ -23,7 +24,12 @@ Future<void> _pump(
     home: CupertinoPageScaffold(
       child: Center(
         child: show
-            ? SecretField(controller: controller, enabled: enabled)
+            ? SecretField(
+                controller: controller,
+                enabled: enabled,
+                revealLabel: 'Hiện mật khẩu',
+                hideLabel: 'Ẩn mật khẩu',
+              )
             : const SizedBox.shrink(),
       ),
     ),
@@ -202,6 +208,40 @@ void main() {
     await tester.pump();
     expect(editable().obscureText, isTrue);
 
+    await _finish(tester, controller);
+  });
+
+  testWidgets('ux_dr19_eye_is_own_screen_reader_button_with_label', (
+    tester,
+  ) async {
+    final handle = tester.ensureSemantics();
+    await _pump(tester, controller);
+    await tester.enterText(find.byType(EditableText), 'fake secret value');
+
+    // Node riêng, không gộp vào ô: có nhãn, cờ button và action tap.
+    final reveal = tester.getSemantics(find.bySemanticsLabel('Hiện mật khẩu'));
+    final data = reveal.getSemanticsData();
+    expect(data.flagsCollection.isButton, isTrue);
+    expect(data.hasAction(SemanticsAction.tap), isTrue);
+
+    tester.semantics.tap(find.semantics.byLabel('Hiện mật khẩu'));
+    await tester.pump();
+    expect(
+      tester.widget<EditableText>(find.byType(EditableText)).obscureText,
+      isFalse,
+    );
+    expect(find.bySemanticsLabel('Ẩn mật khẩu'), findsOneWidget);
+
+    // Ô khóa: nút mắt không còn action (state giữ nguyên: đang hiện).
+    await _pump(tester, controller, enabled: false);
+    expect(
+      tester
+          .getSemantics(find.bySemanticsLabel('Ẩn mật khẩu'))
+          .getSemanticsData()
+          .hasAction(SemanticsAction.tap),
+      isFalse,
+    );
+    handle.dispose();
     await _finish(tester, controller);
   });
 

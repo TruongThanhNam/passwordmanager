@@ -80,4 +80,10 @@ class AppLocalizationsVi extends AppLocalizations {
 
   @override
   String get createFailed => 'Không tạo được tài khoản. Hãy thử lại.';
+
+  @override
+  String get pwReveal => 'Hiện mật khẩu';
+
+  @override
+  String get pwHide => 'Ẩn mật khẩu';
 }

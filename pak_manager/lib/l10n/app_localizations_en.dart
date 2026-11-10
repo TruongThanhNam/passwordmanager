@@ -78,4 +78,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get createFailed => 'Couldn\'t create the account. Try again.';
+
+  @override
+  String get pwReveal => 'Show password';
+
+  @override
+  String get pwHide => 'Hide password';
 }

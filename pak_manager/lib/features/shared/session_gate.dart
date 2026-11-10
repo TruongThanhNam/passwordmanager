@@ -64,15 +64,17 @@ class SessionGateState extends ConsumerState<SessionGate>
   }
 
   /// Back hệ thống đóng tầng trên cùng của navigator đang hiện (S2 → S1);
-  /// ở gốc thì để OS xử lý (UX-DR50). `PopScope` của màn vẫn được tôn trọng.
+  /// ở gốc thì để OS xử lý (UX-DR50). Không kiểm `canPop()` trước:
+  /// `maybePop` tôn trọng `PopScope` của màn và `NavigatorPopHandler` của
+  /// `CupertinoTabView` (lùi trang trong tab), chỉ trả `false` khi không ai
+  /// xử lý.
   @override
   Future<bool> didPopRoute() async {
     final navigator = _navigator.currentState;
-    if (navigator == null || !navigator.canPop()) {
+    if (navigator == null) {
       return false;
     }
-    await navigator.maybePop();
-    return true;
+    return navigator.maybePop();
   }
 
   @override

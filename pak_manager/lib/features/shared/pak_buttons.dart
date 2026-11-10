@@ -47,6 +47,9 @@ class PakPrimaryButton extends StatelessWidget {
       button: true,
       enabled: enabled,
       label: label,
+      // `excludeSemantics` bỏ cả action của `CupertinoButton`: đặt lại để
+      // VoiceOver/TalkBack kích hoạt được nút.
+      onTap: enabled ? onPressed : null,
       excludeSemantics: true,
       child: SizedBox(
         width: double.infinity,

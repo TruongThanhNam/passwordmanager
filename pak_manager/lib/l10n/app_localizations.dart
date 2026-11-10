@@ -223,6 +223,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Couldn\'t create the account. Try again.'**
   String get createFailed;
+
+  /// pw.reveal: screen-reader label of the eye button while the password is hidden.
+  ///
+  /// In en, this message translates to:
+  /// **'Show password'**
+  String get pwReveal;
+
+  /// pw.hide: screen-reader label of the eye button while the password is shown.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide password'**
+  String get pwHide;
 }
 
 class _AppLocalizationsDelegate

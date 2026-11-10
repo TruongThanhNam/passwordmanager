@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cupertino_ui/cupertino_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pak_manager/features/auth/create_account_screen.dart';
@@ -272,5 +274,68 @@ void main() {
 
     await tester.pumpWidget(const SizedBox.shrink());
     expect(dek.disposed, isTrue);
+  });
+
+  testWidgets('ad22_create_finishing_after_tree_is_gone_disposes_session', (
+    tester,
+  ) async {
+    final service = FakeAccountService();
+    await pumpGateApp(tester, service: service);
+    await openCreateScreen(tester);
+    await tester.enterText(
+      find.byKey(const ValueKey('create.field.main')),
+      validPassword,
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('create.field.confirm')),
+      validPassword,
+    );
+    await tester.pump();
+    await tester.tap(find.byType(PakPrimaryButton));
+    await tester.pump();
+    expect(service.createCalls, hasLength(1));
+
+    // Cây bị gỡ khi `create` còn treo; xong sau đó thì DEK vẫn phải bị hủy.
+    await tester.pumpWidget(const SizedBox.shrink());
+    final dek = FakeSecureKey();
+    service.completeCreate(CreateSuccess(fakeSession(dek)));
+    await tester.pump();
+    expect(dek.disposed, isTrue);
+  });
+
+  testWidgets('ux_dr50_android_back_pops_page_inside_tab_first', (
+    tester,
+  ) async {
+    final service = FakeAccountService();
+    await pumpGateApp(tester, service: service);
+    await openCreateScreen(tester);
+    await _createWith(tester, service, CreateSuccess(fakeSession()));
+
+    // Trang con trong tab (story 3.1 trở đi): Back lùi trong tab, không
+    // thoát app.
+    final tabNavigator = tester.state<NavigatorState>(
+      find
+          .descendant(
+            of: find.byType(CupertinoTabView),
+            matching: find.byType(Navigator),
+          )
+          .first,
+    );
+    unawaited(
+      tabNavigator.push(
+        CupertinoPageRoute<void>(builder: (_) => const Text('trang con')),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('trang con'), findsOneWidget);
+
+    final gate = tester.state<SessionGateState>(find.byType(SessionGate));
+    expect(await gate.didPopRoute(), isTrue);
+    await tester.pumpAndSettle();
+    expect(find.text('trang con'), findsNothing);
+    expect(find.byType(CupertinoTabScaffold), findsOneWidget);
+
+    // Ở gốc của tab: để OS xử lý.
+    expect(await gate.didPopRoute(), isFalse);
   });
 }

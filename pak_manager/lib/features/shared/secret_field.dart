@@ -125,9 +125,15 @@ class _SecretFieldState extends State<SecretField> {
       padding: const EdgeInsets.only(left: 15),
       // Ô khóa (bận) giữ nguyên nền vì decoration là của riêng ô.
       decoration: decoration,
+      // Node riêng (container) có action tap: không bị gộp vào node của ô,
+      // nên VoiceOver/TalkBack chọn và kích hoạt được nút mắt.
       suffix: Semantics(
+        container: true,
         button: true,
         label: _obscured ? widget.revealLabel : widget.hideLabel,
+        onTap: widget.enabled
+            ? () => setState(() => _obscured = !_obscured)
+            : null,
         excludeSemantics: true,
         child: CupertinoButton(
           padding: EdgeInsets.zero,
