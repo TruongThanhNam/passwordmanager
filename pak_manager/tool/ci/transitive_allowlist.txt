@@ -1,0 +1,75 @@
+# Allowlist gói kéo theo (transitive) trong pubspec.lock (AD-12).
+# tool/ci/check_stack.dart từ chối mọi gói transitive không có ở đây.
+# Khi thêm: rà code của gói (đặc biệt mã mạng: HttpClient, Socket, package:http),
+# ghi chú gói cha kéo nó vào trong mô tả PR, rồi thêm một dòng tên gói.
+# Không ghi phiên bản: pubspec.lock + `flutter pub get --enforce-lockfile` đã ghim.
+# Mỗi dòng một tên, sắp xếp theo thứ tự chữ cái.
+_fe_analyzer_shared
+algorithmic
+analyzer
+archive
+args
+async
+boolean_selector
+built_collection
+built_value
+characters
+clock
+code_assets
+code_builder
+collection
+convert
+crypto
+csslib
+dart_style
+fake_async
+ffi
+file
+fixnum
+freezed_annotation
+glob
+graphs
+hooks
+html
+intl
+jni
+jni_flutter
+jni_util
+json_annotation
+leak_tracker
+leak_tracker_flutter_testing
+leak_tracker_testing
+listen
+logging
+matcher
+material_color_utilities
+meta
+objective_c
+package_config
+path
+path_provider_android
+path_provider_foundation
+path_provider_linux
+path_provider_platform_interface
+path_provider_windows
+platform
+plugin_platform_interface
+posix
+pub_semver
+record_use
+riverpod
+sky_engine
+source_span
+stack_trace
+state_notifier
+stream_channel
+string_scanner
+term_glyph
+test_api
+typed_data
+uuid
+vector_math
+vm_service
+watcher
+xdg_directories
+yaml
