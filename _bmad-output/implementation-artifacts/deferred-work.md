@@ -71,3 +71,15 @@
 
 - (Chưa xác minh, nếu đúng thì medium) Chưa có bằng chứng CI xanh cho build native của story 1.4: libsodium cho từng ABI Android, căn 16 KB, và build iOS. `pubspec.lock` nâng `objective_c` 9.5.0→9.6.3 (iOS của `path_provider`) và nâng `code_assets`/`hooks`/`record_use` lên major mới. Kết luận được khi job ubuntu (APK) và job macOS (iOS) của CI trên nhánh `feat/1-4-vault-crypto` xanh. Nếu đỏ thì sửa trước khi merge.
   status: done (CI tại `1c7d4e4`: job ubuntu và job macOS đều xanh, theo người dùng báo 2026-11-09) — `check_android_apk.sh` đã kiểm `libsodium.so` trong mọi ABI và căn 16 KB; build iOS cùng bản `objective_c` mới qua.
+
+## Deferred from: build of spec-1-5-luat-mat-khau-chinh-va-danh-gia-do-manh (2026-11-10)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-5-luat-mat-khau-chinh-va-danh-gia-do-manh.md`
+  summary: (medium) `StrengthEstimator.estimate` trên chuỗi 128 ký tự nhiều ký hiệu mất ≈80–99 ms mỗi lần (JIT, máy dev), đủ để giật khung hình nếu story 1.6 gọi đồng bộ trên UI thread ở mỗi lần gõ phím.
+  evidence: Đo lúc build story 1.5: cache từ điển hoạt động (dựng ≈25–31 ms, gọi có cache với chuỗi ngắn ≈2 ms), phần chậm là matcher l33t của `zxcvbnm`. Không giảm l33t vì sẽ đổi điểm (người dùng chọn 2026-11-10). Story 1.6 nên debounce hoặc chạy ước lượng ngoài UI thread, dựng `StrengthEstimator` sớm (làm nóng từ điển), và đo trên bản release ở máy mốc yếu nhất.
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-5-luat-mat-khau-chinh-va-danh-gia-do-manh.md`
+  summary: (medium) Chưa quyết định app làm gì khi `assets/blocklist.bloom` thiếu hoặc `BlocklistFilter.parse` trả `null`; `PasswordPolicy` cần filter non-null nên story 1.6 (người nạp asset) phải chọn cách xử lý.
+  evidence: Review build 1.5 (#6). Asset được đóng gói nên chỉ hỏng khi build lỗi, nhưng 1.6, 5.3 và 6.2 không được mỗi nơi xử lý một kiểu. Gợi ý: nạp một lần ở tầng services, hỏng thì fail closed (chặn tạo tài khoản và đặt mật khẩu, báo lỗi), không âm thầm bỏ luật "phổ biến".
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-5-luat-mat-khau-chinh-va-danh-gia-do-manh.md`
+  summary: (Chưa xác minh; nếu đúng thì medium) Toàn bộ `flutter test` chưa chạy trên nhánh `feat/1-5-password-policy`, vì máy dev thiếu VS Build Tools cho build hook `sodium`.
+  evidence: 40 test mới pass trong bản sao không `sodium`; analyze và check_imports OK. Kết luận được khi job ubuntu của CI trên nhánh này xanh (gồm cả test cũ và đóng gói asset vào APK).
