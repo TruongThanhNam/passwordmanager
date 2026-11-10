@@ -27,6 +27,13 @@ final bootstrapResultProvider = Provider<BootstrapResult>(
   (ref) => const BootstrapUnavailable(),
 );
 
+/// Cách dựng [SessionController] cho `SessionGate`. Mặc định không có đồng
+/// hồ = không tự khóa; `main.dart` nối `ClockPort` và cài đặt hiện tại
+/// (features không import `core/ports`).
+final sessionControllerFactoryProvider = Provider<SessionController Function()>(
+  (ref) => SessionController.new,
+);
+
 /// Bộ điều khiển phiên (AD-9). Chỉ có trong `ProviderScope` của phiên do
 /// `SessionGate` dựng; ngoài scope đó thì ném lỗi.
 final sessionControllerProvider = Provider<SessionController>(

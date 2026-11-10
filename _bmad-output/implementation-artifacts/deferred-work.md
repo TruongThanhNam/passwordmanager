@@ -117,3 +117,7 @@
 ## Deferred from: code review of spec-1-8-khoa-vault-va-xoa-du-lieu-giai-ma-khoi-bo-nho.md (2026-11-10)
 
 - Cửa sổ giữa `session.lock()` và `_notify()` trong `SessionController._runLock` (trong lúc await `clearClipboardIfOurs`): HomeShell vẫn hiện với phiên đã khóa, nhánh reset navigator key `_lastInSession` trong `SessionGate` chưa có test. Khi có hook clipboard thật (Epic 3/5/6): cho phép inject hook vào gate, viết test lock với hook chậm + pump một frame.
+
+## Deferred from: code review of spec-1-9-tu-khoa-khi-chay-nen-va-gioi-han-phien.md (2026-11-10)
+
+- Không có privacy screen: khi `hidden`/`paused`, ảnh app-switcher vẫn lộ nội dung vault, và lúc `resumed` HomeShell có thể hiện 1 frame trước khi `evaluate` khóa xong. Cần story riêng (che màn hình khi vào nền, FLAG_SECURE/iOS snapshot).

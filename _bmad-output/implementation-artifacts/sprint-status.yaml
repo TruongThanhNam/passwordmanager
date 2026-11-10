@@ -44,7 +44,7 @@ development_status:
   1-6-tạo-tài-khoản-và-vào-khung-3-tab: done
   1-7-đăng-nhập-bằng-mật-khẩu-chính: done
   1-8-khóa-vault-và-xóa-dữ-liệu-giải-mã-khỏi-bộ-nhớ: done
-  1-9-tự-khóa-khi-chạy-nền-và-giới-hạn-phiên: backlog
+  1-9-tự-khóa-khi-chạy-nền-và-giới-hạn-phiên: done
   epic-1-retrospective: optional
 
   epic-2: backlog

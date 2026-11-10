@@ -10,10 +10,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pak_manager/core/model/settings.dart';
 import 'package:pak_manager/core/policy/password_policy.dart';
 import 'package:pak_manager/core/policy/strength_estimator.dart';
+import 'package:pak_manager/core/ports/clock_port.dart';
 import 'package:pak_manager/features/shared/pak_app.dart';
 import 'package:pak_manager/features/shared/pak_buttons.dart';
 import 'package:pak_manager/features/shared/providers.dart';
 import 'package:pak_manager/services/account_service.dart';
+import 'package:pak_manager/services/session_controller.dart';
 import 'package:pak_manager/services/settings_store.dart';
 import 'package:pak_manager/services/vault_session.dart';
 import 'package:sodium/sodium_sumo.dart';
@@ -111,6 +113,7 @@ Future<void> pumpGateApp(
   PasswordPolicy? policy,
   bool withPolicy = true,
   AppLanguage language = AppLanguage.vi,
+  SessionController Function()? controllerFactory,
 }) async {
   final store = SettingsStore.inMemory(
     Settings.defaults.copyWith(
@@ -128,6 +131,8 @@ Future<void> pumpGateApp(
         ),
         strengthEstimatorProvider.overrideWithValue(sharedEstimator),
         bootstrapResultProvider.overrideWithValue(bootstrap),
+        if (controllerFactory != null)
+          sessionControllerFactoryProvider.overrideWithValue(controllerFactory),
       ],
       child: PakApp(settings: store, androidSdkInt: 35),
     ),
@@ -164,4 +169,83 @@ Future<void> createAndEnterShell(
   await tester.pump();
   service.completeCreate(CreateSuccess(session ?? fakeSession()));
   await tester.pumpAndSettle();
+}
+
+/// Đồng hồ đơn điệu giả: [ms] đặt tay; [error] khác `null` thì ném.
+final class FakeClock implements ClockPort {
+  FakeClock([this.ms = 1000000]);
+
+  int ms;
+  Object? error;
+
+  /// Khác `null` thì [monotonicMs] chờ nó rồi mới đọc [ms]/[error].
+  Completer<void>? hold;
+
+  /// Số lần đọc [monotonicMs].
+  int reads = 0;
+
+  void advance(Duration d) => ms += d.inMilliseconds;
+
+  @override
+  Future<int> monotonicMs() async {
+    reads++;
+    final gate = hold;
+    if (gate != null) {
+      await gate.future;
+    }
+    final e = error;
+    if (e != null) {
+      Error.throwWithStackTrace(e, StackTrace.current);
+    }
+    return ms;
+  }
+
+  @override
+  Future<String> bootId() async => 'fake-boot';
+}
+
+/// Timer giả do [FakeTimers.create] dựng; chỉ chạy khi test gọi [fire].
+final class FakeTimer implements Timer {
+  FakeTimer(this.duration, this._wake);
+
+  final Duration duration;
+  final void Function() _wake;
+  bool _active = true;
+
+  @override
+  bool get isActive => _active;
+
+  @override
+  int get tick => 0;
+
+  @override
+  void cancel() => _active = false;
+
+  void fire() {
+    if (_active) {
+      _active = false;
+      _wake();
+    }
+  }
+}
+
+/// Nhà máy timer giả cho `SessionController.timerFactory`.
+final class FakeTimers {
+  final List<FakeTimer> created = [];
+
+  Timer create(Duration duration, void Function() wake) {
+    final timer = FakeTimer(duration, wake);
+    created.add(timer);
+    return timer;
+  }
+
+  /// Timer còn hiệu lực (tối đa một).
+  List<FakeTimer> get active => created.where((t) => t.isActive).toList();
+
+  /// Bắn mọi timer còn hiệu lực.
+  void fireAll() {
+    for (final t in active) {
+      t.fire();
+    }
+  }
 }

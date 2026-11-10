@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:cupertino_ui/cupertino_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:pak_manager/core/model/settings.dart';
 import 'package:pak_manager/features/auth/create_account_screen.dart';
 import 'package:pak_manager/features/auth/login_screen.dart';
 import 'package:pak_manager/features/shared/home_shell.dart';
@@ -12,6 +13,7 @@ import 'package:pak_manager/features/shared/secret_field.dart';
 import 'package:pak_manager/features/shared/session_gate.dart';
 import 'package:pak_manager/features/shared/theme/pak_colors.dart';
 import 'package:pak_manager/services/account_service.dart';
+import 'package:pak_manager/services/session_controller.dart';
 
 import '../../support/account_fakes.dart';
 
@@ -503,4 +505,162 @@ void main() {
     expect(find.text('Khóa Vault'), findsNothing);
   });
 
+  group('tự khóa theo vòng đời (FR-14/15/16)', () {
+    late FakeClock clock;
+    late FakeTimers timers;
+    // `limits` được chụp một lần ở `enter` và một lần mỗi lần vào nền.
+    late int limitReads;
+    int backgroundCalls() => limitReads - 1;
+
+    SessionController factory() => SessionController(
+      clock: clock,
+      timerFactory: timers.create,
+      limits: () {
+        limitReads++;
+        return Settings.defaults;
+      },
+    );
+
+    setUp(() {
+      clock = FakeClock();
+      timers = FakeTimers();
+      limitReads = 0;
+    });
+
+    // Đi qua từng bước hợp lệ resumed ↔ inactive ↔ hidden ↔ paused.
+    const chain = [
+      AppLifecycleState.resumed,
+      AppLifecycleState.inactive,
+      AppLifecycleState.hidden,
+      AppLifecycleState.paused,
+    ];
+    void lifecycle(WidgetTester tester, AppLifecycleState state) {
+      var i = chain.indexOf(
+        tester.binding.lifecycleState ?? AppLifecycleState.resumed,
+      );
+      final target = chain.indexOf(state);
+      while (i != target) {
+        i += target > i ? 1 : -1;
+        tester.binding.handleAppLifecycleStateChanged(chain[i]);
+      }
+    }
+
+    Future<void> enterShell(WidgetTester tester) async {
+      final service = FakeAccountService();
+      await pumpGateApp(tester, service: service, controllerFactory: factory);
+      await createAndEnterShell(tester, service);
+      addTearDown(() => lifecycle(tester, AppLifecycleState.resumed));
+    }
+
+    testWidgets('fr16_gate_built_while_inactive_is_foreground', (
+      tester,
+    ) async {
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      await enterShell(tester);
+      await tester.pump();
+      expect(backgroundCalls(), 0);
+      expect(timers.active.single.duration, const Duration(minutes: 10));
+    });
+
+    testWidgets('fr16_inactive_is_not_background', (tester) async {
+      await enterShell(tester);
+      lifecycle(tester, AppLifecycleState.inactive);
+      lifecycle(tester, AppLifecycleState.resumed);
+      await tester.pump();
+      expect(backgroundCalls(), 0);
+    });
+
+    testWidgets('fr16_hidden_then_paused_marks_background_once', (
+      tester,
+    ) async {
+      await enterShell(tester);
+      lifecycle(tester, AppLifecycleState.hidden);
+      lifecycle(tester, AppLifecycleState.paused);
+      await tester.pump();
+      expect(backgroundCalls(), 1);
+      expect(timers.active.single.duration, const Duration(minutes: 3));
+      lifecycle(tester, AppLifecycleState.resumed);
+      await tester.pump();
+      lifecycle(tester, AppLifecycleState.hidden);
+      await tester.pump();
+      expect(backgroundCalls(), 2);
+    });
+
+    testWidgets('fr14_late_resume_locks_to_s3', (tester) async {
+      await enterShell(tester);
+      lifecycle(tester, AppLifecycleState.hidden);
+      await tester.pump();
+      clock.advance(const Duration(minutes: 3));
+      lifecycle(tester, AppLifecycleState.resumed);
+      await tester.pumpAndSettle();
+      expect(find.byType(HomeShell), findsNothing);
+      expect(find.text('Đăng nhập'), findsOneWidget);
+    });
+
+    testWidgets('fr14_timely_resume_keeps_tab_and_route', (tester) async {
+      await enterShell(tester);
+      await tester.tap(find.text('Cài đặt'));
+      await tester.pumpAndSettle();
+      lifecycle(tester, AppLifecycleState.hidden);
+      await tester.pump();
+      clock.advance(const Duration(minutes: 2, seconds: 59));
+      lifecycle(tester, AppLifecycleState.resumed);
+      await tester.pumpAndSettle();
+      expect(find.byType(HomeShell), findsOneWidget);
+      expect(
+        tester
+            .widget<CupertinoTabBar>(find.byType(CupertinoTabBar))
+            .currentIndex,
+        2,
+      );
+    });
+
+    testWidgets('fr14_session_entered_while_hidden_gets_background_mark', (
+      tester,
+    ) async {
+      final service = FakeAccountService();
+      await pumpGateApp(tester, service: service, controllerFactory: factory);
+      addTearDown(() => lifecycle(tester, AppLifecycleState.resumed));
+      await openCreateScreen(tester);
+      await tester.enterText(
+        find.byKey(const ValueKey('create.field.main')),
+        validPassword,
+      );
+      await tester.enterText(
+        find.byKey(const ValueKey('create.field.confirm')),
+        validPassword,
+      );
+      await tester.pump();
+      await tester.tap(find.byType(PakPrimaryButton));
+      await tester.pump();
+      // Người dùng rời app trong lúc KDF chạy.
+      lifecycle(tester, AppLifecycleState.hidden);
+      service.completeCreate(CreateSuccess(fakeSession()));
+      await tester.pump();
+      await tester.pump();
+      expect(backgroundCalls(), 1);
+      clock.advance(const Duration(minutes: 3));
+      lifecycle(tester, AppLifecycleState.resumed);
+      await tester.pumpAndSettle();
+      expect(find.byType(HomeShell), findsNothing);
+      expect(find.text('Đăng nhập'), findsOneWidget);
+    });
+
+    testWidgets('fr16_os_kill_reopens_at_s3', (tester) async {
+      await enterShell(tester);
+      // OS kill: tiến trình mới, không restoration.
+      await tester.pumpWidget(const SizedBox());
+      await pumpGateApp(
+        tester,
+        service: FakeAccountService(
+          bootstrapResult: const BootstrapHasAccount(),
+        ),
+        bootstrap: const BootstrapHasAccount(),
+        controllerFactory: factory,
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(HomeShell), findsNothing);
+      expect(find.text('Đăng nhập'), findsOneWidget);
+    });
+  });
 }

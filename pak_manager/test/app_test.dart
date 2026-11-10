@@ -15,14 +15,18 @@ import 'package:pak_manager/core/ports/file_sync_port.dart';
 import 'package:pak_manager/core/ports/system_info_port.dart';
 import 'package:pak_manager/features/auth/login_screen.dart';
 import 'package:pak_manager/features/shared/content_column.dart';
+import 'package:pak_manager/features/shared/home_shell.dart';
 import 'package:pak_manager/features/shared/pak_app.dart';
 import 'package:pak_manager/features/shared/pak_buttons.dart';
 import 'package:pak_manager/features/shared/secret_field.dart';
+import 'package:pak_manager/features/shared/session_gate.dart';
 import 'package:pak_manager/main.dart' as app;
 import 'package:pak_manager/platform/platform_api.g.dart';
 import 'package:pak_manager/services/settings_store.dart';
 import 'package:pak_manager/services/storage_bootstrap.dart';
 import 'package:sodium/sodium_sumo.dart';
+
+import 'support/account_fakes.dart' show FakeClock, fakeSession;
 
 void main() {
   testWidgets('pak_app_builds_cupertino_app', (tester) async {
@@ -49,6 +53,7 @@ void main() {
       _unavailableStorage(),
       fileSync: _RecordingFileSync(),
       systemInfo: _FakeSystemInfo(35),
+      clock: FakeClock(),
       releaseMode: kReleaseMode,
     );
     await tester.pump();
@@ -441,6 +446,7 @@ void main() {
       _unavailableStorage(),
       fileSync: _RecordingFileSync(),
       systemInfo: _FakeSystemInfo(35),
+      clock: FakeClock(),
       releaseMode: false,
     );
     await tester.pump();
@@ -457,6 +463,39 @@ void main() {
     );
     expect(find.byType(CupertinoApp), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('fr14_run_pak_app_wires_clock_and_settings_into_gate', (
+    tester,
+  ) async {
+    final clock = FakeClock();
+    app.runPakApp(
+      _unavailableStorage(),
+      fileSync: _RecordingFileSync(),
+      systemInfo: _FakeSystemInfo(35),
+      clock: clock,
+      releaseMode: false,
+    );
+    await tester.pump();
+    await tester.pump();
+    final gate = tester.state<SessionGateState>(find.byType(SessionGate));
+    gate.controller.enter(fakeSession());
+    await tester.pumpAndSettle();
+    expect(find.byType(HomeShell), findsOneWidget);
+
+    final binding = tester.binding;
+    binding
+      ..handleAppLifecycleStateChanged(AppLifecycleState.inactive)
+      ..handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+    await tester.pump();
+    // Mặc định settings: autolock 3 phút.
+    clock.advance(const Duration(minutes: 3));
+    binding
+      ..handleAppLifecycleStateChanged(AppLifecycleState.inactive)
+      ..handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+    expect(find.byType(HomeShell), findsNothing);
+    expect(find.byType(LoginScreen), findsOneWidget);
   });
 
   testWidgets('nfr8_run_app_waits_for_storage_bootstrap', (tester) async {
@@ -484,6 +523,7 @@ void main() {
       StorageBootstrap(directories: directories, backup: backup),
       fileSync: fileSync,
       systemInfo: _FakeSystemInfo(35),
+      clock: FakeClock(),
       releaseMode: false,
     );
     await tester.pump();
@@ -516,6 +556,7 @@ void main() {
       _unavailableStorage(),
       fileSync: _RecordingFileSync(),
       systemInfo: _FakeSystemInfo(27),
+      clock: FakeClock(),
       releaseMode: false,
     );
     await tester.pump();
@@ -526,6 +567,7 @@ void main() {
       _unavailableStorage(),
       fileSync: _RecordingFileSync(),
       systemInfo: _FakeSystemInfo(null),
+      clock: FakeClock(),
       releaseMode: false,
     );
     await tester.pump();
