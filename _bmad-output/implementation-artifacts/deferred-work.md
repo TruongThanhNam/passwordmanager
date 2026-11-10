@@ -83,3 +83,12 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-5-luat-mat-khau-chinh-va-danh-gia-do-manh.md`
   summary: (Chưa xác minh; nếu đúng thì medium) Toàn bộ `flutter test` chưa chạy trên nhánh `feat/1-5-password-policy`, vì máy dev thiếu VS Build Tools cho build hook `sodium`.
   evidence: 40 test mới pass trong bản sao không `sodium`; analyze và check_imports OK. Kết luận được khi job ubuntu của CI trên nhánh này xanh (gồm cả test cũ và đóng gói asset vào APK).
+
+## Deferred from: code review of spec-1-5-luat-mat-khau-chinh-va-danh-gia-do-manh.md (2026-11-10)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-5-luat-mat-khau-chinh-va-danh-gia-do-manh.md`
+  summary: (Chưa xác minh; nếu đúng thì medium) Thiếu ghi công giấy phép MIT của SecLists đi kèm `assets/blocklist.bloom` và `test/fixtures/blocklist/sample.txt`; chỉ có URL trong `tool/blocklist/SOURCE`, không có NOTICE hay `LicenseRegistry.addLicense`. Nguồn `rockyou` là dữ liệu lộ, không do SecLists viết.
+  evidence: Code review 1.5 (blind-hunter). Kết luận được khi xác định Bloom filter dẫn xuất và 500 dòng mẫu có phải "copies or substantial portions" theo MIT không; nếu có thì thêm NOTICE cạnh asset và đăng ký giấy phép ở story có màn giấy phép.
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-5-luat-mat-khau-chinh-va-danh-gia-do-manh.md`
+  summary: (low) Chưa định nghĩa dòng độ mạnh hiện gì khi `PasswordPolicy.check` trả lỗi: `StrengthEstimator` không biết blocklist và luật lặp/tuần tự, nên UI có thể hiện `High` cạnh lỗi `PasswordCommon`/`PasswordPattern`.
+  evidence: Code review 1.5 (blind-hunter). Story 1.6, 5.3 và 6.2 đều hiện dòng độ mạnh; cần quyết định chung một lần (vd ép `low` khi `check` không `PasswordOk`) để ba nơi không lệch nhau.
