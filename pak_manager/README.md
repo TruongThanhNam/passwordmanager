@@ -20,8 +20,9 @@ Thêm hay nâng dependency thì phải cập nhật bảng Stack trong `ARCHITEC
 `tool/ci/transitive_allowlist.txt` sau khi rà code; `tool/ci/check_stack.dart`
 chặn mọi lệch. Nâng action trong `.github/workflows/ci.yml` thì ghim SHA commit
 mới kèm comment tag; nâng Gradle thì cập nhật `distributionSha256Sum` trong
-`android/gradle/wrapper/gradle-wrapper.properties`; nâng Flutter thì revision
-trong `.metadata` phải khớp tag.
+`android/gradle/wrapper/gradle-wrapper.properties`; nâng Flutter thì đổi
+`FLUTTER_VERSION` trong `ci.yml` và sửa tay `revision` trong `.metadata` cho khớp
+commit của tag (`flutter upgrade` không tự cập nhật `.metadata`).
 
 ## Flavor
 

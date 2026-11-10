@@ -110,3 +110,25 @@ macOS: `macos-latest` hiện trỏ `macos-26`; AC yêu cầu `macos-15`. Image `
 - `grep -nE 'uses:|runs-on:' .github/workflows/ci.yml` -- chỉ SHA + runner ghim
 
 ## Implementation Notes
+
+### Review Findings
+
+- [x] [Review][Patch] README: hướng dẫn nâng Flutter chưa nói phải đổi `FLUTTER_VERSION` trong `ci.yml` cùng lúc với `revision` trong `.metadata` (`flutter upgrade` không tự cập nhật `.metadata`) [pak_manager/README.md:23]
+- [x] [Review][Defer] Chưa có kiểm âm cho bước so revision Flutter (lệch/rỗng → fail) [.github/workflows/ci.yml:54] — deferred: đã ghi trong deferred-work.md, thuộc story 1.12
+
+**Rejected:**
+- false — Dòng dep thụt 4 bị nuốt làm con của dep trước: pub sẽ coi là direct trong lock mà không khai báo → vi phạm "dependency không khớp".
+- false — `dependencies: {..}` dạng flow: không parse dep nào, nhưng gói direct trong lock không được khai báo → vẫn fail.
+- false — `###`/backtick trong bảng Stack làm rơi mục: rơi mục → dep báo "không có trong bảng Stack", fail-closed.
+- false — grep `^  revision:` phụ thuộc thụt lề: lệch thì `expected` rỗng → fail-closed.
+- false — Checksum Gradle chưa kiểm: wrapper tự xác minh khi build Android trên CI.
+- low — Lock `direct main` nhưng pubspec ở `dev_dependencies`: lock do pub sinh, không xảy ra thực tế.
+- low — Ô Version của Stack không phải X.Y.Z cho thông báo khó hiểu: vẫn fail, chỉ là thông điệp; sửa cần thêm nhánh.
+- low — `hosted` từ registry khác pub.dev không bị chặn (không đọc `description.url`): gói pub.dev không thể phụ thuộc host khác; thêm guard không đáng.
+- low — Không đối chiếu ràng buộc Dart SDK với Stack: ngoài luật (a)–(e); Flutter/Gradle/Xcode đã được defer.
+- low — Allowlist không kiểm sắp xếp/trùng/mục thừa: đã bác ở triage #11 của spec.
+- low — Thiếu vài test (dev dep lệch lock, run() thiếu allowlist, CRLF Stack…): đường code chung đã được phủ.
+- low — Kiểm thêm source/overrides/direct ngoài luật (a)–(e): phù hợp ý đồ spec, đã ghi triage #1–#3.
+- low — Spec `status: done` lệch sprint `review`: sửa bằng bước cập nhật trạng thái của review này.
+- low — Thông báo `revision ''` khó hiểu khi `.metadata` thiếu revision: vẫn fail-closed.
+- low — Không chạy lại lệnh verify: test `ad12_real_repo_files_are_clean` chạy trong CI.
