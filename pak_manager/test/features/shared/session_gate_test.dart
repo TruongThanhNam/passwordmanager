@@ -552,6 +552,16 @@ void main() {
       addTearDown(() => lifecycle(tester, AppLifecycleState.resumed));
     }
 
+    testWidgets('fr16_gate_built_while_inactive_is_foreground', (
+      tester,
+    ) async {
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      await enterShell(tester);
+      await tester.pump();
+      expect(backgroundCalls(), 0);
+      expect(timers.active.single.duration, const Duration(minutes: 10));
+    });
+
     testWidgets('fr16_inactive_is_not_background', (tester) async {
       await enterShell(tester);
       lifecycle(tester, AppLifecycleState.inactive);

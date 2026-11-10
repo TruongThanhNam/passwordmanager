@@ -316,6 +316,39 @@ void main() {
       expect(log, isEmpty);
     });
 
+    test('fr14_fr15_autolock_first_wins_over_session_limit', () async {
+      final c = await entered();
+      clock.advance(min * 1);
+      c.enteredBackground();
+      await pumpEventQueue();
+      // Autolock (3 phút) đến trước hạn phiên (còn 9 phút).
+      expect(timers.active.single.duration, min * 3);
+      clock.advance(min * 3);
+      timers.fireAll();
+      await pumpEventQueue();
+      expect(c.session, isNull);
+      expect(log, isEmpty);
+    });
+
+    test('ad9_resume_invalidates_pending_background_mark', () async {
+      final c = await entered();
+      final hold = Completer<void>();
+      clock.hold = hold;
+      c.enteredBackground();
+      await pumpEventQueue();
+      clock.hold = null;
+      // Trở lại tiền cảnh trước khi `_markBackground` đọc được clock.
+      expect(await c.evaluate(resumed: true), isFalse);
+      hold.complete();
+      await pumpEventQueue();
+      // Mốc nền cũ không được ghi: quá autolock vẫn không khóa.
+      clock.advance(min * 4);
+      expect(await c.evaluate(), isFalse);
+      expect(c.session, isNotNull);
+      expect(timers.active.single.duration, min * 6);
+      c.dispose();
+    });
+
     test('fr14_fr15_settings_change_applies_next_count_only', () async {
       final c = await entered();
       settings = settings.copyWith(sessionMin: 1, autolockMin: 1);

@@ -90,8 +90,11 @@ class SessionGateState extends ConsumerState<SessionGate>
     _bootstrap = ref.read(bootstrapResultProvider);
     _controller = ref.read(sessionControllerFactoryProvider)();
     final state = WidgetsBinding.instance.lifecycleState;
+    // `inactive` vẫn là tiền cảnh (FR-16): không coi là đang ở nền.
     _resumedSinceBackground =
-        state == null || state == AppLifecycleState.resumed;
+        state == null ||
+        state == AppLifecycleState.resumed ||
+        state == AppLifecycleState.inactive;
     _controller.addListener(_onControllerChanged);
   }
 

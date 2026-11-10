@@ -73,6 +73,27 @@ context:
 - Given `lib/services/session_controller.dart`, then không có `Stopwatch`, `DateTime.now` hay `dart:io`.
 - Given toàn repo, then `flutter analyze --fatal-infos --fatal-warnings` 0 issue và `dart tool/check_imports.dart` exit 0.
 
+
+### Review Findings
+
+- [x] [Review][Patch] Thiếu test: `resumed` vô hiệu `_markBackground` đang treo (giữ clock trong `enteredBackground()`, gọi `evaluate(resumed: true)`, nhả clock, tiến quá `autolockMin` → không khóa). Xóa `_backgroundGen++` hiện không test nào bắt được [pak_manager/test/services/session_controller_test.dart]
+- [x] [Review][Patch] Gate dựng khi `lifecycleState == inactive` (đang tiền cảnh) đặt `_resumedSinceBackground = false` → vào phiên ghi mốc nền dù user đang dùng; thêm `inactive` vào điều kiện + test [pak_manager/lib/features/shared/session_gate.dart:93]
+- [x] [Review][Patch] Matrix "Hai điều kiện" chỉ test hạn phiên đến trước; thêm case hạn nền đến trước khi có hạn phiên [pak_manager/test/services/session_controller_test.dart]
+- [x] [Review][Defer] Không che màn hình khi `hidden`/ảnh app-switcher và 1 frame HomeShell trước khi khóa lúc `resumed` [pak_manager/lib/features/shared/session_gate.dart:102] — deferred: ngoài phạm vi 1.9, cần story riêng về privacy screen
+
+**Rejected:**
+- `false`: Đồng hồ dừng khi ngủ sâu: native dùng `SystemClock.elapsedRealtime()` / `mach_continuous_time`, vẫn đếm khi máy ngủ.
+- `false`: Không kiểm tra `sessionMin`/`autolockMin` ≤ 0: `settings_codec` chỉ nhận 1|3|5|10.
+- `false`: `lock()` ở nhánh lỗi clock thiếu kiểm `_session == null`: `lock()` tự trả về khi `_session == null`.
+- `false`: `inactive → resumed` làm mất mốc nền đang treo: không có `hidden` thì không có mốc nào đang treo; còn `hidden → inactive → resumed` vô hiệu mốc là đúng ý.
+- `false`: Launch thẳng vào nền với lifecycle `null`: không có UI đăng nhập nên không có phiên nào để tính.
+- `low`: Default `SessionController.new` không tự khóa: spec chủ đích (AD-8, test `ad8_*`), `main.dart` đã nối.
+- `low`: Bỏ qua `detached`: spec quy định; engine detach thì process sắp bị kill (FR-16).
+- `low`: Khóa từ timer/nhánh lỗi chạy với `foreground:false` bỏ xóa clipboard: hook clipboard hiện là no-op (cùng triage #9).
+- `low`: Timer được hẹn lại trong lúc `_runLock` await hook: `finally` gọi `_resetTiming()` hủy timer; nhánh đổi phiên giữa lúc khóa không xảy ra từ UI.
+- `low`: `fr16_os_kill_reopens_at_s3` tautological; `ad8_without_clock_never_autolocks` yếu; thiếu e2e FR-15 qua `runPakApp`; thiếu test gate cho `paused`-only (cùng code path, triage cũ đã bác); write đang chạy khi hết hạn nền: chung `_runLock` đã test.
+- `low`: Lệch status spec `done` và sprint `review`: được đồng bộ ở bước cập nhật trạng thái của review này.
+
 ## Implementation Notes
 
 - `evaluate` có thêm cờ `resumed` (chỉ `resumed` mới xóa mốc nền, và chỉ khi `_backgroundGen` không đổi trong lúc chờ clock) để lần resumed cũ không xóa mốc nền mới.
