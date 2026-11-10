@@ -12,6 +12,7 @@ import 'core/io/pak_paths.dart';
 import 'core/policy/blocklist_filter.dart';
 import 'core/policy/password_policy.dart';
 import 'core/policy/strength_estimator.dart';
+import 'core/ports/clock_port.dart';
 import 'core/ports/file_sync_port.dart';
 import 'core/ports/system_info_port.dart';
 import 'error_policy.dart';
@@ -21,6 +22,7 @@ import 'features/shared/providers.dart';
 import 'platform/path_provider_directory.dart';
 import 'platform/pigeon_ports.dart';
 import 'services/account_service.dart';
+import 'services/session_controller.dart';
 import 'services/settings_store.dart';
 import 'services/storage_bootstrap.dart';
 
@@ -35,6 +37,7 @@ void main() {
     StorageBootstrap(directories: const PathProviderDirectory(), backup: ports),
     fileSync: ports,
     systemInfo: ports,
+    clock: ports,
     releaseMode: kReleaseMode,
   );
 }
@@ -52,6 +55,7 @@ void runPakApp(
   StorageBootstrap storage, {
   required FileSyncPort fileSync,
   required SystemInfoPort systemInfo,
+  required ClockPort clock,
   required bool releaseMode,
 }) {
   runWithErrorPolicy(() async {
@@ -94,6 +98,11 @@ void runPakApp(
           if (account.estimator case final estimator?)
             strengthEstimatorProvider.overrideWithValue(estimator),
           bootstrapResultProvider.overrideWithValue(account.bootstrap),
+          // Tự khóa (FR-14/15): hạn chụp từ cài đặt hiện tại mỗi lần đếm.
+          sessionControllerFactoryProvider.overrideWithValue(
+            () =>
+                SessionController(clock: clock, limits: () => settings.current),
+          ),
         ],
         child: PakApp(settings: settings, androidSdkInt: androidSdkInt),
       ),

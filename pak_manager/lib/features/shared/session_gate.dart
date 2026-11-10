@@ -33,7 +33,11 @@ class SessionGate extends ConsumerStatefulWidget {
 class SessionGateState extends ConsumerState<SessionGate>
     with WidgetsBindingObserver {
   /// Chủ của phiên và epoch (AD-9); gate dựng lại mỗi khi controller báo.
-  final SessionController _controller = SessionController();
+  /// Dựng từ [sessionControllerFactoryProvider] trong `initState`.
+  late final SessionController _controller;
+
+  /// `true` khi đã `resumed` và chưa vào nền (FR-16): `inactive` không tính.
+  late bool _resumedSinceBackground;
 
   /// Kết quả bootstrap giữ cục bộ: [bootstrapResultProvider] chỉ tính một
   /// lần trước `runApp`, nên sau khi vào phiên (kể cả qua S2) gate đặt
@@ -66,6 +70,10 @@ class SessionGateState extends ConsumerState<SessionGate>
     }
     _bootstrap = const BootstrapHasAccount();
     _controller.enter(session);
+    // Đăng nhập xong khi app đã ở nền: mốc nền tính từ lúc vào phiên.
+    if (!_resumedSinceBackground) {
+      _controller.enteredBackground();
+    }
   }
 
   void _onControllerChanged() {
@@ -80,7 +88,30 @@ class SessionGateState extends ConsumerState<SessionGate>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _bootstrap = ref.read(bootstrapResultProvider);
+    _controller = ref.read(sessionControllerFactoryProvider)();
+    final state = WidgetsBinding.instance.lifecycleState;
+    _resumedSinceBackground =
+        state == null || state == AppLifecycleState.resumed;
     _controller.addListener(_onControllerChanged);
+  }
+
+  /// Vào nền = lần đầu `hidden`/`paused` sau `resumed`; `resumed` gọi
+  /// [SessionController.evaluate] (khóa tiền cảnh nếu quá hạn, không thì giữ
+  /// nguyên màn hình và xóa mốc nền).
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    switch (state) {
+      case AppLifecycleState.hidden || AppLifecycleState.paused:
+        if (_resumedSinceBackground) {
+          _resumedSinceBackground = false;
+          _controller.enteredBackground();
+        }
+      case AppLifecycleState.resumed:
+        _resumedSinceBackground = true;
+        unawaited(_controller.evaluate(resumed: true));
+      case AppLifecycleState.inactive || AppLifecycleState.detached:
+        break;
+    }
   }
 
   /// Back hệ thống đóng tầng trên cùng của navigator đang hiện (S2 → S1);
