@@ -113,3 +113,7 @@
   summary: (Chưa xác minh; nếu đúng thì medium) Khi bấm mắt để hiện mật khẩu, `SecretField` gửi `TextInputType.text`; một số bàn phím Android có thể bật thanh gợi ý hoặc học từ mật khẩu chính dù `enableSuggestions`/`enableIMEPersonalizedLearning` = false.
   evidence: Review build 1.6 (blind-hunter #18). Kết luận được bằng cách thử Gboard và Samsung Keyboard trên máy Android thật với ô đang hiện: nếu thấy gợi ý hoặc từ mới trong từ điển cá nhân thì dùng `TextInputType.visiblePassword` khi ô đang hiện (kiểm cả ảnh hưởng tới bộ gõ Telex, UX-DR41). Làm cùng bộ nghiệm thu trên máy thật (story 7.1).
 
+
+## Deferred from: code review of spec-1-8-khoa-vault-va-xoa-du-lieu-giai-ma-khoi-bo-nho.md (2026-11-10)
+
+- Cửa sổ giữa `session.lock()` và `_notify()` trong `SessionController._runLock` (trong lúc await `clearClipboardIfOurs`): HomeShell vẫn hiện với phiên đã khóa, nhánh reset navigator key `_lastInSession` trong `SessionGate` chưa có test. Khi có hook clipboard thật (Epic 3/5/6): cho phép inject hook vào gate, viết test lock với hook chậm + pump một frame.

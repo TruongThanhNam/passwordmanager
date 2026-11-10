@@ -95,8 +95,8 @@ class _TabShell extends StatelessWidget {
 }
 
 /// Trang gốc tạm của một tab: chỉ nav-bar (UX-DR29), thân trống. Nội dung
-/// thật thêm ở các epic sau (danh sách card ở 3.1, generator ở Epic 4, các
-/// tab Cài đặt là `SettingsScreen`).
+/// thật thêm ở các epic sau (danh sách card ở 3.1, generator ở Epic 4); tab Cài đặt
+/// đã là `SettingsScreen`.
 class _TabPage extends StatelessWidget {
   const _TabPage({required this.title});
 

@@ -77,15 +77,15 @@ void main() {
     expect(decoration.borderRadius, BorderRadius.circular(PakRadius.md));
 
     final rect = tester.getRect(cellFinder);
-    expect(rect.height, 44);
+    expect(rect.height, PakSpacing.rowHeight);
     final screen = tester.getRect(
       find.descendant(
         of: find.byType(SettingsScreen),
         matching: find.byType(ContentColumn),
       ),
     );
-    expect(rect.left - screen.left, 16);
-    expect(screen.right - rect.right, 16);
+    expect(rect.left - screen.left, PakSpacing.margin);
+    expect(screen.right - rect.right, PakSpacing.margin);
     final navRect = tester.getRect(
       find.descendant(
         of: find.byType(SettingsScreen),

@@ -83,6 +83,8 @@ context:
 
 ## Spec Change Log
 
+- 2026-11-10 (code review): trình tự khóa thực tế là `flushDraft` → `holdQueue()` → `awaitPendingWrites` → `cancelUnstarted` → `session.idle()` → `session.lock()` → `clearClipboardIfOurs` → epoch++ → báo listener. `idle` dời ra sau `cancelUnstarted` (triage #1) để op xếp hàng không chạy khi DEK còn sống; `holdQueue()` đặt sau `flushDraft` để draft ghi qua `session.run` không bị kẹt. Người dùng chấp thuận.
+
 ## Review Triage Log
 
 Review 2026-11-10 (diff `1fa7931..` cây làm việc, bỏ code l10n sinh ra; 3 lớp: blind (B), edge (E), verif-gap (V)). V: không có lỗ hổng kiểm chứng.
@@ -118,3 +120,24 @@ Review 2026-11-10 (diff `1fa7931..` cây làm việc, bỏ code l10n sinh ra; 3 
 - `flutter analyze --fatal-infos --fatal-warnings` -- 0 issue.
 - `dart tool/check_imports.dart` -- exit 0.
 - `NIX_SKIP_SODIUM_BUILD_HOOKS=1 flutter test` -- pass trừ `setUpAll` cần libsodium (như 1.7).
+
+### Review Findings
+
+- [x] [Review][Patch] (từ Decision → phương án 1: dời `holdQueue()` sau `flushDraft`, ghi Spec Change Log, sửa comment test) Thứ tự khóa lệch spec và `holdQueue()` chặn `flushDraft` — `_runLock` gọi `holdQueue()` trước `flushDraft` và chạy `idle` sau `cancelUnstarted`. Spec quy định `flushDraft` → `idle()`+`awaitPendingWrites` → `cancelUnstarted`. Nếu `flushDraft` (Epic 3/5/6) ghi qua `session.run`, op bị chặn tới `lock()`: hoặc lock treo, hoặc draft bị hủy. Spec Change Log trống; comment test thứ tự đã cũ.
+- [x] [Review][Patch] Test thứ tự không log `idle` và `session.lock()` [pak_manager/test/services/session_controller_test.dart]
+- [x] [Review][Patch] Test S18 còn số cứng 44/16 thay vì `PakSpacing.rowHeight`/`PakSpacing.margin` [pak_manager/test/features/settings/settings_screen_test.dart:80]
+- [x] [Review][Patch] ~~Thiếu test widget "dispose gate khóa phiên"~~ — false khi áp dụng: đã có `fr45_gate_disposes_session_with_tree`
+- [x] [Review][Patch] `ad9_double_tap_lock_bumps_epoch_once` không bấm nút thật lần nào [pak_manager/test/features/shared/session_gate_test.dart:488]
+- [x] [Review][Patch] Doc comment `_TabPage` gãy câu ("các / tab Cài đặt là") [pak_manager/lib/features/shared/home_shell.dart:98]
+- [x] [Review][Defer] Cửa sổ giữa `session.lock()` và `_notify()` (await `clearClipboardIfOurs`): HomeShell còn hiện với phiên đã khóa; nhánh reset navigator `_lastInSession` không có test [pak_manager/lib/services/session_controller.dart, pak_manager/lib/features/shared/session_gate.dart:447] — deferred: hook hiện no-op; cần cách inject hook vào gate khi có hook clipboard thật (Epic 3/5/6)
+
+**Rejected:**
+- `enter()` khi lock đang chạy / `lock()` trả future cũ — low: khi đang khóa, HomeShell vẫn hiện nên không thể vào màn đăng nhập để gọi `enter`.
+- Dispose gate khi op đang chạy hủy DEK giữa chừng; op đang chạy trả `SessionOk` sau lock — low: chỉ xảy ra khi teardown app, cần thêm nhánh guard.
+- Listener ném lỗi / lỗi `unawaited` ở Settings — low: listener chỉ là `setState` của gate, hook đã bọc `_guard`.
+- `holdQueue()` public không có release — low: hiện chỉ controller gọi; thêm API release là tăng bề mặt.
+- `idle()` dùng `Timer.run` — false: luật "không timer" áp cho controller (autolock 1.9), không phải event-loop yield.
+- Status spec `done` vs sprint `review`, AC2 thiếu ngoại lệ gate `!mounted` — reject: fix là sửa spec.
+- Key `settings.rows` — low: chỉ đặt tên.
+- Chiều cao ô cố định khi text scale lớn — false so với spec: spec yêu cầu cao `rowHeight`.
+- Không có công cụ cưỡng chế nơi gọi `lock()`; `enter` cùng instance tăng epoch; test account_service chưa chạy — low/quy trình.

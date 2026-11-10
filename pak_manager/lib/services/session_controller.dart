@@ -10,8 +10,8 @@ Future<void> _noop() async {}
 /// Chủ của phiên đang mở (AD-9): nơi duy nhất gọi [VaultSession.lock] và giữ
 /// epoch của cây UI.
 ///
-/// Trình tự khóa: [flushDraft] → chờ [VaultSession.idle] và
-/// [awaitPendingWrites] → [cancelUnstarted] → [VaultSession.lock] →
+/// Trình tự khóa: [flushDraft] → chặn hàng đợi → [awaitPendingWrites] →
+/// [cancelUnstarted] → chờ [VaultSession.idle] → [VaultSession.lock] →
 /// [clearClipboardIfOurs] (chỉ khi khóa ở tiền cảnh) → epoch++ → báo
 /// listener. Bước nào chưa có tính năng thì hook rỗng (Epic 3/5/6 lấp).
 ///
@@ -80,9 +80,10 @@ final class SessionController {
     VaultSession session, {
     required bool foreground,
   }) async {
-    session.holdQueue();
     try {
+      // flushDraft có thể ghi qua `session.run`: chỉ chặn hàng đợi sau bước này.
       await _guard(flushDraft);
+      session.holdQueue();
       await _guard(awaitPendingWrites);
       await _guard(cancelUnstarted);
       // Chờ op đang chạy ngay sát trước khi khóa (không await nào xen giữa):

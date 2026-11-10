@@ -47,20 +47,40 @@ void main() {
   test('fr49_ad9_lock_runs_steps_in_order', () async {
     final log = <String>[];
     final dek = FakeSecureKey();
-    final controller = _logged(log);
+    final release = Completer<void>();
+    late VaultSession session;
+    final controller = SessionController(
+      flushDraft: () async => log.add('flushDraft'),
+      awaitPendingWrites: () async => log.add('awaitPendingWrites'),
+      cancelUnstarted: () async {
+        log.add('cancelUnstarted');
+        release.complete();
+      },
+      clearClipboardIfOurs: () async =>
+          log.add('clearClipboard(locked: ${session.isLocked})'),
+    );
     controller
       ..enter(fakeSession(dek))
       ..addListener(() => log.add('notify(epoch ${controller.epoch})'));
-    final session = controller.session!;
+    session = controller.session!;
+    // Op đang chạy chỉ xong sau cancelUnstarted: `idle` phải chờ nó.
+    unawaited(
+      session.run((_) async {
+        await release.future;
+        log.add('op done(locked: ${session.isLocked})');
+      }),
+    );
+    await pumpEventQueue();
 
     await controller.lock();
 
-    // `session.idle` chạy song song với awaitPendingWrites.
+    // idle chờ op xong sau cancelUnstarted, rồi mới lock() trước clipboard.
     expect(log, [
       'flushDraft',
       'awaitPendingWrites',
       'cancelUnstarted',
-      'clearClipboard',
+      'op done(locked: false)',
+      'clearClipboard(locked: true)',
       'notify(epoch 2)',
     ]);
     expect(dek.disposed, isTrue);

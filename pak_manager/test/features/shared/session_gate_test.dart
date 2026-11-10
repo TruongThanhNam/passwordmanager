@@ -493,12 +493,14 @@ void main() {
 
     await tester.tap(find.text('Cài đặt'));
     await tester.pumpAndSettle();
-    final a = gate.controller.lock();
-    final b = gate.controller.lock();
-    await Future.wait([a, b]);
+    // Hai lần bấm thật trước khi cây kịp dựng lại.
+    await tester.tap(find.text('Khóa Vault'));
+    await tester.tap(find.text('Khóa Vault'), warnIfMissed: false);
     await tester.pumpAndSettle();
 
     expect(gate.epoch, 2);
     expect(find.byType(LoginScreen), findsOneWidget);
+    expect(find.text('Khóa Vault'), findsNothing);
   });
+
 }
