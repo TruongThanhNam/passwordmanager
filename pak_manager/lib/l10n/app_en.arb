@@ -3,5 +3,95 @@
   "appName": "PAK Manager",
   "@appName": {
     "description": "app.name: large title on S1 and S3; also the window/task title."
+  },
+  "tabCards": "Passwords",
+  "@tabCards": {
+    "description": "tab.cards: tab 1 label and S7 nav title."
+  },
+  "tabGenerator": "Generator",
+  "@tabGenerator": {
+    "description": "tab.generator: tab 2 label."
+  },
+  "generatorTitle": "Password Generator",
+  "@generatorTitle": {
+    "description": "generator.title: S14 nav title."
+  },
+  "tabSettings": "Settings",
+  "@tabSettings": {
+    "description": "tab.settings: tab 3 label and S18 nav title."
+  },
+  "loginCreate": "Create Account",
+  "@loginCreate": {
+    "description": "login.create: S1 button, S2 nav title and S2 button."
+  },
+  "createWarning": "There is no way to recover your main password. If you forget it, you lose all your data.",
+  "@createWarning": {
+    "description": "create.warning (FR-1): paragraph above the two fields on S2."
+  },
+  "createFieldMain": "Main password",
+  "@createFieldMain": {
+    "description": "create.field.main: placeholder of the first S2 field."
+  },
+  "createFieldConfirm": "Re-enter main password",
+  "@createFieldConfirm": {
+    "description": "create.field.confirm: placeholder of the second S2 field."
+  },
+  "pwNonAscii": "Use only unaccented letters, numbers, symbols and spaces. Accented letters may be typed differently by the keyboard and lock you out.",
+  "@pwNonAscii": {
+    "description": "pw.nonAscii (FR-2): inline-message when the field has a non-ASCII character."
+  },
+  "pwStrength": "Strength: {level}",
+  "@pwStrength": {
+    "description": "pw.strength (FR-2): strength-meter line; level is pwStrengthLow/Medium/High.",
+    "placeholders": {
+      "level": {
+        "type": "String"
+      }
+    }
+  },
+  "pwStrengthLow": "Low",
+  "@pwStrengthLow": {
+    "description": "pw.strength level for zxcvbnm score 0-2."
+  },
+  "pwStrengthMedium": "Medium",
+  "@pwStrengthMedium": {
+    "description": "pw.strength level for zxcvbnm score 3."
+  },
+  "pwStrengthHigh": "High",
+  "@pwStrengthHigh": {
+    "description": "pw.strength level for zxcvbnm score 4."
+  },
+  "pwTooShort": "At least 15 characters ({n} so far).",
+  "@pwTooShort": {
+    "description": "pw.tooShort: n is the current length.",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "pwTooLong": "128 characters maximum.",
+  "@pwTooLong": {
+    "description": "pw.tooLong."
+  },
+  "pwCommon": "This password is too common or has been leaked. Choose another.",
+  "@pwCommon": {
+    "description": "pw.common: password is in the offline blocklist."
+  },
+  "pwPattern": "Don't use one repeated character or a sequence.",
+  "@pwPattern": {
+    "description": "pw.pattern: repeated character or sequential run."
+  },
+  "pwMismatch": "Passwords don't match.",
+  "@pwMismatch": {
+    "description": "pw.mismatch: shown once the re-entered field is as long as the first."
+  },
+  "createUnavailable": "Can't open app data. Restart the app.",
+  "@createUnavailable": {
+    "description": "create.unavailable: S1, under the disabled button when storage, Sodium or the blocklist failed to load."
+  },
+  "createFailed": "Couldn't create the account. Try again.",
+  "@createFailed": {
+    "description": "create.failed: S2, under the button when AccountService.create failed."
   }
 }

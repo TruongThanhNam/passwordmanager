@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:cupertino_ui/cupertino_ui.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pak_manager/core/format/settings_codec.dart';
 import 'package:pak_manager/core/io/atomic_file_writer.dart';
@@ -10,6 +11,7 @@ import 'package:pak_manager/core/model/settings.dart';
 import 'package:pak_manager/core/ports/file_sync_port.dart';
 import 'package:pak_manager/features/shared/content_column.dart';
 import 'package:pak_manager/features/shared/pak_app.dart';
+import 'package:pak_manager/features/shared/session_gate.dart';
 import 'package:pak_manager/features/shared/theme/pak_colors.dart';
 import 'package:pak_manager/l10n/app_localizations.dart';
 import 'package:pak_manager/services/settings_store.dart';
@@ -54,7 +56,9 @@ Future<void> _pumpApp(
   final store = SettingsStore.inMemory(settings);
   addTearDown(store.dispose);
   await tester.pumpWidget(
-    PakApp(settings: store, androidSdkInt: androidSdkInt),
+    ProviderScope(
+      child: PakApp(settings: store, androidSdkInt: androidSdkInt),
+    ),
   );
 }
 
@@ -254,7 +258,9 @@ void main() {
       addTearDown(tester.platformDispatcher.clearPlatformBrightnessTestValue);
       final store = SettingsStore.inMemory();
       addTearDown(store.dispose);
-      await tester.pumpWidget(PakApp(settings: store, androidSdkInt: 35));
+      await tester.pumpWidget(
+        ProviderScope(child: PakApp(settings: store, androidSdkInt: 35)),
+      );
 
       store.update(
         (s) =>
@@ -284,6 +290,31 @@ void main() {
     expect(find.byType(CupertinoApp), findsOneWidget);
     expect(find.byType(CupertinoPageScaffold), findsOneWidget);
     expect(find.byType(ContentColumn), findsOneWidget);
+  });
+
+  testWidgets('ad23_builder_hosts_session_gate_without_app_navigator', (
+    tester,
+  ) async {
+    await _pumpApp(tester);
+
+    // `CupertinoApp` không có `home`: navigator duy nhất là của gate, nằm
+    // dưới `SessionGate` (trong `builder`, sau kẹp chữ và AnnotatedRegion).
+    expect(find.byType(SessionGate), findsOneWidget);
+    expect(find.byType(Navigator), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(SessionGate),
+        matching: find.byType(Navigator),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.ancestor(
+        of: find.byType(SessionGate),
+        matching: find.byType(AnnotatedRegion<SystemUiOverlayStyle>),
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('ad01_metrics_change_reapplies_orientation_policy', (
@@ -330,7 +361,9 @@ void main() {
       ),
     );
     addTearDown(store!.dispose);
-    await tester.pumpWidget(PakApp(settings: store, androidSdkInt: 35));
+    await tester.pumpWidget(
+      ProviderScope(child: PakApp(settings: store, androidSdkInt: 35)),
+    );
 
     store.update((s) => s.copyWith(autolockMin: 10));
     await tester.pump();

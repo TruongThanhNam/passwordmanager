@@ -17,6 +17,7 @@ dependencies:
     sdk: flutter
   cupertino_ui: 1.1.4
   cupertino_icons: 2.0.0
+  flutter_riverpod: 3.4.3
   path_provider: 2.1.6
   sodium: 4.1.2
   zxcvbnm: 1.1.1

@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:cupertino_ui/cupertino_ui.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pak_manager/core/format/settings_codec.dart';
 import 'package:pak_manager/core/model/settings.dart';
@@ -11,21 +13,26 @@ import 'package:pak_manager/core/ports/app_directory_port.dart';
 import 'package:pak_manager/core/ports/backup_port.dart';
 import 'package:pak_manager/core/ports/file_sync_port.dart';
 import 'package:pak_manager/core/ports/system_info_port.dart';
+import 'package:pak_manager/features/auth/login_screen.dart';
 import 'package:pak_manager/features/shared/content_column.dart';
 import 'package:pak_manager/features/shared/pak_app.dart';
 import 'package:pak_manager/main.dart' as app;
 import 'package:pak_manager/platform/platform_api.g.dart';
 import 'package:pak_manager/services/settings_store.dart';
 import 'package:pak_manager/services/storage_bootstrap.dart';
+import 'package:sodium/sodium_sumo.dart';
 
 void main() {
   testWidgets('pak_app_builds_cupertino_app', (tester) async {
     await tester.pumpWidget(
-      PakApp(settings: SettingsStore.inMemory(), androidSdkInt: 35),
+      ProviderScope(
+        child: PakApp(settings: SettingsStore.inMemory(), androidSdkInt: 35),
+      ),
     );
 
     expect(find.byType(CupertinoApp), findsOneWidget);
     expect(find.byType(CupertinoPageScaffold), findsOneWidget);
+    expect(find.byType(LoginScreen), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -162,6 +169,25 @@ void main() {
     final pakApp = tester.widget<PakApp>(find.byType(PakApp));
     expect(pakApp.androidSdkInt, 28);
 
+    // FR-1: máy mới (không có `vault/header`) → S1, khung đầu không màn chờ.
+    // Bootstrap chỉ kiểm `header`: không ghi gì, không gọi Pigeon thêm. Máy
+    // dev thiếu libsodium thì gate nhận `BootstrapUnavailable` (fail closed),
+    // vẫn là S1.
+    expect(find.byType(LoginScreen), findsOneWidget);
+    expect(
+      tester.widget<LoginScreen>(find.byType(LoginScreen)).hasAccount,
+      isFalse,
+    );
+    expect(find.text('PAK Manager'), findsOneWidget);
+    expect(find.text('Tạo tài khoản'), findsOneWidget);
+    expect(Directory('$pak${sep}vault').listSync(), isEmpty);
+    // Có libsodium (CI): main() nạp được blocklist từ asset và nối dịch vụ,
+    // nên nút bật. Chỉ khi Sodium không khởi tạo được mới fail closed.
+    expect(
+      tester.widget<LoginScreen>(find.byType(LoginScreen)).unavailable,
+      !_sodiumAvailable(),
+    );
+
     // Đổi cài đặt rồi cho app ẩn: store ghi ngay qua `fileSync` của main(),
     // tức chính PigeonPlatformPorts (fsync thư mục `pak/`).
     final store = pakApp.settings;
@@ -187,6 +213,100 @@ void main() {
     );
     expect(SettingsCodec.decode(settingsFile.readAsBytesSync()), store.current);
     expect(store.current.appearance, Appearance.light);
+  });
+
+  // Blocklist hỏng hoặc không nạp được → fail closed (AD-15, deferred 1.5):
+  // S1 nút vô hiệu, không đọc/ghi vault. Máy thiếu libsodium thì Sodium lỗi
+  // trước, kết quả vẫn phải là unavailable.
+  final blocklistFailures = <String, ByteData? Function()>{
+    'garbage_bytes': () =>
+        ByteData.sublistView(Uint8List.fromList(List<int>.filled(64, 0x5A))),
+    'load_fails': () => null,
+  };
+  blocklistFailures.forEach((name, reply) {
+    testWidgets('ad15_ad11_broken_blocklist_fails_closed_$name', (
+      tester,
+    ) async {
+      final savedDebugPrint = debugPrint;
+      final savedFlutterOnError = FlutterError.onError;
+      final savedPlatformOnError = PlatformDispatcher.instance.onError;
+      final sep = Platform.pathSeparator;
+
+      final sandbox = Directory.systemTemp.createTempSync('pak_blocklist_');
+      addTearDown(() => sandbox.deleteSync(recursive: true));
+      final vault = '${sandbox.path}${sep}pak${sep}vault';
+
+      final messenger = tester.binding.defaultBinaryMessenger;
+      const pathProvider = MethodChannel('plugins.flutter.io/path_provider');
+      messenger.setMockMethodCallHandler(pathProvider, (call) async {
+        if (call.method == 'getApplicationSupportDirectory') {
+          return sandbox.path;
+        }
+        throw MissingPluginException(call.method);
+      });
+      addTearDown(() => messenger.setMockMethodCallHandler(pathProvider, null));
+
+      // Chỉ chặn asset blocklist; asset khác không được nạp lúc khởi động.
+      final assetKeys = <String>[];
+      messenger.setMockMessageHandler('flutter/assets', (message) async {
+        final key = utf8.decode(Uint8List.sublistView(message!));
+        assetKeys.add(key);
+        return key == app.blocklistAsset ? reply() : null;
+      });
+      addTearDown(
+        () => messenger.setMockMessageHandler('flutter/assets', null),
+      );
+
+      const prefix = 'dev.flutter.pigeon.pak_manager.PlatformApi.';
+      const replies = <String, Object?>{
+        'bootId': '',
+        'monotonicMs': 0,
+        'excludeFromBackup': null,
+        'fsyncDirectory': null,
+        'androidSdkInt': 28,
+      };
+      for (final MapEntry(key: method, value: value) in replies.entries) {
+        final channel = BasicMessageChannel<Object?>(
+          '$prefix$method',
+          PlatformApi.pigeonChannelCodec,
+        );
+        messenger.setMockDecodedMessageHandler<Object?>(
+          channel,
+          (message) async => [value],
+        );
+        addTearDown(
+          () => messenger.setMockDecodedMessageHandler<Object?>(channel, null),
+        );
+      }
+
+      app.main();
+      for (var i = 0; i < 100; i++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 20)),
+        );
+        await tester.pump();
+        if (find.byType(CupertinoApp).evaluate().isNotEmpty) {
+          break;
+        }
+      }
+
+      debugPrint = savedDebugPrint;
+      FlutterError.onError = savedFlutterOnError;
+      PlatformDispatcher.instance.onError = savedPlatformOnError;
+
+      if (_sodiumAvailable()) {
+        // Có libsodium: lỗi đến từ đúng bước nạp blocklist.
+        expect(assetKeys, contains(app.blocklistAsset));
+      }
+      final login = tester.widget<LoginScreen>(find.byType(LoginScreen));
+      expect(login.hasAccount, isFalse);
+      expect(login.unavailable, isTrue);
+      expect(
+        find.text("Can't open app data. Restart the app."),
+        findsOneWidget,
+      );
+      expect(Directory(vault).existsSync(), isFalse);
+    });
   });
 
   testWidgets('ad01_run_app_enables_edge_to_edge_without_blocking', (
@@ -270,6 +390,12 @@ void main() {
     expect(backup.calls, isEmpty);
     // Lưu trữ lỗi: settings chỉ ở RAM, không đọc/ghi file.
     expect(fileSync.calls, isEmpty);
+    // Fail closed (story 1.2 → 1.6): S1 với nút vô hiệu và
+    // `create.unavailable`; không có dịch vụ tài khoản để đọc/ghi vault.
+    final login = tester.widget<LoginScreen>(find.byType(LoginScreen));
+    expect(login.hasAccount, isFalse);
+    expect(login.unavailable, isTrue);
+    expect(find.text("Can't open app data. Restart the app."), findsOneWidget);
   });
 
   testWidgets('nfr13_run_app_passes_android_sdk_and_falls_back_to_0', (
@@ -295,6 +421,17 @@ void main() {
     expect(tester.widget<PakApp>(find.byType(PakApp)).androidSdkInt, 0);
     expect(tester.takeException(), isNull);
   });
+}
+
+/// `true` khi libsodium nạp được trong môi trường test (CI có build hook;
+/// máy dev Windows thiếu VS Build Tools thì không).
+bool _sodiumAvailable() {
+  try {
+    SodiumSumoInit.init();
+    return true;
+  } on Object {
+    return false;
+  }
 }
 
 /// API Android giả; `null` thì ném như kênh Pigeon lỗi.

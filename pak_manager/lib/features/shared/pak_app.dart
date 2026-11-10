@@ -7,8 +7,8 @@ import 'package:flutter/services.dart';
 import '../../core/model/settings.dart';
 import '../../l10n/app_localizations.dart';
 import '../../services/settings_store.dart';
-import 'content_column.dart';
 import 'orientation.dart';
+import 'session_gate.dart';
 import 'theme/pak_colors.dart';
 import 'theme/pak_theme.dart';
 
@@ -81,7 +81,8 @@ SystemUiOverlayStyle pakSystemUiStyle(
 }
 
 /// Gốc ứng dụng (AD-23): đọc locale và theme từ [settings] ở phía trên
-/// `CupertinoApp`.
+/// `CupertinoApp`; `CupertinoApp.builder` chứa `SessionGate`. Cần một
+/// `ProviderScope` phía trên (xem `main.dart`).
 ///
 /// Đồng thời ghi ngay cài đặt chưa lưu khi app ẩn và áp lại chính sách hướng
 /// màn hình mỗi khi metrics đổi (xoay, gập máy).
@@ -161,18 +162,17 @@ class _PakAppState extends State<PakApp> with WidgetsBindingObserver {
             ...GlobalCupertinoLocalizations.delegates,
           ],
           theme: pakTheme(settings.appearance),
-          builder: (context, child) => MediaQuery.withClampedTextScaling(
+          builder: (context, _) => MediaQuery.withClampedTextScaling(
             maxScaleFactor: pakMaxTextScale,
             child: AnnotatedRegion<SystemUiOverlayStyle>(
               value: pakSystemUiStyle(
                 CupertinoTheme.brightnessOf(context),
                 androidSdkInt: widget.androidSdkInt,
               ),
-              child: child ?? const SizedBox.shrink(),
+              // Không có `home`: gate tự quản navigator của S1–S3 và của cây
+              // sau đăng nhập (AD-23), nên `child` luôn `null` ở đây.
+              child: const SessionGate(),
             ),
-          ),
-          home: const CupertinoPageScaffold(
-            child: ContentColumn(child: SizedBox.shrink()),
           ),
         );
       },
