@@ -83,6 +83,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-5-luat-mat-khau-chinh-va-danh-gia-do-manh.md`
   summary: (Chưa xác minh; nếu đúng thì medium) Toàn bộ `flutter test` chưa chạy trên nhánh `feat/1-5-password-policy`, vì máy dev thiếu VS Build Tools cho build hook `sodium`.
   evidence: 40 test mới pass trong bản sao không `sodium`; analyze và check_imports OK. Kết luận được khi job ubuntu của CI trên nhánh này xanh (gồm cả test cũ và đóng gói asset vào APK).
+  status: done (CI tại `8b63f36`: job ubuntu và job macOS đều xanh, theo người dùng báo 2026-11-10) — toàn bộ `flutter test` (gồm 44 test của story 1.5 và test cũ) pass; `check_android_apk.sh` đã kiểm `assets/flutter_assets/assets/blocklist.bloom` có trong APK (bước thêm sau code review, commit `8735293`).
 
 ## Deferred from: code review of spec-1-5-luat-mat-khau-chinh-va-danh-gia-do-manh.md (2026-11-10)
 
