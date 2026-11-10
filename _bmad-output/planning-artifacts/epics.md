@@ -746,6 +746,103 @@ So that vault không mở mãi khi tôi quên khóa, mà vẫn không làm phi�
 **Then** app ở S3 (không dùng state restoration)
 **And** unit test dùng fake clock cho mọi trường hợp trên
 
+### Story 1.10: Hiệu chỉnh KDF lùi về sàn khi lần thử đầu lỗi
+
+As a người dùng có máy cấu hình thấp,
+I want app vẫn tạo được tài khoản khi máy không chạy nổi tham số khởi điểm của Argon2id,
+So that tôi không bị chặn ngay từ bước đầu tiên chỉ vì máy ít RAM (AD-5, NFR-2).
+
+**Acceptance Criteria:**
+
+**Given** `calibrateVaultKdf` chạy lần thử đầu với m=64 MiB, t=3
+**When** lần thử đó lỗi (`derive` trả `null` hoặc ném, ví dụ không cấp được bộ nhớ)
+**Then** hàm thử lại đúng một lần ở sàn m=19 MiB, t=2 và trả `(params, kek)` của lần đó nếu thành công
+**And** chỉ trả `null` khi cả lần thử ở sàn cũng lỗi
+**And** không bao giờ trả tham số dưới sàn; mọi KEK không được trả về đều bị `dispose`
+
+**Given** lần thử đầu thành công
+**When** hiệu chỉnh tiếp tục
+**Then** thuật toán giữ nguyên như story 1.4 (mục tiêu ~1 giây, trần 2 giây, chỉ giảm)
+**And** unit test với `derive` giả cho các ca: probe lỗi rồi sàn thành công, cả hai lỗi, probe ném
+
+### Story 1.11: Ghim chuỗi cung ứng và Stack trong CI
+
+As a chủ sản phẩm,
+I want mọi thứ CI tải về được ghim chính xác và mọi dependency phải khớp bảng Stack,
+So that không thay đổi ngầm nào từ bên ngoài lọt vào build của app mật khẩu trong repo public (AD-12, AD-18).
+
+**Acceptance Criteria:**
+
+**Given** `.github/workflows/ci.yml`
+**When** CI chạy
+**Then** mọi `uses:` được ghim theo commit SHA đầy đủ (comment ghi tag tương ứng)
+**And** runner được ghim phiên bản (`ubuntu-24.04`, `macos-15`, cùng phiên bản Xcode cụ thể), không dùng `*-latest`
+**And** sau khi clone Flutter, CI kiểm revision khớp `pak_manager/.metadata`, sai thì fail
+**And** `gradle-wrapper.properties` có `distributionSha256Sum`
+
+**Given** `pubspec.yaml` và `pubspec.lock`
+**When** CI chạy bước kiểm Stack (script trong `tool/ci/`, có test)
+**Then** fail khi một package trực tiếp (kể cả `dev_dependencies`) không có trong bảng Stack của ARCHITECTURE-SPINE, hoặc ràng buộc không phải phiên bản chính xác
+**And** danh sách gói kéo theo được phép (vd. `riverpod`, `state_notifier`, `uuid` của `flutter_riverpod`) được ghi rõ trong một file allowlist, gói kéo theo mới ngoài allowlist làm CI fail
+
+### Story 1.12: Kiểm âm cho các cổng CI
+
+As a chủ sản phẩm,
+I want chứng minh mỗi cổng CI thực sự fail trên đầu vào xấu,
+So that một cổng hỏng âm thầm không khiến mọi build trông như an toàn (AD-18, NFR-7, NFR-8).
+
+**Acceptance Criteria:**
+
+**Given** `tool/ci/check_android_apk.sh` được tách phần phân tích output `aapt2`/`readelf` khỏi phần gọi công cụ
+**When** chạy harness kiểm âm với output mẫu
+**Then** script fail với: manifest có `android.permission.INTERNET`; `.so` 64-bit căn `0x1000`; `allowBackup="true"`; thiếu `dataExtractionRules`/`fullBackupContent`; thiếu `libsodium.so` hoặc `blocklist.bloom`
+**And** pass với output mẫu hợp lệ
+**And** kiểm 16 KB chỉ áp cho `arm64-v8a` và `x86_64`; `.so` 32-bit căn 4 KB không làm fail
+
+**Given** APK prod và APK dev
+**When** CI kiểm `aapt2 dump badging`
+**Then** prod có `applicationId` `io.github.truongthanhnam.pakmanager`, dev có hậu tố `.dev`, sai thì fail
+
+**Given** bước chặn secret của `ci.yml` được tách thành script có test
+**When** chạy harness kiểm âm
+**Then** script fail với `secrets.X`, `secrets['X']`, `toJSON(secrets)` và `pull_request_target`
+**And** harness kiểm âm chạy trong CI
+
+### Story 1.13: Integration test cho API native
+
+As a chủ sản phẩm,
+I want CI chạy app thật trên emulator Android và simulator iOS để gọi các kênh native,
+So that lỗi đăng ký Pigeon hoặc mất cờ loại-khỏi-backup bị bắt trước khi tới tay người dùng (AD-14, NFR-8).
+
+**Acceptance Criteria:**
+
+**Given** `pak_manager/integration_test/` có test cho `PlatformApi`
+**When** CI chạy test trên emulator Android và simulator iOS
+**Then** cả bốn kênh Pigeon trả lời được (không `PlatformException` "channel-error")
+**And** sau `StorageBootstrap.run()`, kết quả là `StorageReady`
+**And** trên iOS, thư mục `pak/` có `isExcludedFromBackup == true`
+**And** gỡ `PlatformApiSetup.setUp` (Android) hoặc đăng ký plugin (iOS) làm test fail
+**And** job integration được phép tách riêng khỏi job chính; mọi action mới (vd. emulator runner) được ghim theo SHA như story 1.11
+
+### Story 1.14: Flavor dev cho iOS và ghi công giấy phép blocklist
+
+As a chủ sản phẩm,
+I want bản dev trên iPhone không ghi đè vault thật và app ghi công đúng giấy phép dữ liệu bên thứ ba,
+So that tôi thử app an toàn trên máy của mình và repo tuân thủ giấy phép MIT của SecLists.
+
+**Acceptance Criteria:**
+
+**Given** dự án iOS
+**When** build với `--flavor dev`
+**Then** có scheme và build configuration `dev` với bundle id `io.github.truongthanhnam.pakmanager.dev`; scheme `prod` giữ bundle id gốc
+**And** `flutter build ios --no-codesign` không cờ flavor vẫn build được (hoặc CI build cả hai flavor rõ ràng)
+**And** CI kiểm bundle id của từng flavor
+
+**Given** `assets/blocklist.bloom` và `test/fixtures/blocklist/sample.txt` dẫn xuất từ SecLists
+**When** rà repo
+**Then** có file `NOTICE` (hoặc `THIRD_PARTY_LICENSES`) chứa nguyên văn giấy phép MIT của SecLists và ghi rõ nguồn; `tool/blocklist/SOURCE` trỏ tới file đó
+**And** việc đăng ký giấy phép trong app (`LicenseRegistry`) được ghi lại cho story có màn giấy phép
+
 ## Epic 2: Chống dò mật khẩu và xóa dữ liệu
 
 Màn Login có đủ cơ chế chống dò: đếm số lần sai, chờ 30 phút không phụ thuộc đồng hồ máy, tự xóa ở lần sai thứ 10; thêm "Xóa & Tạo tài khoản mới" (giữ 3 giây), trạng thái "Dữ liệu bị hỏng" không bao giờ dẫn tới xóa, và xóa tiếp khi lần xóa trước bị gián đoạn. Hoàn thành UJ-4 và TC-3.

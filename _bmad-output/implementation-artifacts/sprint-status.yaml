@@ -45,6 +45,11 @@ development_status:
   1-7-đăng-nhập-bằng-mật-khẩu-chính: done
   1-8-khóa-vault-và-xóa-dữ-liệu-giải-mã-khỏi-bộ-nhớ: done
   1-9-tự-khóa-khi-chạy-nền-và-giới-hạn-phiên: done
+  1-10-hiệu-chỉnh-kdf-lùi-về-sàn-khi-lần-thử-đầu-lỗi: done
+  1-11-ghim-chuỗi-cung-ứng-và-stack-trong-ci: backlog
+  1-12-kiểm-âm-cho-các-cổng-ci: backlog
+  1-13-integration-test-cho-api-native: backlog
+  1-14-flavor-dev-cho-ios-và-ghi-công-giấy-phép-blocklist: backlog
   epic-1-retrospective: optional
 
   epic-2: backlog

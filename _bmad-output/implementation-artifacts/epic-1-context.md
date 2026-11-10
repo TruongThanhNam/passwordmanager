@@ -4,7 +4,7 @@
 
 ## Goal
 
-Người dùng cài PAK Manager (app quản lý mật khẩu offline, Flutter cho iOS và Android), tạo tài khoản bằng mật khẩu chính đạt chuẩn NIST, đăng nhập vào khung 3 tab và khóa vault, thủ công hoặc tự động khi chạy nền quá lâu hay hết hạn phiên. Vault được mã hóa trên máy, không nằm trong backup của OS, app không có kết nối mạng. Epic này dựng toàn bộ nền dùng chung cho các epic sau: cấu trúc dự án và CI, theme token, ARB vi/en, component shared, `AtomicFileWriter`, codec `header`/`settings`/vault, `VaultSession`, `SessionController`, Pigeon (đồng hồ/backup/fsync). Ở epic này nhập sai chỉ báo "Sai mật khẩu", chưa đếm số lần (việc đếm thuộc Epic 2).
+Người dùng cài PAK Manager (app quản lý mật khẩu offline, Flutter cho iOS và Android), tạo tài khoản bằng mật khẩu chính đạt chuẩn NIST, đăng nhập vào khung 3 tab và khóa vault, thủ công hoặc tự động khi chạy nền quá lâu hay hết hạn phiên. Vault được mã hóa trên máy, không nằm trong backup của OS, app không có kết nối mạng. Epic này dựng toàn bộ nền dùng chung cho các epic sau: cấu trúc dự án và CI, theme token, ARB vi/en, component shared, `AtomicFileWriter`, codec `header`/`settings`/vault, `VaultSession`, `SessionController`, Pigeon (đồng hồ/backup/fsync). Story 1.10–1.14 được thêm sau để xử lý nợ kỹ thuật từ review: lùi KDF về sàn, ghim chuỗi cung ứng CI, kiểm âm cổng CI, integration test native, flavor dev iOS và ghi công giấy phép. Ở epic này nhập sai chỉ báo "Sai mật khẩu", chưa đếm số lần (việc đếm thuộc Epic 2).
 
 ## Stories
 
@@ -17,6 +17,11 @@ Người dùng cài PAK Manager (app quản lý mật khẩu offline, Flutter ch
 - Story 1.7: Đăng nhập bằng mật khẩu chính
 - Story 1.8: Khóa Vault và xóa dữ liệu giải mã khỏi bộ nhớ
 - Story 1.9: Tự khóa khi chạy nền và giới hạn phiên
+- Story 1.10: Hiệu chỉnh KDF lùi về sàn khi lần thử đầu lỗi
+- Story 1.11: Ghim chuỗi cung ứng và Stack trong CI
+- Story 1.12: Kiểm âm cho các cổng CI
+- Story 1.13: Integration test cho API native
+- Story 1.14: Flavor dev cho iOS và ghi công giấy phép blocklist
 
 ## Requirements & Constraints
 
@@ -39,7 +44,7 @@ Người dùng cài PAK Manager (app quản lý mật khẩu offline, Flutter ch
 - **Lưu trữ:** mọi file nằm dưới `ApplicationSupport/pak/` (`vault/{header,cards,recent,draft}`, `guard`, `settings`, `tmp/`). iOS đặt `isExcludedFromBackup` trên `pak/` ở mỗi lần khởi động, trước mọi I/O. Android: `allowBackup=false`, `dataExtractionRules` loại mọi domain cho `cloud-backup` và `device-transfer`, kèm `fullBackupContent`.
 - **`AtomicFileWriter`:** ghi `<tên>.tmp` cùng thư mục → fsync → rename → `fsyncDirectory`. Không bao giờ tạo thư mục cha. Khởi động thì xóa mọi `*.tmp` còn sót. Mỗi thao tác nghiệp vụ commit đúng một file.
 - **Pigeon:** một API duy nhất `pigeons/platform_api.dart` (`@HostApi` đồng bộ, kênh mặc định). Epic này dùng các nhóm đồng hồ (`bootId`: Android `BOOT_COUNT`, iOS `kern.bootsessionuuid`; `monotonicMs`: `elapsedRealtime`/`mach_continuous_time`), backup và `fsyncDirectory`. iOS đăng ký trong `FlutterImplicitEngineDelegate`.
-- **Crypto:** DEK 32 byte ngẫu nhiên, sinh một lần. KEK = Argon2id13 (`pwhash.callRaw`, p=1), chạy qua `Sodium.runIsolated`, trả `SecureKey`. Hiệu chỉnh trên máy: khởi điểm m=64 MiB, t=3, mục tiêu ~1 giây, trần 2 giây, sàn m=19 MiB, t=2. Tham số ngoài [m 19–128 MiB, t 2–10] bị từ chối trước KDF. Mọi số ngẫu nhiên lấy từ `randombytes` qua `RandomSource`.
+- **Crypto:** DEK 32 byte ngẫu nhiên, sinh một lần. KEK = Argon2id13 (`pwhash.callRaw`, p=1), chạy qua `Sodium.runIsolated`, trả `SecureKey`. Hiệu chỉnh trên máy: khởi điểm m=64 MiB, t=3, mục tiêu ~1 giây, trần 2 giây, sàn m=19 MiB, t=2; lần thử đầu lỗi (`null` hoặc ném) thì thử lại đúng một lần ở sàn và nhận kết quả, không bao giờ dưới sàn, KEK không trả về phải dispose. Tham số ngoài [m 19–128 MiB, t 2–10] bị từ chối trước KDF. Mọi số ngẫu nhiên lấy từ `randombytes` qua `RandomSource`.
 - **Header (nhị phân, little-endian):** `PAKV`[4] · version u16 · kdfAlg u8 · opslimit u32 · memlimit u64 · salt[16] · wrapNonce[24] · wrappedDek[48] · kcv[16] · checksum[32]. AD khi bọc DEK là các byte từ magic đến hết salt. `kcv` = BLAKE2b-16 khóa KEK trên `PAK-KCV-v1`; `checksum` = BLAKE2b-256 không khóa trên mọi byte trước nó. Có golden test.
 - **File dữ liệu:** nonce[24] · ciphertext‖tag (XChaCha20-Poly1305 bằng DEK), nonce mới mỗi lần ghi, AD `PAK-VAULT/<loại>/v1`. `cards` = `{"v":1,"cards":[{id,title,username,password,note,createdAt}]}`, `recent` = `{"v":1,"items":[{password,recordedAt}]}`. Note rỗng là `""`; id là UUIDv4 chữ thường; thời gian là UTC epoch ms; mọi key bắt buộc. Thiếu key, sai kiểu, `v` lạ hoặc AEAD lỗi → `corrupt` không kèm thông điệp. Mỗi file chỉ có một codec trong `lib/core/format/`. Fixture `test/fixtures/vault/v1/` được sinh bằng script trong `tool/fixtures/`.
 - **Mở khóa:** (1) đọc header; sai kích thước/magic/version, checksum lệch hoặc tham số ngoài khoảng → `corrupt`, không chạy KDF. (2) Chạy KDF. (3) So `kcv` bằng phép so hằng thời gian; lệch → `wrongPassword`. (4) Mở bọc DEK và giải mã `cards`/`recent` vào RAM; lỗi → `corrupt`. Có `header` mà thiếu `cards`/`recent` → `corrupt`.

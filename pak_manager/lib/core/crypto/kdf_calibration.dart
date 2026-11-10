@@ -28,14 +28,19 @@ const int _maxRuns = 3;
 
 /// Hiệu chỉnh Argon2id trên máy (AD-4): mục tiêu ~1 giây, trần 2 giây.
 ///
+/// 0. Probe lỗi: chạy đúng một lần ở sàn và nhận kết quả bất kể thời gian
+///    (tổng 2 lần chạy).
 /// 1. Probe [KdfParams.start] → T. Nhận nếu 500 ≤ T ≤ 1500 ms.
 /// 2. f = 1000/T. f > 1: tăng t (tối đa 10), giữ 64 MiB. f < 1: giảm t
 ///    rồi m (không dưới sàn). Chạy lại → T'.
 /// 3. Nhận nếu T' ≤ 2000 ms hoặc đã ở sàn; ngược lại giảm thêm một lần và
 ///    nhận kết quả dù chậm. Tối đa 3 lần chạy.
 ///
-/// Trả `null` khi một lần KDF bất kỳ lỗi. Mọi KEK không trả về đều bị
-/// `dispose`. [nowMs] mặc định đo bằng `Stopwatch`.
+/// Probe lỗi (`derive` trả `null` hoặc ném, vd. máy không cấp nổi 64 MiB)
+/// thì thử lại đúng một lần ở [KdfParams.floor] và nhận kết quả đó (AD-5).
+/// Trả `null` khi lần ở sàn cũng lỗi, hoặc khi lần 2/3 lỗi sau probe thành
+/// công. Mọi KEK không trả về đều bị `dispose`. [nowMs] mặc định đo bằng
+/// `Stopwatch`.
 Future<CalibratedKek?> calibrateVaultKdf({
   required Uint8List password,
   required Uint8List salt,
@@ -47,14 +52,18 @@ Future<CalibratedKek?> calibrateVaultKdf({
   var params = KdfParams.start;
   for (var run = 1; ; run++) {
     final startedAt = clock();
-    final SecureKey? kek;
-    try {
-      kek = await derive(password, salt, params);
-    } on Object {
-      return null;
-    }
+    final kek = await _tryDerive(derive, password, salt, params);
     if (kek == null) {
-      return null;
+      if (run != 1) {
+        return null;
+      }
+      final floorKek = await _tryDerive(
+        derive,
+        password,
+        salt,
+        KdfParams.floor,
+      );
+      return floorKek == null ? null : (params: KdfParams.floor, kek: floorKek);
     }
     final elapsed = clock() - startedAt;
     final accept = switch (run) {
@@ -69,6 +78,20 @@ Future<CalibratedKek?> calibrateVaultKdf({
     params = run == 1
         ? _rescale(params, elapsed)
         : _reduce(params, _targetMs / elapsed);
+  }
+}
+
+/// Một lần KDF; `derive` ném được coi như lỗi (`null`).
+Future<SecureKey?> _tryDerive(
+  KekDeriver derive,
+  Uint8List password,
+  Uint8List salt,
+  KdfParams params,
+) async {
+  try {
+    return await derive(password, salt, params);
+  } on Object {
+    return null;
   }
 }
 
