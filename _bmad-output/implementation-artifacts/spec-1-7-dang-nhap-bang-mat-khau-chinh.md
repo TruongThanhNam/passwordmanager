@@ -84,6 +84,25 @@ Người dùng chọn 2026-11-10:
 - Given `UnlockSuccess`, when gate dựng lại, then thấy `CupertinoTabScaffold` tab 0 và `SecretField` của S3 đã bị gỡ.
 - Given toàn repo, then `flutter analyze --fatal-infos --fatal-warnings` 0 issue và `dart tool/check_imports.dart` exit 0.
 
+### Review Findings
+
+- [x] [Review][Patch] `last_updated` đổi định dạng (`11-10-2026 15:17` → `2026-11-10`), lệch với `generated` [_bmad-output/implementation-artifacts/sprint-status.yaml:32]
+
+**Rejected:**
+- (edge+blind) Gọi chồng `unlock` chia sẻ một `UnlockSuccess` / race trước `whenComplete` — low: UI chặn bằng `_busy`; hành vi trả `Future` đang chạy là quyết định spec (Design Notes); sửa là sửa spec.
+- (edge+blind) `_submit` không `try/finally` quanh `unlock` — low: `_unlock` bắt `on Object`, hợp đồng không ném; thêm chốt phòng thủ.
+- (auditor) Nút "Đăng nhập" không vô hiệu khi bận — false: `PakPrimaryButton.enabled` = `onPressed != null && !busy`.
+- (edge+auditor) S3 hiện khi `accountServiceProvider` null — false: `BootstrapHasAccount` chỉ do chính `AccountService` trả (`account_service.dart:160`).
+- (blind) `login.corrupt` nói "mật khẩu đúng" cả khi header hỏng / nhắc nút chưa có — sửa là sửa spec (Decisions đã chọn).
+- (blind) Spec `status: done` lệch sprint `review` — sửa là sửa spec; bước review cập nhật trạng thái.
+- (blind) `on Object` nuốt lỗi không log — low: thêm logging là thêm độ phức tạp.
+- (blind) Mật khẩu còn trong `_password` tới khi dispose — low: `SecretField` con `clear()` khi bị gỡ.
+- (blind) `app_test` khôi phục global không qua `addTearDown`, vòng chờ dừng theo `CupertinoApp` — low: mẫu có sẵn từ 1.6.
+- (blind+auditor) Thiếu test DEK dispose nhánh corrupt, UI khi `unlock` ném, reset `_unlocking` sau wrong — low: đã ghi nhận ở Implementation Notes; code dispose trong `finally`.
+- (blind) Test so danh sách `Text` chính xác — low: cố ý để chứng minh không có ô/nút thừa (AC1).
+- (blind) Không autofocus ô mật khẩu — sửa là sửa spec.
+- (edge) Đổi định dạng `last_updated` — gộp vào patch trên.
+
 ## Implementation Notes
 
 - Thêm `PasswordPolicy.isPrintableAscii` (static, `core/policy`) để S3 hiện `pw.nonAscii` mà không chạy cả luật; cổng nút dùng `meetsLoginGate` có sẵn.
