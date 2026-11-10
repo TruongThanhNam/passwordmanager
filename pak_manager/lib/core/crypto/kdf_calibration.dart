@@ -28,13 +28,13 @@ const int _maxRuns = 3;
 
 /// Hiệu chỉnh Argon2id trên máy (AD-4): mục tiêu ~1 giây, trần 2 giây.
 ///
+/// 0. Probe lỗi: chạy đúng một lần ở sàn và nhận kết quả bất kể thời gian
+///    (tổng 2 lần chạy).
 /// 1. Probe [KdfParams.start] → T. Nhận nếu 500 ≤ T ≤ 1500 ms.
 /// 2. f = 1000/T. f > 1: tăng t (tối đa 10), giữ 64 MiB. f < 1: giảm t
 ///    rồi m (không dưới sàn). Chạy lại → T'.
 /// 3. Nhận nếu T' ≤ 2000 ms hoặc đã ở sàn; ngược lại giảm thêm một lần và
 ///    nhận kết quả dù chậm. Tối đa 3 lần chạy.
-/// 0. Probe lỗi: chạy đúng một lần ở sàn và nhận kết quả bất kể thời gian
-///    (tổng 2 lần chạy).
 ///
 /// Probe lỗi (`derive` trả `null` hoặc ném, vd. máy không cấp nổi 64 MiB)
 /// thì thử lại đúng một lần ở [KdfParams.floor] và nhận kết quả đó (AD-5).

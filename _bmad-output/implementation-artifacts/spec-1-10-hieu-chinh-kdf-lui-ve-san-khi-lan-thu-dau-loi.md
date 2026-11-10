@@ -37,3 +37,18 @@ Review 2026-11-10 (Blind Hunter, cây làm việc).
 - `false` — KEK rò khi probe ném sau khi tạo key: `derive` ném thì không trả key nào cho hàm nắm giữ.
 - `low` (reject) — Thiếu test cấp `account_service`: service chỉ chuyển tiếp kết quả `calibrateVaultKdf`, đã test ở unit.
 - `false` — Status/bookkeeping spec cũ: được cập nhật ở bước Finalize này.
+
+### Review Findings
+
+Code review 2026-11-10 (Blind Hunter, Edge Case Hunter, Verification Gap, Acceptance Auditor; branch diff vs `main`).
+
+- [x] [Review][Decision→Patch, fixed: khôi phục bản `main` + thêm 1.10–1.14 và KDF fallback] Commit 4283cd4 viết lại `epic-1-context.md`, làm mất nội dung chuẩn — mất layout nhị phân header + AD + golden test, trình tự unlock 4 bước, schema `cards`/`recent`, mặc định `SettingsStore`, luật Login vô hiệu khi có ký tự không ASCII, "giữ nội dung ô"/"Dữ liệu bị hỏng không xóa gì", dải 0x20–0x7E; thêm mâu thuẫn Pigeon "bốn nhóm (có clipboard)" trong khi Goal ghi 3 nhóm và clipboard thuộc Epic 3. Cần chọn: khôi phục bản `main` + chỉ thêm dòng 1.10–1.14/KDF fallback, hay giữ bản rút gọn.
+- [x] [Review][Patch] Bước "0. Probe lỗi" nằm sau bước 3 trong doc comment [pak_manager/lib/core/crypto/kdf_calibration.dart:36]
+
+**Rejected**
+- `false` — Diff bị cắt giữa hunk test: diff kết thúc do context 3 dòng của git; phần còn lại của test không đổi.
+- `low` — Status spec `done` ≠ sprint `review`: bước 6 của review này sẽ đồng bộ.
+- `low` — Lần ở sàn không giới hạn thời gian / không báo caller đã lùi sàn: đúng Intent đã đóng băng (sàn là mức thấp nhất cho phép); báo hiệu cần API mới.
+- `low` — `on Object` coi mọi lỗi là lỗi probe: giữ hành vi story 1.4; thu hẹp cần phân loại lỗi mới.
+- `low` — Thiếu test e2e account_service/libsodium, test probe ném sau khi cấp key, đếm call: service chỉ chuyển tiếp; `derive` ném không trả key; Verification Gap xác nhận assertion đủ.
+- `low` — `run != 1` khó đọc, tách probe khỏi vòng lặp: chỉ là refactor phong cách.
