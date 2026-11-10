@@ -5,6 +5,7 @@
 #   2. zipalign: mọi .so không nén được căn 16 KB trong APK.
 #   3. readelf: mọi segment LOAD của lib/*/*.so có Align >= 0x4000 (16 KB);
 #      APK phải có lib/arm64-v8a/, và mọi lib/<abi>/ phải có libsodium.so.
+#   4. APK có assets/flutter_assets/assets/blocklist.bloom (AD-15).
 #
 # Dùng: tool/ci/check_android_apk.sh <đường-dẫn-apk>
 # Cần: ANDROID_HOME (hoặc ANDROID_SDK_ROOT) có build-tools (aapt2, zipalign),
@@ -125,6 +126,17 @@ for so in "${libs[@]}"; do
     echo "OK: $rel (align: $(echo "$aligns" | sort -u | tr '\n' ' '))"
   fi
 done
+
+echo
+echo "== Asset blocklist (AD-15)"
+# Test đọc asset từ cây nguồn qua dart:io, nên chỉ bước này chứng minh
+# assets/blocklist.bloom thật sự được đóng gói vào APK.
+if unzip -l "$apk" | grep -qE '[[:space:]]assets/flutter_assets/assets/blocklist\.bloom$'; then
+  echo "OK: APK có assets/flutter_assets/assets/blocklist.bloom"
+else
+  echo "FAIL: APK thiếu assets/flutter_assets/assets/blocklist.bloom (khối flutter: assets: trong pubspec.yaml?)"
+  failed=1
+fi
 
 echo
 if ((failed)); then

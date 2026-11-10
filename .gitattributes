@@ -1,2 +1,4 @@
 # Fixture golden phải giữ nguyên từng byte (không đổi CRLF/LF khi checkout).
 pak_manager/test/fixtures/** -text
+# Bloom filter blocklist (AD-15) là nhị phân.
+pak_manager/assets/*.bloom binary

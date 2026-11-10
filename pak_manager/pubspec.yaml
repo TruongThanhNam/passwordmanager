@@ -19,6 +19,7 @@ dependencies:
   cupertino_icons: 2.0.0
   path_provider: 2.1.6
   sodium: 4.1.2
+  zxcvbnm: 1.1.1
 
 dev_dependencies:
   flutter_test:
@@ -31,3 +32,7 @@ flutter:
   # Flutter 3.47 từ chối `flutter gen-l10n` khi thiếu cờ này. Code sinh ra vẫn
   # nằm trong lib/l10n và được commit (l10n.yaml); CI kiểm nó khớp ARB.
   generate: true
+  # Bloom filter blocklist mật khẩu phổ biến (AD-15); sinh bằng
+  # tool/blocklist/build_blocklist.dart, định dạng trong assets/blocklist.FORMAT.md.
+  assets:
+    - assets/blocklist.bloom
