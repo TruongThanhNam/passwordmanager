@@ -49,6 +49,7 @@
 ## Deferred from: code review of spec-1-2-thu-muc-du-lieu-rieng-ghi-nguyen-tu-loai-khoi-backup (2026-11-02)
 
 - `runPakApp` bỏ kết quả `StorageBootstrap.run()`; story 1.6 phải truyền `StorageBootstrapResult` vào `PakApp`/`SessionGate` và chặn mọi đọc/ghi dữ liệu khi nhận `StorageUnavailable` (quyết định fail-closed của story 1.2). Hiện chỉ có comment trong `lib/main.dart` nhắc việc này.
+  status: done (story 1.6, `spec-1-6-tao-tai-khoan-va-vao-khung-3-tab.md`) — `runPakApp` nối kết quả vào `bootstrapResultProvider`; `StorageUnavailable` → không dựng `AccountService`, gate hiện S1 với nút vô hiệu và `create.unavailable` (test `nfr8_run_app_waits_for_storage_bootstrap`).
 - Các regex kiểm `allowBackup`/`dataExtractionRules`/`fullBackupContent` mới trong `check_android_apk.sh` chưa có kiểm âm trên output `aapt2` xấu; nếu định dạng output lệch thì kiểm sai trên APK thật (fail oan hoặc lọt). Làm cùng harness kiểm âm của script APK, mục đã ghi từ story 1.1.
 
 ## Deferred from: build review of spec-1-3-giao-dien-sang-toi-hai-ngon-ngu-cai-dat-mac-dinh (2026-11-09)
@@ -77,9 +78,11 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-5-luat-mat-khau-chinh-va-danh-gia-do-manh.md`
   summary: (medium) `StrengthEstimator.estimate` trên chuỗi 128 ký tự nhiều ký hiệu mất ≈80–99 ms mỗi lần (JIT, máy dev), đủ để giật khung hình nếu story 1.6 gọi đồng bộ trên UI thread ở mỗi lần gõ phím.
   evidence: Đo lúc build story 1.5: cache từ điển hoạt động (dựng ≈25–31 ms, gọi có cache với chuỗi ngắn ≈2 ms), phần chậm là matcher l33t của `zxcvbnm`. Không giảm l33t vì sẽ đổi điểm (người dùng chọn 2026-11-10). Story 1.6 nên debounce hoặc chạy ước lượng ngoài UI thread, dựng `StrengthEstimator` sớm (làm nóng từ điển), và đo trên bản release ở máy mốc yếu nhất.
+  status: partly done (story 1.6) — S2 debounce 150 ms (`strengthDebounce`), `main.dart` dựng `StrengthEstimator` trước `runApp`. Còn mở: đo bản release trên máy mốc yếu nhất (story 7.1).
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-5-luat-mat-khau-chinh-va-danh-gia-do-manh.md`
   summary: (medium) Chưa quyết định app làm gì khi `assets/blocklist.bloom` thiếu hoặc `BlocklistFilter.parse` trả `null`; `PasswordPolicy` cần filter non-null nên story 1.6 (người nạp asset) phải chọn cách xử lý.
   evidence: Review build 1.5 (#6). Asset được đóng gói nên chỉ hỏng khi build lỗi, nhưng 1.6, 5.3 và 6.2 không được mỗi nơi xử lý một kiểu. Gợi ý: nạp một lần ở tầng services, hỏng thì fail closed (chặn tạo tài khoản và đặt mật khẩu, báo lỗi), không âm thầm bỏ luật "phổ biến".
+  status: done (story 1.6) — `main.dart` nạp asset một lần; `parse` → `null` hoặc lỗi đọc → `BootstrapUnavailable`, `passwordPolicyProvider` = `null` (S2 không bao giờ bật nút). 5.3 và 6.2 đọc cùng `passwordPolicyProvider`.
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-5-luat-mat-khau-chinh-va-danh-gia-do-manh.md`
   summary: (Chưa xác minh; nếu đúng thì medium) Toàn bộ `flutter test` chưa chạy trên nhánh `feat/1-5-password-policy`, vì máy dev thiếu VS Build Tools cho build hook `sodium`.
   evidence: 40 test mới pass trong bản sao không `sodium`; analyze và check_imports OK. Kết luận được khi job ubuntu của CI trên nhánh này xanh (gồm cả test cũ và đóng gói asset vào APK).
@@ -93,3 +96,20 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-5-luat-mat-khau-chinh-va-danh-gia-do-manh.md`
   summary: (low) Chưa định nghĩa dòng độ mạnh hiện gì khi `PasswordPolicy.check` trả lỗi: `StrengthEstimator` không biết blocklist và luật lặp/tuần tự, nên UI có thể hiện `High` cạnh lỗi `PasswordCommon`/`PasswordPattern`.
   evidence: Code review 1.5 (blind-hunter). Story 1.6, 5.3 và 6.2 đều hiện dòng độ mạnh; cần quyết định chung một lần (vd ép `low` khi `check` không `PasswordOk`) để ba nơi không lệch nhau.
+  status: done (quyết định người dùng 2026-11-10, spec 1.6) — vẫn hiện mức `zxcvbnm` như mockup, không ép "Thấp", không ẩn; áp chung cho 1.6/5.3/6.2.
+
+## Deferred from: build of spec-1-6-tao-tai-khoan-va-vao-khung-3-tab (2026-11-10)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-6-tao-tai-khoan-va-vao-khung-3-tab.md`
+  summary: (low) Bấm tab đang chọn chưa cuộn về đầu (UX-DR29); Back hệ thống Android chỉ được `SessionGate` chuyển cho navigator gốc của cây đang hiện, chưa vào navigator riêng của từng `CupertinoTabView`.
+  evidence: Thân tab ở 1.6 trống, không có nội dung cuộn hay màn push trong tab. Làm khi tab có nội dung (3.1 danh sách card, Epic 4 generator, `ModalPresenter` Epic 3).
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-6-tao-tai-khoan-va-vao-khung-3-tab.md`
+  summary: (low) `flutter_riverpod` 3.4.3 kéo theo `riverpod`, `listen`, `state_notifier`, `uuid` (chỉ để sinh id debug/devtools); cần tính vào bước CI so `pubspec` với Stack (mục deferred của 1.1).
+  evidence: Thấy trong `pubspec.lock` khi thêm package; không dùng mạng, không plugin native.
+
+## Deferred from: build review of spec-1-6-tao-tai-khoan-va-vao-khung-3-tab (2026-11-10)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-6-tao-tai-khoan-va-vao-khung-3-tab.md`
+  summary: (Chưa xác minh; nếu đúng thì medium) Khi bấm mắt để hiện mật khẩu, `SecretField` gửi `TextInputType.text`; một số bàn phím Android có thể bật thanh gợi ý hoặc học từ mật khẩu chính dù `enableSuggestions`/`enableIMEPersonalizedLearning` = false.
+  evidence: Review build 1.6 (blind-hunter #18). Kết luận được bằng cách thử Gboard và Samsung Keyboard trên máy Android thật với ô đang hiện: nếu thấy gợi ý hoặc từ mới trong từ điển cá nhân thì dùng `TextInputType.visiblePassword` khi ô đang hiện (kiểm cả ảnh hưởng tới bộ gõ Telex, UX-DR41). Làm cùng bộ nghiệm thu trên máy thật (story 7.1).
+
