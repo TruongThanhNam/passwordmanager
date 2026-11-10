@@ -137,3 +137,13 @@
 
 - Không có privacy screen: khi `hidden`/`paused`, ảnh app-switcher vẫn lộ nội dung vault, và lúc `resumed` HomeShell có thể hiện 1 frame trước khi `evaluate` khóa xong. Cần story riêng (che màn hình khi vào nền, FLAG_SECURE/iOS snapshot).
   status: closed — rủi ro đã chấp nhận theo PRD NFR-10 (chủ sản phẩm 2026-11-10)
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-11-ghim-chuoi-cung-ung-va-stack-trong-ci.md`
+  summary: Kiểm âm bước so revision Flutter với `.metadata` và gom khối shell lặp ở hai job vào một script `tool/ci/`.
+  evidence: Chỉ đường pass được chạy trên CI; đảo điều kiện hoặc bỏ `exit 1` vẫn xanh (thuộc phạm vi story 1.12).
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-11-ghim-chuoi-cung-ung-va-stack-trong-ci.md`
+  summary: Đối chiếu phiên bản Flutter (`FLUTTER_VERSION`), Gradle và Xcode trong CI với bảng Stack của spine.
+  evidence: `check_stack.dart` chỉ kiểm package; spine và CI có thể lệch mà gate vẫn pass.
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-11-ghim-chuoi-cung-ung-va-stack-trong-ci.md`
+  summary: Xác thực `gradle-wrapper.jar` đã commit (vd `gradle/actions/wrapper-validation` ghim SHA).
+  evidence: `distributionSha256Sum` chỉ phủ bản phân phối tải về, không phủ JAR wrapper trong repo.

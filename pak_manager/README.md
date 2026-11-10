@@ -9,8 +9,19 @@ Kiến trúc: `_bmad-output/planning-artifacts/architecture/` ở gốc repo.
 flutter pub get
 flutter analyze --fatal-infos --fatal-warnings
 dart run tool/check_imports.dart
+dart run tool/ci/check_stack.dart
 flutter test
 ```
+
+## Chuỗi cung ứng (AD-12, AD-18)
+
+Thêm hay nâng dependency thì phải cập nhật bảng Stack trong `ARCHITECTURE-SPINE.md`
+(ghim chính xác `X.Y.Z`) và thêm gói kéo theo mới vào
+`tool/ci/transitive_allowlist.txt` sau khi rà code; `tool/ci/check_stack.dart`
+chặn mọi lệch. Nâng action trong `.github/workflows/ci.yml` thì ghim SHA commit
+mới kèm comment tag; nâng Gradle thì cập nhật `distributionSha256Sum` trong
+`android/gradle/wrapper/gradle-wrapper.properties`; nâng Flutter thì revision
+trong `.metadata` phải khớp tag.
 
 ## Flavor
 
