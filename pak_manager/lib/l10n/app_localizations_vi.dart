@@ -28,6 +28,16 @@ class AppLocalizationsVi extends AppLocalizations {
   String get loginCreate => 'Tạo tài khoản';
 
   @override
+  String get loginSubmit => 'Đăng nhập';
+
+  @override
+  String get loginWrong => 'Sai mật khẩu.';
+
+  @override
+  String get loginCorrupt =>
+      'Dữ liệu bị hỏng — Mật khẩu đúng nhưng không đọc được dữ liệu. Bạn có thể dùng \"Xóa & Tạo tài khoản mới\" rồi import lại từ file export.';
+
+  @override
   String get createWarning =>
       'Không có cách khôi phục mật khẩu chính. Nếu quên, bạn sẽ mất toàn bộ dữ liệu.';
 

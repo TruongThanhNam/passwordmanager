@@ -80,6 +80,10 @@ final class PasswordPolicy {
   /// được gửi đi kiểm tra.
   static bool meetsLoginGate(String password) =>
       password.length >= minLength && _isPrintableAscii(password);
+
+  /// `true` khi [password] chỉ có ASCII in được (0x20–0x7E). S3 dùng để
+  /// hiện `pw.nonAscii` mà không chạy cả luật (không blocklist ở S3).
+  static bool isPrintableAscii(String password) => _isPrintableAscii(password);
 }
 
 bool _isPrintableAscii(String s) {

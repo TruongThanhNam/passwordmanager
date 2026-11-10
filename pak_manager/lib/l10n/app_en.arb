@@ -24,6 +24,18 @@
   "@loginCreate": {
     "description": "login.create: S1 button, S2 nav title and S2 button."
   },
+  "loginSubmit": "Log In",
+  "@loginSubmit": {
+    "description": "login.submit: S3 button."
+  },
+  "loginWrong": "Incorrect password.",
+  "@loginWrong": {
+    "description": "login.wrong (FR-3): inline-message under the S3 field when the password is wrong."
+  },
+  "loginCorrupt": "Data is damaged — The password is correct but the data can't be read. You can use \"Erase & Create New Account\", then import your export file.",
+  "@loginCorrupt": {
+    "description": "login.corrupt (FR-7): inline-message on S3 when the header is damaged or the data can't be decrypted."
+  },
   "createWarning": "There is no way to recover your main password. If you forget it, you lose all your data.",
   "@createWarning": {
     "description": "create.warning (FR-1): paragraph above the two fields on S2."

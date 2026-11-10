@@ -38,13 +38,16 @@ class SessionGateState extends ConsumerState<SessionGate>
   /// giữ lại state của cây trước.
   GlobalKey<NavigatorState> _navigator = GlobalKey<NavigatorState>();
 
-  /// Tăng mỗi lần đổi cây (vào phiên; story 1.8: khóa).
+  /// Tăng mỗi lần đổi cây (vào phiên qua tạo/đăng nhập; story 1.8: khóa).
   int get epoch => _epoch;
 
   /// Phiên hiện tại; `null` khi chưa mở khóa.
   VaultSession? get session => _session;
 
-  void _onCreated(VaultSession session) {
+  /// Đường vào phiên chung cho tạo tài khoản (S2) và đăng nhập (S3): nhận
+  /// quyền sở hữu [session], tăng epoch và thay cả cây bằng [HomeShell]
+  /// (tab 0). Gate đã bị gỡ thì hủy phiên ngay.
+  void _enterSession(VaultSession session) {
     if (!mounted) {
       session.dispose();
       return;
@@ -109,7 +112,10 @@ class SessionGateState extends ConsumerState<SessionGate>
 
   Widget _loginFor(BuildContext context, BootstrapResult result) =>
       switch (result) {
-        BootstrapHasAccount() => const LoginScreen(hasAccount: true),
+        BootstrapHasAccount() => LoginScreen(
+          hasAccount: true,
+          onUnlocked: _enterSession,
+        ),
         BootstrapNoAccount() => LoginScreen(
           hasAccount: false,
           onCreate: () => _pushCreate(context),
@@ -125,7 +131,7 @@ class SessionGateState extends ConsumerState<SessionGate>
     unawaited(
       Navigator.of(context).push(
         CupertinoPageRoute<void>(
-          builder: (context) => CreateAccountScreen(onCreated: _onCreated),
+          builder: (context) => CreateAccountScreen(onCreated: _enterSession),
         ),
       ),
     );

@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pak_manager/core/crypto/kdf.dart';
+import 'package:pak_manager/core/crypto/kdf_calibration.dart';
 import 'package:pak_manager/core/crypto/random_source.dart';
 import 'package:pak_manager/core/format/header_codec.dart';
 import 'package:pak_manager/core/format/vault_file_codec.dart';
@@ -410,6 +411,221 @@ void main() {
       expect(result, isA<CreateSuccess>());
       expect(derives, 1);
       (result as CreateSuccess).session.dispose();
+    });
+  });
+
+  group('unlock', () {
+    const fixturePw = 'fixture-only correct horse 42';
+    const wrongPw = 'fixture-only wrong horse 42!';
+
+    /// Chép fixture v1 thật vào `vault/`; [overrides] thay nội dung từng file
+    /// (`null` = bỏ file đó).
+    void installVault([Map<String, Uint8List?> overrides = const {}]) {
+      Directory(paths.vaultDir).createSync();
+      final targets = {
+        'header': paths.headerFile,
+        'cards': paths.cardsFile,
+        'recent': paths.recentFile,
+      };
+      for (final MapEntry(key: name, value: path) in targets.entries) {
+        final bytes = overrides.containsKey(name)
+            ? overrides[name]
+            : vaultFixture(name);
+        if (bytes != null) {
+          File(path).writeAsBytesSync(bytes);
+        }
+      }
+    }
+
+    /// Ảnh chụp mọi file dưới `pak/` (đường dẫn → byte).
+    Map<String, List<int>> snapshot() => {
+      for (final e in Directory(paths.pakDir).listSync(recursive: true))
+        if (e is File) e.path: e.readAsBytesSync(),
+    };
+
+    var derives = 0;
+
+    /// Service với KDF thật (Argon2id) bọc [_TrackedKey]; đếm số lần chạy.
+    AccountService realService() {
+      derives = 0;
+      final sync = _RecordingFileSync();
+      final real = kekDeriver(sodium);
+      return service(
+        writer: AtomicFileWriter(sync),
+        fileSync: sync,
+        derive: (pw, salt, params) async {
+          derives++;
+          final kek = await real(pw, salt, params);
+          if (kek == null) {
+            return null;
+          }
+          final tracked = _TrackedKey(kek);
+          keks.add(tracked);
+          return tracked;
+        },
+      );
+    }
+
+    /// Header fixture với [mutate] áp lên byte rồi tính lại checksum (để
+    /// qua `decode` và hỏng ở bước sau).
+    Uint8List headerWith(void Function(Uint8List) mutate) {
+      final bytes = vaultFixture('header');
+      mutate(bytes);
+      bytes.setAll(
+        123,
+        sodium.crypto.genericHash(
+          message: Uint8List.sublistView(bytes, 0, 123),
+          outLen: 32,
+        ),
+      );
+      return bytes;
+    }
+
+    test('fr03_ad05_correct_password_unlocks_with_decrypted_data', () async {
+      installVault();
+      final before = snapshot();
+      final s = realService();
+
+      final result = await s.unlock(fixturePw);
+
+      expect(result, isA<UnlockSuccess>());
+      final session = (result as UnlockSuccess).session;
+      expect(session.cards, fixtureCards);
+      expect(session.recent, fixtureRecent);
+      expect(derives, 1);
+      expectKeksDisposed();
+      expect(snapshot(), before);
+      session.dispose();
+    });
+
+    test('fr03_ad05_wrong_password_is_wrong_not_corrupt', () async {
+      installVault();
+      final before = snapshot();
+      final s = realService();
+
+      expect(await s.unlock(wrongPw), isA<UnlockWrongPassword>());
+      expect(derives, 1);
+      expectKeksDisposed();
+      expect(snapshot(), before);
+    });
+
+    final corruptHeaders = <String, Uint8List? Function()>{
+      'missing': () => null,
+      'truncated': () => Uint8List.sublistView(vaultFixture('header'), 0, 154),
+      'bad_magic': () => vaultFixture('header')..[0] ^= 0xff,
+      'bad_checksum': () => vaultFixture('header')..[154] ^= 0x01,
+      'kdf_out_of_range': () => headerWith(
+        (b) => ByteData.sublistView(b).setUint32(7, 11, Endian.little),
+      ),
+    };
+    for (final MapEntry(key: name, value: header) in corruptHeaders.entries) {
+      test('fr07_ad05_corrupt_header_skips_kdf_$name', () async {
+        installVault({'header': header()});
+        final before = snapshot();
+        final s = realService();
+
+        expect(await s.unlock(fixturePw), isA<UnlockCorrupt>());
+        expect(derives, 0);
+        expect(snapshot(), before);
+      });
+    }
+
+    final corruptData = <String, Map<String, Uint8List?> Function()>{
+      'cards_tampered': () => {'cards': vaultFixture('cards')..[30] ^= 0x01},
+      'recent_tampered': () => {'recent': vaultFixture('recent')..[30] ^= 0x01},
+      'cards_missing': () => {'cards': null},
+      'recent_missing': () => {'recent': null},
+      'cards_garbage': () => {'cards': Uint8List(3)},
+      'wrapped_dek_tampered': () => {
+        'header': headerWith((b) => b[59] ^= 0x01),
+      },
+    };
+    for (final MapEntry(key: name, value: files) in corruptData.entries) {
+      test('fr07_ad05_correct_password_bad_data_is_corrupt_$name', () async {
+        installVault(files());
+        final before = snapshot();
+        final s = realService();
+
+        expect(await s.unlock(fixturePw), isA<UnlockCorrupt>());
+        expect(derives, 1);
+        expectKeksDisposed();
+        expect(snapshot(), before);
+      });
+    }
+
+    test('fr07_kdf_failure_is_corrupt_not_a_throw', () async {
+      installVault();
+      final sync = _RecordingFileSync();
+      final s = service(
+        writer: AtomicFileWriter(sync),
+        fileSync: sync,
+        derive: (_, _, _) async => null,
+      );
+      expect(await s.unlock(fixturePw), isA<UnlockCorrupt>());
+
+      final throwing = service(
+        writer: AtomicFileWriter(sync),
+        fileSync: sync,
+        derive: (_, _, _) async => throw StateError('KDF giả lỗi'),
+      );
+      expect(await throwing.unlock(fixturePw), isA<UnlockCorrupt>());
+    });
+
+    test('ad22_unlock_wipes_password_bytes', () async {
+      installVault();
+      final seen = <Uint8List>[];
+      final sync = _RecordingFileSync();
+      final real = kekDeriver(sodium);
+      final s = service(
+        writer: AtomicFileWriter(sync),
+        fileSync: sync,
+        derive: (pw, salt, params) {
+          seen.add(pw);
+          return real(pw, salt, params);
+        },
+      );
+
+      final ok = await s.unlock(fixturePw);
+      expect(await s.unlock(wrongPw), isA<UnlockWrongPassword>());
+      expect(seen, hasLength(2));
+      for (final pw in seen) {
+        expect(pw, everyElement(0));
+      }
+      (ok as UnlockSuccess).session.dispose();
+    });
+
+    test('ux_dr42_concurrent_unlock_returns_running_result', () async {
+      installVault();
+      final gate = Completer<void>();
+      var count = 0;
+      final sync = _RecordingFileSync();
+      final real = kekDeriver(sodium);
+      final s = service(
+        writer: AtomicFileWriter(sync),
+        fileSync: sync,
+        derive: (pw, salt, params) async {
+          count++;
+          final kek = await real(pw, salt, params);
+          await gate.future;
+          return kek;
+        },
+      );
+
+      final first = s.unlock(fixturePw);
+      final second = s.unlock(fixturePw);
+      gate.complete();
+      final a = await first;
+      final b = await second;
+
+      expect(count, 1);
+      expect(a, isA<UnlockSuccess>());
+      expect(b, same(a));
+      (a as UnlockSuccess).session.dispose();
+
+      // Xong rồi thì lần sau chạy lại bình thường.
+      final third = await s.unlock(fixturePw);
+      expect(count, 2);
+      (third as UnlockSuccess).session.dispose();
     });
   });
 }
