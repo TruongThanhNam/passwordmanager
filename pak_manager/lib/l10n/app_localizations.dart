@@ -253,6 +253,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Hide password'**
   String get pwHide;
+
+  /// settings.lockVault: S18 last block, text button that locks the vault immediately without confirmation.
+  ///
+  /// In en, this message translates to:
+  /// **'Lock Vault'**
+  String get settingsLockVault;
 }
 
 class _AppLocalizationsDelegate

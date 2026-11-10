@@ -4,12 +4,14 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:cupertino_ui/cupertino_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pak_manager/core/model/settings.dart';
 import 'package:pak_manager/core/policy/password_policy.dart';
 import 'package:pak_manager/core/policy/strength_estimator.dart';
 import 'package:pak_manager/features/shared/pak_app.dart';
+import 'package:pak_manager/features/shared/pak_buttons.dart';
 import 'package:pak_manager/features/shared/providers.dart';
 import 'package:pak_manager/services/account_service.dart';
 import 'package:pak_manager/services/settings_store.dart';
@@ -134,9 +136,32 @@ Future<void> pumpGateApp(
 
 /// Bấm "Tạo tài khoản" ở S1 và chờ chuyển cảnh push xong.
 Future<void> openCreateScreen(WidgetTester tester) async {
-  await tester.tap(find.text('Tạo tài khoản'));
+  await tester.tap(find.byType(PakPrimaryButton));
   await tester.pumpAndSettle();
 }
 
 /// Mật khẩu hợp lệ với blocklist rỗng (chỉ dữ liệu giả).
 const validPassword = 'fake purple lantern 42 drift';
+
+/// Từ S1: mở S2, tạo tài khoản với [session] (mặc định phiên giả) và chờ
+/// khung 3 tab hiện.
+Future<void> createAndEnterShell(
+  WidgetTester tester,
+  FakeAccountService service, [
+  VaultSession? session,
+]) async {
+  await openCreateScreen(tester);
+  await tester.enterText(
+    find.byKey(const ValueKey('create.field.main')),
+    validPassword,
+  );
+  await tester.enterText(
+    find.byKey(const ValueKey('create.field.confirm')),
+    validPassword,
+  );
+  await tester.pump();
+  await tester.tap(find.byType(PakPrimaryButton));
+  await tester.pump();
+  service.completeCreate(CreateSuccess(session ?? fakeSession()));
+  await tester.pumpAndSettle();
+}

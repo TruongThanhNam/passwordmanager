@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 11-02-2026 16:41
-last_updated: 11-10-2026 15:52
+last_updated: 2026-11-10
 project: passwordmanager
 project_key: NOKEY
 tracking_system: file-system
@@ -43,7 +43,7 @@ development_status:
   1-5-luật-mật-khẩu-chính-và-đánh-giá-độ-mạnh: done
   1-6-tạo-tài-khoản-và-vào-khung-3-tab: done
   1-7-đăng-nhập-bằng-mật-khẩu-chính: done
-  1-8-khóa-vault-và-xóa-dữ-liệu-giải-mã-khỏi-bộ-nhớ: backlog
+  1-8-khóa-vault-và-xóa-dữ-liệu-giải-mã-khỏi-bộ-nhớ: review
   1-9-tự-khóa-khi-chạy-nền-và-giới-hạn-phiên: backlog
   epic-1-retrospective: optional
 

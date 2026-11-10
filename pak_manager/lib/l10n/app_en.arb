@@ -113,5 +113,9 @@
   "pwHide": "Hide password",
   "@pwHide": {
     "description": "pw.hide: screen-reader label of the eye button while the password is shown."
+  },
+  "settingsLockVault": "Lock Vault",
+  "@settingsLockVault": {
+    "description": "settings.lockVault: S18 last block, text button that locks the vault immediately without confirmation."
   }
 }

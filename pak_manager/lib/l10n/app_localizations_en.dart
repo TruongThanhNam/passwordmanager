@@ -94,4 +94,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get pwHide => 'Hide password';
+
+  @override
+  String get settingsLockVault => 'Lock Vault';
 }

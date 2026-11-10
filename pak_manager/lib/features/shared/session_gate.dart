@@ -4,6 +4,7 @@ import 'package:cupertino_ui/cupertino_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../services/account_service.dart';
+import '../../services/session_controller.dart';
 import '../../services/vault_session.dart';
 import '../auth/create_account_screen.dart';
 import '../auth/login_screen.dart';
@@ -16,8 +17,8 @@ import 'providers.dart';
 ///   [bootstrapResultProvider]; S2 được push lên bằng `CupertinoPageRoute`.
 /// - Có phiên: thay **cả** cây trên bằng [HomeShell] bọc
 ///   `KeyedSubtree(ValueKey(epoch))`. Mọi màn chưa đăng nhập (và mọi
-///   `SecretField`) bị gỡ; khóa ở story 1.8 cũng là thay cây, không push S3
-///   lên UI cũ.
+///   `SecretField`) bị gỡ. Khóa ([SessionController.lock]) cũng là thay cây,
+///   luôn về S3, không push S3 lên UI cũ.
 ///
 /// `CupertinoApp` không có navigator riêng (không `home`), nên gate nhận nút
 /// Back hệ thống (Android) và chuyển cho navigator đang hiện.
@@ -28,42 +29,58 @@ class SessionGate extends ConsumerStatefulWidget {
   ConsumerState<SessionGate> createState() => SessionGateState();
 }
 
-/// State công khai để test đọc [epoch]/[session].
+/// State công khai để test đọc [epoch]/[session]/[controller].
 class SessionGateState extends ConsumerState<SessionGate>
     with WidgetsBindingObserver {
-  VaultSession? _session;
-  int _epoch = 0;
+  /// Chủ của phiên và epoch (AD-9); gate dựng lại mỗi khi controller báo.
+  final SessionController _controller = SessionController();
+
+  /// Kết quả bootstrap giữ cục bộ: [bootstrapResultProvider] chỉ tính một
+  /// lần trước `runApp`, nên sau khi vào phiên (kể cả qua S2) gate đặt
+  /// [BootstrapHasAccount] để khóa luôn về S3.
+  late BootstrapResult _bootstrap;
 
   /// Navigator gốc của cây đang hiện; tạo mới ở mỗi epoch để không cây nào
   /// giữ lại state của cây trước.
   GlobalKey<NavigatorState> _navigator = GlobalKey<NavigatorState>();
 
-  /// Tăng mỗi lần đổi cây (vào phiên qua tạo/đăng nhập; story 1.8: khóa).
-  int get epoch => _epoch;
+  /// Loại cây đã dựng lần trước (`true` = cây phiên).
+  bool _lastInSession = false;
 
-  /// Phiên hiện tại; `null` khi chưa mở khóa.
-  VaultSession? get session => _session;
+  /// Tăng mỗi lần đổi cây (vào phiên qua tạo/đăng nhập, khóa).
+  int get epoch => _controller.epoch;
 
-  /// Đường vào phiên chung cho tạo tài khoản (S2) và đăng nhập (S3): nhận
-  /// quyền sở hữu [session], tăng epoch và thay cả cây bằng [HomeShell]
-  /// (tab 0). Gate đã bị gỡ thì hủy phiên ngay.
+  /// Phiên hiện tại; `null` khi chưa mở khóa hoặc đã khóa.
+  VaultSession? get session => _controller.session;
+
+  /// Bộ điều khiển phiên của gate.
+  SessionController get controller => _controller;
+
+  /// Đường vào phiên chung cho tạo tài khoản (S2) và đăng nhập (S3): trao
+  /// [session] cho controller (epoch++), cây sau đăng nhập thay cả cây cũ.
+  /// Gate đã bị gỡ thì phiên chưa từng được trao, khóa ngay.
   void _enterSession(VaultSession session) {
     if (!mounted) {
-      session.dispose();
+      session.lock();
       return;
     }
-    setState(() {
-      _session?.dispose();
-      _session = session;
-      _epoch++;
-      _navigator = GlobalKey<NavigatorState>();
-    });
+    _bootstrap = const BootstrapHasAccount();
+    _controller.enter(session);
+  }
+
+  void _onControllerChanged() {
+    if (!mounted) {
+      return;
+    }
+    setState(() => _navigator = GlobalKey<NavigatorState>());
   }
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _bootstrap = ref.read(bootstrapResultProvider);
+    _controller.addListener(_onControllerChanged);
   }
 
   /// Back hệ thống đóng tầng trên cùng của navigator đang hiện (S2 → S1);
@@ -83,28 +100,41 @@ class SessionGateState extends ConsumerState<SessionGate>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _session?.dispose();
-    _session = null;
+    _controller.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final session = _session;
-    if (session != null && !session.isDisposed) {
+    final session = _controller.session;
+    final inSession = session != null && !session.isLocked;
+    // Đổi giữa cây phiên và cây đăng nhập (kể cả trước khi controller báo,
+    // vd. lúc khóa đang chờ hook clipboard) thì luôn dùng navigator key mới,
+    // để NavigatorState của cây phiên không bị chuyển sang cây đăng nhập.
+    if (inSession != _lastInSession) {
+      _lastInSession = inSession;
+      _navigator = GlobalKey<NavigatorState>();
+    }
+    if (inSession) {
+      // Khóa = gỡ cả scope này: mọi provider/State của phiên bị hủy.
       return KeyedSubtree(
-        key: ValueKey<int>(_epoch),
-        child: HomeShell(navigatorKey: _navigator),
+        key: ValueKey<int>(epoch),
+        child: ProviderScope(
+          overrides: [
+            sessionControllerProvider.overrideWithValue(_controller),
+            vaultSessionProvider.overrideWithValue(session),
+          ],
+          child: HomeShell(navigatorKey: _navigator),
+        ),
       );
     }
     return KeyedSubtree(
-      key: ValueKey<int>(_epoch),
+      key: ValueKey<int>(epoch),
       child: Navigator(
         key: _navigator,
         onGenerateRoute: (settings) => CupertinoPageRoute<void>(
           settings: settings,
-          builder: (context) =>
-              _loginFor(context, ref.read(bootstrapResultProvider)),
+          builder: (context) => _loginFor(context, _bootstrap),
         ),
       ),
     );

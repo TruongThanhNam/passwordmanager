@@ -1,6 +1,7 @@
 import 'package:cupertino_ui/cupertino_ui.dart';
 
 import '../../l10n/app_localizations.dart';
+import '../settings/settings_screen.dart';
 import 'content_column.dart';
 import 'icons/tab_icons.dart';
 import 'theme/pak_colors.dart';
@@ -86,10 +87,7 @@ class _TabShell extends StatelessWidget {
         builder: (context) => switch (index) {
           0 => _TabPage(title: l10n.tabCards),
           1 => _TabPage(title: l10n.generatorTitle),
-          _ => _TabPage(
-            title: l10n.tabSettings,
-            background: PakColors.surfaceGrouped,
-          ),
+          _ => const SettingsScreen(),
         },
       ),
     );
@@ -98,23 +96,19 @@ class _TabShell extends StatelessWidget {
 
 /// Trang gốc tạm của một tab: chỉ nav-bar (UX-DR29), thân trống. Nội dung
 /// thật thêm ở các epic sau (danh sách card ở 3.1, generator ở Epic 4, các
-/// khối Cài đặt ở 1.8 và Epic 5).
+/// tab Cài đặt là `SettingsScreen`).
 class _TabPage extends StatelessWidget {
-  const _TabPage({
-    required this.title,
-    this.background = PakColors.surfaceBase,
-  });
+  const _TabPage({required this.title});
 
   final String title;
-  final Color background;
 
   @override
   Widget build(BuildContext context) {
     return CupertinoPageScaffold(
-      backgroundColor: background,
+      backgroundColor: PakColors.surfaceBase,
       navigationBar: CupertinoNavigationBar(
         middle: Text(title),
-        backgroundColor: background,
+        backgroundColor: PakColors.surfaceBase,
         border: null,
         automaticallyImplyLeading: false,
         automaticBackgroundVisibility: false,

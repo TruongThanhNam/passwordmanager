@@ -25,5 +25,6 @@
   "createUnavailable": "Không mở được dữ liệu của app. Hãy khởi động lại app.",
   "createFailed": "Không tạo được tài khoản. Hãy thử lại.",
   "pwReveal": "Hiện mật khẩu",
-  "pwHide": "Ẩn mật khẩu"
+  "pwHide": "Ẩn mật khẩu",
+  "settingsLockVault": "Khóa Vault"
 }

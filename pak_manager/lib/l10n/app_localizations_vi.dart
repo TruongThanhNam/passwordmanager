@@ -96,4 +96,7 @@ class AppLocalizationsVi extends AppLocalizations {
 
   @override
   String get pwHide => 'Ẩn mật khẩu';
+
+  @override
+  String get settingsLockVault => 'Khóa Vault';
 }

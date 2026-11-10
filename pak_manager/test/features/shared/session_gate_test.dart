@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:cupertino_ui/cupertino_ui.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pak_manager/features/auth/create_account_screen.dart';
 import 'package:pak_manager/features/auth/login_screen.dart';
@@ -394,5 +395,110 @@ void main() {
 
     // Ở gốc của tab: để OS xử lý.
     expect(await gate.didPopRoute(), isFalse);
+  });
+
+  testWidgets('fr49_ad23_lock_vault_replaces_tree_with_s3', (tester) async {
+    final service = FakeAccountService();
+    await pumpGateApp(
+      tester,
+      bootstrap: const BootstrapHasAccount(),
+      service: service,
+    );
+    final gate = tester.state<SessionGateState>(find.byType(SessionGate));
+    await tester.enterText(find.byType(SecretField), validPassword);
+    await tester.pump();
+    await tester.tap(find.byType(PakPrimaryButton));
+    await tester.pump();
+    final dek = FakeSecureKey();
+    service.completeUnlock(UnlockSuccess(fakeSession(dek)));
+    await tester.pumpAndSettle();
+    expect(gate.epoch, 1);
+    expect(find.byType(ProviderScope), findsNWidgets(2));
+
+    await tester.tap(find.text('Cài đặt'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Khóa Vault'));
+    await tester.pumpAndSettle();
+
+    expect(dek.disposed, isTrue);
+    expect(gate.session, isNull);
+    expect(gate.epoch, 2);
+    expect(find.byType(HomeShell), findsNothing);
+    expect(find.byType(CupertinoTabScaffold), findsNothing);
+    // Scope của phiên đã bị gỡ, chỉ còn scope gốc.
+    expect(find.byType(ProviderScope), findsOneWidget);
+    // S3 mới: ô mật khẩu trống, không thông báo lý do, không dialog.
+    expect(
+      tester.widget<LoginScreen>(find.byType(LoginScreen)).hasAccount,
+      isTrue,
+    );
+    final field = tester.widget<SecretField>(find.byType(SecretField));
+    expect(field.controller.text, isEmpty);
+    expect(find.byType(CupertinoAlertDialog), findsNothing);
+    expect(find.text('Sai mật khẩu.'), findsNothing);
+  });
+
+  testWidgets('fr49_ux_dr43_lock_removes_open_dialog', (tester) async {
+    final service = FakeAccountService();
+    await pumpGateApp(tester, service: service);
+    await createAndEnterShell(tester, service);
+    final gate = tester.state<SessionGateState>(find.byType(SessionGate));
+
+    final shellNavigator = tester.state<NavigatorState>(
+      find.byType(Navigator).first,
+    );
+    unawaited(
+      showCupertinoDialog<void>(
+        context: shellNavigator.context,
+        builder: (_) => const CupertinoAlertDialog(content: Text('hộp giả')),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('hộp giả'), findsOneWidget);
+
+    await gate.controller.lock();
+    await tester.pumpAndSettle();
+
+    expect(find.text('hộp giả'), findsNothing);
+    expect(find.byType(CupertinoAlertDialog), findsNothing);
+    expect(find.byType(SecretField), findsOneWidget);
+  });
+
+  testWidgets('fr49_session_from_s2_locks_to_s3_not_s1', (tester) async {
+    final service = FakeAccountService();
+    await pumpGateApp(tester, service: service);
+    await createAndEnterShell(tester, service);
+    final gate = tester.state<SessionGateState>(find.byType(SessionGate));
+    expect(gate.epoch, 1);
+
+    await tester.tap(find.text('Cài đặt'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Khóa Vault'));
+    await tester.pumpAndSettle();
+
+    expect(gate.epoch, 2);
+    expect(
+      tester.widget<LoginScreen>(find.byType(LoginScreen)).hasAccount,
+      isTrue,
+    );
+    expect(find.text('Tạo tài khoản'), findsNothing);
+    expect(find.byType(SecretField), findsOneWidget);
+  });
+
+  testWidgets('ad9_double_tap_lock_bumps_epoch_once', (tester) async {
+    final service = FakeAccountService();
+    await pumpGateApp(tester, service: service);
+    await createAndEnterShell(tester, service);
+    final gate = tester.state<SessionGateState>(find.byType(SessionGate));
+
+    await tester.tap(find.text('Cài đặt'));
+    await tester.pumpAndSettle();
+    final a = gate.controller.lock();
+    final b = gate.controller.lock();
+    await Future.wait([a, b]);
+    await tester.pumpAndSettle();
+
+    expect(gate.epoch, 2);
+    expect(find.byType(LoginScreen), findsOneWidget);
   });
 }
