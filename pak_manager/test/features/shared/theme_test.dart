@@ -224,5 +224,19 @@ void main() {
       expect(text.fontFamily, PakTextStyles.body.fontFamily);
       expect(text.height, PakTextStyles.body.height);
     });
+
+    test('ux_dr29_theme_nav_title_and_tab_label_use_tokens', () {
+      final textTheme = pakTheme(Appearance.system).textTheme;
+      final nav = textTheme.navTitleTextStyle;
+      expect(nav.color, PakColors.inkPrimary);
+      expect(nav.fontFamily, PakTextStyles.navTitle.fontFamily);
+      expect(nav.fontSize, PakTextStyles.navTitle.fontSize);
+      expect(nav.fontWeight, PakTextStyles.navTitle.fontWeight);
+      final tab = textTheme.tabLabelTextStyle;
+      expect(tab.color, PakColors.inkTabInactive);
+      expect(tab.fontFamily, PakTextStyles.tabLabel.fontFamily);
+      expect(tab.fontSize, PakTextStyles.tabLabel.fontSize);
+      expect(tab.fontWeight, PakTextStyles.tabLabel.fontWeight);
+    });
   });
 }

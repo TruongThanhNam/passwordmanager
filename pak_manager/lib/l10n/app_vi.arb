@@ -1,4 +1,26 @@
 {
   "@@locale": "vi",
-  "appName": "PAK Manager"
+  "appName": "PAK Manager",
+  "tabCards": "Quản lý mật khẩu",
+  "tabGenerator": "Tạo mật khẩu",
+  "generatorTitle": "Tạo mật khẩu",
+  "tabSettings": "Cài đặt",
+  "loginCreate": "Tạo tài khoản",
+  "createWarning": "Không có cách khôi phục mật khẩu chính. Nếu quên, bạn sẽ mất toàn bộ dữ liệu.",
+  "createFieldMain": "Mật khẩu chính",
+  "createFieldConfirm": "Nhập lại mật khẩu chính",
+  "pwNonAscii": "Chỉ dùng chữ không dấu, số, ký hiệu và khoảng trắng. Chữ có dấu có thể bị bàn phím ghi khác đi và khiến bạn không đăng nhập được.",
+  "pwStrength": "Độ mạnh: {level}",
+  "pwStrengthLow": "Thấp",
+  "pwStrengthMedium": "Trung bình",
+  "pwStrengthHigh": "Cao",
+  "pwTooShort": "Cần ít nhất 15 ký tự (hiện có {n}).",
+  "pwTooLong": "Tối đa 128 ký tự.",
+  "pwCommon": "Mật khẩu này quá phổ biến hoặc đã bị lộ. Hãy chọn mật khẩu khác.",
+  "pwPattern": "Không dùng một ký tự lặp lại hoặc một dãy liên tiếp.",
+  "pwMismatch": "Hai mật khẩu không khớp.",
+  "createUnavailable": "Không mở được dữ liệu của app. Hãy khởi động lại app.",
+  "createFailed": "Không tạo được tài khoản. Hãy thử lại.",
+  "pwReveal": "Hiện mật khẩu",
+  "pwHide": "Ẩn mật khẩu"
 }

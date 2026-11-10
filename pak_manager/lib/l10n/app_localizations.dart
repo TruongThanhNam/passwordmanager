@@ -103,6 +103,138 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'PAK Manager'**
   String get appName;
+
+  /// tab.cards: tab 1 label and S7 nav title.
+  ///
+  /// In en, this message translates to:
+  /// **'Passwords'**
+  String get tabCards;
+
+  /// tab.generator: tab 2 label.
+  ///
+  /// In en, this message translates to:
+  /// **'Generator'**
+  String get tabGenerator;
+
+  /// generator.title: S14 nav title.
+  ///
+  /// In en, this message translates to:
+  /// **'Password Generator'**
+  String get generatorTitle;
+
+  /// tab.settings: tab 3 label and S18 nav title.
+  ///
+  /// In en, this message translates to:
+  /// **'Settings'**
+  String get tabSettings;
+
+  /// login.create: S1 button, S2 nav title and S2 button.
+  ///
+  /// In en, this message translates to:
+  /// **'Create Account'**
+  String get loginCreate;
+
+  /// create.warning (FR-1): paragraph above the two fields on S2.
+  ///
+  /// In en, this message translates to:
+  /// **'There is no way to recover your main password. If you forget it, you lose all your data.'**
+  String get createWarning;
+
+  /// create.field.main: placeholder of the first S2 field.
+  ///
+  /// In en, this message translates to:
+  /// **'Main password'**
+  String get createFieldMain;
+
+  /// create.field.confirm: placeholder of the second S2 field.
+  ///
+  /// In en, this message translates to:
+  /// **'Re-enter main password'**
+  String get createFieldConfirm;
+
+  /// pw.nonAscii (FR-2): inline-message when the field has a non-ASCII character.
+  ///
+  /// In en, this message translates to:
+  /// **'Use only unaccented letters, numbers, symbols and spaces. Accented letters may be typed differently by the keyboard and lock you out.'**
+  String get pwNonAscii;
+
+  /// pw.strength (FR-2): strength-meter line; level is pwStrengthLow/Medium/High.
+  ///
+  /// In en, this message translates to:
+  /// **'Strength: {level}'**
+  String pwStrength(String level);
+
+  /// pw.strength level for zxcvbnm score 0-2.
+  ///
+  /// In en, this message translates to:
+  /// **'Low'**
+  String get pwStrengthLow;
+
+  /// pw.strength level for zxcvbnm score 3.
+  ///
+  /// In en, this message translates to:
+  /// **'Medium'**
+  String get pwStrengthMedium;
+
+  /// pw.strength level for zxcvbnm score 4.
+  ///
+  /// In en, this message translates to:
+  /// **'High'**
+  String get pwStrengthHigh;
+
+  /// pw.tooShort: n is the current length.
+  ///
+  /// In en, this message translates to:
+  /// **'At least 15 characters ({n} so far).'**
+  String pwTooShort(int n);
+
+  /// pw.tooLong.
+  ///
+  /// In en, this message translates to:
+  /// **'128 characters maximum.'**
+  String get pwTooLong;
+
+  /// pw.common: password is in the offline blocklist.
+  ///
+  /// In en, this message translates to:
+  /// **'This password is too common or has been leaked. Choose another.'**
+  String get pwCommon;
+
+  /// pw.pattern: repeated character or sequential run.
+  ///
+  /// In en, this message translates to:
+  /// **'Don\'t use one repeated character or a sequence.'**
+  String get pwPattern;
+
+  /// pw.mismatch: shown once the re-entered field is as long as the first.
+  ///
+  /// In en, this message translates to:
+  /// **'Passwords don\'t match.'**
+  String get pwMismatch;
+
+  /// create.unavailable: S1, under the disabled button when storage, Sodium or the blocklist failed to load.
+  ///
+  /// In en, this message translates to:
+  /// **'Can\'t open app data. Restart the app.'**
+  String get createUnavailable;
+
+  /// create.failed: S2, under the button when AccountService.create failed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t create the account. Try again.'**
+  String get createFailed;
+
+  /// pw.reveal: screen-reader label of the eye button while the password is hidden.
+  ///
+  /// In en, this message translates to:
+  /// **'Show password'**
+  String get pwReveal;
+
+  /// pw.hide: screen-reader label of the eye button while the password is shown.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide password'**
+  String get pwHide;
 }
 
 class _AppLocalizationsDelegate

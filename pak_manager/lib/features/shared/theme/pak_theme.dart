@@ -18,5 +18,12 @@ CupertinoThemeData pakTheme(Appearance appearance) => CupertinoThemeData(
   scaffoldBackgroundColor: PakColors.surfaceBase,
   textTheme: CupertinoTextThemeData(
     textStyle: PakTextStyles.body.copyWith(color: PakColors.inkPrimary),
+    navTitleTextStyle: PakTextStyles.navTitle.copyWith(
+      color: PakColors.inkPrimary,
+    ),
+    // Màu chọn/chưa chọn do `CupertinoTabBar` đặt (UX-DR29).
+    tabLabelTextStyle: PakTextStyles.tabLabel.copyWith(
+      color: PakColors.inkTabInactive,
+    ),
   ),
 );
