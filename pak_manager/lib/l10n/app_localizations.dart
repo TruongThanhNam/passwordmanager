@@ -134,6 +134,24 @@ abstract class AppLocalizations {
   /// **'Create Account'**
   String get loginCreate;
 
+  /// login.submit: S3 button.
+  ///
+  /// In en, this message translates to:
+  /// **'Log In'**
+  String get loginSubmit;
+
+  /// login.wrong (FR-3): inline-message under the S3 field when the password is wrong.
+  ///
+  /// In en, this message translates to:
+  /// **'Incorrect password.'**
+  String get loginWrong;
+
+  /// login.corrupt (FR-7): inline-message on S3 when the header is damaged or the data can't be decrypted.
+  ///
+  /// In en, this message translates to:
+  /// **'Data is damaged — The password is correct but the data can\'t be read. You can use \"Erase & Create New Account\", then import your export file.'**
+  String get loginCorrupt;
+
   /// create.warning (FR-1): paragraph above the two fields on S2.
   ///
   /// In en, this message translates to:

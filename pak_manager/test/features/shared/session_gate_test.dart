@@ -68,7 +68,7 @@ void main() {
     expect(title.right - button.right, 16);
   });
 
-  testWidgets('fr01_s3_placeholder_has_title_only_before_story_1_7', (
+  testWidgets('fr03_has_account_shows_s3_with_field_and_login_button', (
     tester,
   ) async {
     await pumpGateApp(
@@ -78,12 +78,69 @@ void main() {
     );
 
     expect(find.text('PAK Manager'), findsOneWidget);
-    expect(find.byType(PakPrimaryButton), findsNothing);
+    expect(find.byType(SecretField), findsOneWidget);
+    expect(find.text('Đăng nhập'), findsOneWidget);
     expect(find.text('Tạo tài khoản'), findsNothing);
     expect(
       tester.widget<LoginScreen>(find.byType(LoginScreen)).hasAccount,
       isTrue,
     );
+  });
+
+  testWidgets('fr03_ad23_unlock_success_replaces_s3_with_shell_tab_0', (
+    tester,
+  ) async {
+    final service = FakeAccountService();
+    await pumpGateApp(
+      tester,
+      bootstrap: const BootstrapHasAccount(),
+      service: service,
+    );
+    final gate = tester.state<SessionGateState>(find.byType(SessionGate));
+    final controller = tester
+        .widget<SecretField>(find.byType(SecretField))
+        .controller;
+
+    await tester.enterText(find.byType(SecretField), validPassword);
+    await tester.pump();
+    await tester.tap(find.byType(PakPrimaryButton));
+    await tester.pump();
+    final session = fakeSession();
+    service.completeUnlock(UnlockSuccess(session));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(LoginScreen), findsNothing);
+    expect(find.byType(SecretField), findsNothing);
+    expect(controller.text, isEmpty);
+    expect(gate.epoch, 1);
+    expect(gate.session, same(session));
+    expect(find.byType(CupertinoTabScaffold), findsOneWidget);
+    expect(
+      tester.widget<CupertinoTabBar>(find.byType(CupertinoTabBar)).currentIndex,
+      0,
+    );
+  });
+
+  testWidgets('ad22_unlock_finishing_after_tree_is_gone_disposes_session', (
+    tester,
+  ) async {
+    final service = FakeAccountService();
+    await pumpGateApp(
+      tester,
+      bootstrap: const BootstrapHasAccount(),
+      service: service,
+    );
+    await tester.enterText(find.byType(SecretField), validPassword);
+    await tester.pump();
+    await tester.tap(find.byType(PakPrimaryButton));
+    await tester.pump();
+    expect(service.unlockCalls, hasLength(1));
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    final dek = FakeSecureKey();
+    service.completeUnlock(UnlockSuccess(fakeSession(dek)));
+    await tester.pump();
+    expect(dek.disposed, isTrue);
   });
 
   testWidgets('ad11_unavailable_storage_disables_create_and_explains', (

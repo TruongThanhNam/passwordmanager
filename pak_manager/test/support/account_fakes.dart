@@ -52,7 +52,8 @@ VaultSession fakeSession([FakeSecureKey? dek]) => VaultSession(
   recent: const [],
 );
 
-/// `AccountService` giả: `create` treo tới khi test gọi [completeCreate].
+/// `AccountService` giả: `create`/`unlock` treo tới khi test gọi
+/// [completeCreate]/[completeUnlock].
 final class FakeAccountService implements AccountService {
   FakeAccountService({this.bootstrapResult = const BootstrapNoAccount()});
 
@@ -77,6 +78,23 @@ final class FakeAccountService implements AccountService {
   /// Trả kết quả cho lần `create` cũ nhất còn treo.
   void completeCreate(CreateResult result) =>
       _pending.removeAt(0).complete(result);
+
+  /// Mật khẩu của từng lần gọi `unlock`.
+  final List<String> unlockCalls = [];
+
+  final List<Completer<UnlockResult>> _pendingUnlock = [];
+
+  @override
+  Future<UnlockResult> unlock(String password) {
+    unlockCalls.add(password);
+    final completer = Completer<UnlockResult>();
+    _pendingUnlock.add(completer);
+    return completer.future;
+  }
+
+  /// Trả kết quả cho lần `unlock` cũ nhất còn treo.
+  void completeUnlock(UnlockResult result) =>
+      _pendingUnlock.removeAt(0).complete(result);
 }
 
 /// Bộ ước lượng độ mạnh dùng chung (dựng từ điển một lần cho cả file test).

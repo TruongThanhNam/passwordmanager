@@ -28,6 +28,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get loginCreate => 'Create Account';
 
   @override
+  String get loginSubmit => 'Log In';
+
+  @override
+  String get loginWrong => 'Incorrect password.';
+
+  @override
+  String get loginCorrupt =>
+      'Data is damaged — The password is correct but the data can\'t be read. You can use \"Erase & Create New Account\", then import your export file.';
+
+  @override
   String get createWarning =>
       'There is no way to recover your main password. If you forget it, you lose all your data.';
 

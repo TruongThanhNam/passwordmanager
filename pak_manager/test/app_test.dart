@@ -17,6 +17,7 @@ import 'package:pak_manager/features/auth/login_screen.dart';
 import 'package:pak_manager/features/shared/content_column.dart';
 import 'package:pak_manager/features/shared/pak_app.dart';
 import 'package:pak_manager/features/shared/pak_buttons.dart';
+import 'package:pak_manager/features/shared/secret_field.dart';
 import 'package:pak_manager/main.dart' as app;
 import 'package:pak_manager/platform/platform_api.g.dart';
 import 'package:pak_manager/services/settings_store.dart';
@@ -237,6 +238,92 @@ void main() {
     );
     expect(SettingsCodec.decode(settingsFile.readAsBytesSync()), store.current);
     expect(store.current.appearance, Appearance.light);
+  });
+
+  testWidgets('fr03_real_main_with_header_shows_s3_field_and_login', (
+    tester,
+  ) async {
+    final savedDebugPrint = debugPrint;
+    final savedFlutterOnError = FlutterError.onError;
+    final savedPlatformOnError = PlatformDispatcher.instance.onError;
+    final sep = Platform.pathSeparator;
+
+    final sandbox = Directory.systemTemp.createTempSync('pak_main_s3_');
+    addTearDown(() => sandbox.deleteSync(recursive: true));
+    final vault = '${sandbox.path}${sep}pak${sep}vault';
+    Directory(vault).createSync(recursive: true);
+    final files = <String, List<int>>{
+      for (final name in const ['header', 'cards', 'recent'])
+        name: File('test/fixtures/vault/v1/$name').readAsBytesSync(),
+    };
+    for (final MapEntry(key: name, value: bytes) in files.entries) {
+      File('$vault$sep$name').writeAsBytesSync(bytes);
+    }
+
+    final messenger = tester.binding.defaultBinaryMessenger;
+    const pathProvider = MethodChannel('plugins.flutter.io/path_provider');
+    messenger.setMockMethodCallHandler(pathProvider, (call) async {
+      if (call.method == 'getApplicationSupportDirectory') {
+        return sandbox.path;
+      }
+      throw MissingPluginException(call.method);
+    });
+    addTearDown(() => messenger.setMockMethodCallHandler(pathProvider, null));
+
+    const prefix = 'dev.flutter.pigeon.pak_manager.PlatformApi.';
+    const replies = <String, Object?>{
+      'bootId': '',
+      'monotonicMs': 0,
+      'excludeFromBackup': null,
+      'fsyncDirectory': null,
+      'androidSdkInt': 28,
+    };
+    for (final MapEntry(key: method, value: value) in replies.entries) {
+      final channel = BasicMessageChannel<Object?>(
+        '$prefix$method',
+        PlatformApi.pigeonChannelCodec,
+      );
+      messenger.setMockDecodedMessageHandler<Object?>(
+        channel,
+        (message) async => [value],
+      );
+      addTearDown(
+        () => messenger.setMockDecodedMessageHandler<Object?>(channel, null),
+      );
+    }
+
+    app.main();
+    for (var i = 0; i < 100; i++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 20)),
+      );
+      await tester.pump();
+      if (find.byType(CupertinoApp).evaluate().isNotEmpty) {
+        break;
+      }
+    }
+
+    debugPrint = savedDebugPrint;
+    FlutterError.onError = savedFlutterOnError;
+    PlatformDispatcher.instance.onError = savedPlatformOnError;
+
+    final login = tester.widget<LoginScreen>(find.byType(LoginScreen));
+    if (_sodiumAvailable()) {
+      // FR-3: có `header` → S3: tên app, ô mật khẩu, nút "Đăng nhập".
+      expect(login.hasAccount, isTrue);
+      expect(find.text('PAK Manager'), findsOneWidget);
+      expect(find.byType(SecretField), findsOneWidget);
+      expect(find.byType(PakPrimaryButton), findsOneWidget);
+      expect(find.text('Log In'), findsOneWidget);
+    } else {
+      // Thiếu libsodium: fail closed như 1.6 (S1, nút vô hiệu).
+      expect(login.hasAccount, isFalse);
+      expect(login.unavailable, isTrue);
+    }
+    // Khởi động không đổi file vault nào.
+    for (final MapEntry(key: name, value: bytes) in files.entries) {
+      expect(File('$vault$sep$name').readAsBytesSync(), bytes);
+    }
   });
 
   // Blocklist hỏng hoặc không nạp được → fail closed (AD-15, deferred 1.5):
