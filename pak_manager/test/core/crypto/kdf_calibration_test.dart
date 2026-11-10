@@ -202,24 +202,58 @@ void main() {
     }
   });
 
-  test('ad05_kdf_failure_on_any_run_returns_null_and_disposes', () async {
+  test('ad05_probe_failure_retries_once_at_floor_and_accepts', () async {
+    for (final probe in <int?>[null, _Harness._throw]) {
+      // Lần ở sàn chậm 9000 ms vẫn được nhận: không còn gì thấp hơn.
+      final h = _Harness([probe, 9000]);
+
+      final result = await h.run();
+
+      expect(h.calls, [KdfParams.start, KdfParams.floor], reason: '$probe');
+      expect(result!.params, KdfParams.floor);
+      expect(identical(result.kek, h.keys.single), isTrue);
+      h.expectOnlyReturnedAlive(result);
+    }
+  });
+
+  test('ad05_probe_and_floor_both_failing_returns_null', () async {
     for (final durations in [
-      <int?>[null],
-      <int?>[300, null],
-      <int?>[2000, 2500, null],
+      <int?>[null, null],
+      <int?>[null, _Harness._throw],
+      <int?>[_Harness._throw, null],
+      <int?>[_Harness._throw, _Harness._throw],
     ]) {
       final h = _Harness(durations);
 
       final result = await h.run();
 
-      expect(result, isNull);
-      expect(h.keys.every((k) => k.disposed), isTrue);
+      expect(result, isNull, reason: '$durations');
+      expect(h.calls, [KdfParams.start, KdfParams.floor]);
+      expect(h.keys, isEmpty);
     }
   });
 
-  test('ad05_derive_throwing_on_any_run_returns_null_and_disposes', () async {
+  test(
+    'ad05_kdf_failure_after_probe_success_returns_null_and_disposes',
+    () async {
+      for (final durations in [
+        <int?>[300, null],
+        <int?>[2000, 2500, null],
+      ]) {
+        final h = _Harness(durations);
+
+        final result = await h.run();
+
+        expect(result, isNull);
+        expect(h.keys.every((k) => k.disposed), isTrue);
+        // Lỗi sau probe thành công không lùi về sàn.
+        expect(h.calls, hasLength(durations.length), reason: '$durations');
+      }
+    },
+  );
+
+  test('ad05_derive_throwing_after_probe_success_returns_null', () async {
     for (final durations in [
-      <int?>[_Harness._throw],
       <int?>[300, _Harness._throw],
       <int?>[2000, 2500, _Harness._throw],
     ]) {
