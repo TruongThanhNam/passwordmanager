@@ -49,7 +49,7 @@ development_status:
   1-11-ghim-chuỗi-cung-ứng-và-stack-trong-ci: done
   1-12-kiểm-âm-cho-các-cổng-ci: done
   1-13-integration-test-cho-api-native: done
-  1-14-flavor-dev-cho-ios-và-ghi-công-giấy-phép-blocklist: backlog
+  1-14-flavor-dev-cho-ios-và-ghi-công-giấy-phép-blocklist: review
   epic-1-retrospective: optional
 
   epic-2: backlog

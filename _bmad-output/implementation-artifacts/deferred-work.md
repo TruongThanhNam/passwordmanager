@@ -3,7 +3,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-1-khoi-tao-du-an-flutter-structural-seed-ci.md`
   summary: Thêm flavor `dev` cho iOS (scheme + build configuration, bundle id hậu tố `.dev`) để bản dev không ghi đè vault thật trên iPhone.
   evidence: Story 1.1 chỉ làm flavor Android theo quyết định của người dùng; iOS cần sửa tay `project.pbxproj` và chỉ kiểm được qua CI macOS. Khi có scheme `prod`/`dev` cho iOS thì cân nhắc `flutter: default-flavor: prod` trong `pubspec.yaml` (hiện không dùng được vì làm `flutter build ios` không cờ bị fail).
-  status: planned — story 1.14
+  status: done (story 1.14, `spec-1-14-flavor-dev-cho-ios-va-ghi-cong-giay-phep-blocklist.md`) — scheme `prod`/`dev` và cấu hình `{Debug,Release,Profile}-{prod,dev}`; bundle id dev `io.github.truongthanhnam.pakmanager.dev`; CI job `ios` build và kiểm bundle id cả hai flavor. Chưa thêm `default-flavor` (build không cờ vẫn dùng scheme `Runner`).
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-1-khoi-tao-du-an-flutter-structural-seed-ci.md`
   status: done (story 1.2, `spec-1-2-thu-muc-du-lieu-rieng-ghi-nguyen-tu-loai-khoi-backup.md`) — composition root là `lib/main.dart`; `check_imports` cấm services import `lib/platform/`/`lib/features/` và mọi file ngoài `lib/platform/` trừ `lib/main.dart` import `lib/platform/`.
@@ -106,7 +106,11 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-5-luat-mat-khau-chinh-va-danh-gia-do-manh.md`
   summary: (Chưa xác minh; nếu đúng thì medium) Thiếu ghi công giấy phép MIT của SecLists đi kèm `assets/blocklist.bloom` và `test/fixtures/blocklist/sample.txt`; chỉ có URL trong `tool/blocklist/SOURCE`, không có NOTICE hay `LicenseRegistry.addLicense`. Nguồn `rockyou` là dữ liệu lộ, không do SecLists viết.
   evidence: Code review 1.5 (blind-hunter). Kết luận được khi xác định Bloom filter dẫn xuất và 500 dòng mẫu có phải "copies or substantial portions" theo MIT không; nếu có thì thêm NOTICE cạnh asset và đăng ký giấy phép ở story có màn giấy phép.
-  status: planned — story 1.14
+  status: done (story 1.14) — thêm `pak_manager/NOTICE` chứa nguyên văn MIT của SecLists tại commit ghim, repo, các path và ghi chú về `rockyou`; `tool/blocklist/SOURCE` và `assets/blocklist.FORMAT.md` trỏ tới `NOTICE`. Phần `LicenseRegistry` tách thành mục riêng bên dưới.
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-14-flavor-dev-cho-ios-va-ghi-cong-giay-phep-blocklist.md`
+  summary: Gọi `LicenseRegistry.addLicense` với nội dung `NOTICE` (khai báo làm asset) để ghi công SecLists hiện trong màn giấy phép của app.
+  evidence: Story 1.14 chỉ thêm file `NOTICE` trong repo; epics hiện chưa có story màn giấy phép.
+  status: planned — khi có story màn giấy phép
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-5-luat-mat-khau-chinh-va-danh-gia-do-manh.md`
   summary: (low) Chưa định nghĩa dòng độ mạnh hiện gì khi `PasswordPolicy.check` trả lỗi: `StrengthEstimator` không biết blocklist và luật lặp/tuần tự, nên UI có thể hiện `High` cạnh lỗi `PasswordCommon`/`PasswordPattern`.
   evidence: Code review 1.5 (blind-hunter). Story 1.6, 5.3 và 6.2 đều hiện dòng độ mạnh; cần quyết định chung một lần (vd ép `low` khi `check` không `PasswordOk`) để ba nơi không lệch nhau.
