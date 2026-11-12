@@ -1,18 +1,32 @@
 #!/usr/bin/env bash
-# Kiểm APK release (AD-12, AD-19):
-#   1. Manifest đã merge không có android.permission.INTERNET; có
-#      allowBackup=false, dataExtractionRules và fullBackupContent (AD-11).
-#   2. zipalign: mọi .so không nén được căn 16 KB trong APK.
-#   3. readelf: mọi segment LOAD của lib/*/*.so có Align >= 0x4000 (16 KB);
-#      APK phải có lib/arm64-v8a/, và mọi lib/<abi>/ phải có libsodium.so.
-#   4. APK có assets/flutter_assets/assets/blocklist.bloom (AD-15).
+# Kiểm APK release (AD-11, AD-12, AD-15, AD-19). Script chỉ gọi công cụ và lưu
+# output thô vào thư mục làm việc; luật nằm ở tool/ci/apk_rules.dart (có test
+# kiểm âm trong test/tool/apk_rules_test.dart).
+#   - zipalign -c -P 16: mọi .so không nén được căn 16 KB trong APK.
+#   - apk_rules.dart: manifest (INTERNET, backup), listing (ABI, libsodium,
+#     blocklist), readelf (LOAD >= 0x4000 với ABI 64-bit), badging (applicationId).
 #
-# Dùng: tool/ci/check_android_apk.sh <đường-dẫn-apk>
+# Dùng (trong pak_manager/):
+#   tool/ci/check_android_apk.sh <đường-dẫn-apk> [--expect-id <applicationId>]
 # Cần: ANDROID_HOME (hoặc ANDROID_SDK_ROOT) có build-tools (aapt2, zipalign),
-#      readelf, unzip.
+#      readelf, unzip, dart.
 set -euo pipefail
 
-apk="${1:?Dùng: check_android_apk.sh <apk>}"
+apk="${1:?Dùng: check_android_apk.sh <apk> [--expect-id <id>]}"
+shift
+expect_id=""
+while (($#)); do
+  case "$1" in
+    --expect-id)
+      expect_id="${2:?--expect-id cần applicationId}"
+      shift 2
+      ;;
+    *)
+      echo "Tham số không hợp lệ: $1" >&2
+      exit 1
+      ;;
+  esac
+done
 if [[ ! -f "$apk" ]]; then
   echo "Không tìm thấy APK: $apk" >&2
   exit 1
@@ -29,7 +43,7 @@ zipalign="$build_tools/zipalign"
 for tool in "$aapt2" "$zipalign"; do
   [[ -x "$tool" ]] || { echo "Thiếu $tool" >&2; exit 1; }
 done
-for tool in readelf unzip; do
+for tool in readelf unzip dart; do
   command -v "$tool" >/dev/null || { echo "Thiếu $tool" >&2; exit 1; }
 done
 echo "APK: $apk"
@@ -38,37 +52,6 @@ echo "build-tools: $build_tools"
 failed=0
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
-
-echo
-echo "== Quyền INTERNET (AD-12)"
-"$aapt2" dump xmltree --file AndroidManifest.xml "$apk" >"$work/manifest.txt"
-if grep -q 'android.permission.INTERNET' "$work/manifest.txt"; then
-  echo "FAIL: manifest có android.permission.INTERNET"
-  grep -n -B2 'android.permission.INTERNET' "$work/manifest.txt" || true
-  failed=1
-else
-  echo "OK: manifest không có android.permission.INTERNET"
-fi
-
-echo
-echo "== Loại khỏi backup (AD-11, NFR-8)"
-# aapt2 in thuộc tính dạng `A: http://schemas.android.com/apk/res/android:allowBackup(0x01010280)=false`;
-# boolean đôi khi in dạng `(type 0x12)0x0`.
-if grep -qE ':allowBackup\(0x[0-9a-fA-F]+\)=(false|\(type 0x12\)0x0)([[:space:]]|$)' "$work/manifest.txt"; then
-  echo "OK: android:allowBackup=false"
-else
-  echo "FAIL: manifest không có android:allowBackup=false"
-  grep -n 'allowBackup' "$work/manifest.txt" || true
-  failed=1
-fi
-for attr in dataExtractionRules fullBackupContent; do
-  if grep -qE ":$attr\(0x[0-9a-fA-F]+\)=@" "$work/manifest.txt"; then
-    echo "OK: android:$attr trỏ tới resource"
-  else
-    echo "FAIL: manifest thiếu android:$attr"
-    failed=1
-  fi
-done
 
 echo
 echo "== zipalign 16 KB (AD-19)"
@@ -82,59 +65,28 @@ else
 fi
 
 echo
-echo "== Căn ELF LOAD >= 0x4000 (AD-19)"
+echo "== Thu thập output aapt2/unzip/readelf"
+"$aapt2" dump xmltree --file AndroidManifest.xml "$apk" >"$work/manifest.txt"
+unzip -l "$apk" >"$work/listing.txt"
 unzip -q -o "$apk" 'lib/*' -d "$work/apk" || true
 shopt -s nullglob
-libs=("$work"/apk/lib/*/*.so)
-if ((${#libs[@]} == 0)); then
-  echo "FAIL: APK không có lib/*/*.so"
-  failed=1
-fi
-# Build hook của sodium đặt tên asset theo libraryFileName('sodium'). APK
-# release là bản fat: mọi ABI có .so đều phải có libsodium.so.
-if [[ ! -d "$work/apk/lib/arm64-v8a" ]]; then
-  echo "FAIL: APK thiếu lib/arm64-v8a/"
-  failed=1
-fi
-for abi_dir in "$work"/apk/lib/*/; do
-  abi="$(basename "$abi_dir")"
-  if [[ -f "$abi_dir/libsodium.so" ]]; then
-    echo "OK: APK có lib/$abi/libsodium.so"
-  else
-    echo "FAIL: APK thiếu lib/$abi/libsodium.so (build hook của sodium không chạy?)"
-    failed=1
-  fi
+for so in "$work"/apk/lib/*/*.so; do
+  rel="${so#"$work/apk/lib/"}"
+  mkdir -p "$work/readelf/$(dirname "$rel")"
+  readelf -lW "$so" >"$work/readelf/$rel.txt"
 done
-for so in "${libs[@]}"; do
-  rel="${so#"$work/apk/"}"
-  aligns="$(readelf -lW "$so" | awk '$1 == "LOAD" { print $NF }')"
-  if [[ -z "$aligns" ]]; then
-    echo "FAIL: $rel không có segment LOAD"
-    failed=1
-    continue
-  fi
-  bad=""
-  for align in $aligns; do
-    if ((align < 0x4000)); then
-      bad="$bad $align"
-    fi
-  done
-  if [[ -n "$bad" ]]; then
-    echo "FAIL: $rel có LOAD align <0x4000:$bad"
-    failed=1
-  else
-    echo "OK: $rel (align: $(echo "$aligns" | sort -u | tr '\n' ' '))"
-  fi
-done
+rule_args=("$work")
+if [[ -n "$expect_id" ]]; then
+  "$aapt2" dump badging "$apk" >"$work/badging.txt"
+  rule_args+=("$expect_id")
+fi
 
 echo
-echo "== Asset blocklist (AD-15)"
-# Test đọc asset từ cây nguồn qua dart:io, nên chỉ bước này chứng minh
-# assets/blocklist.bloom thật sự được đóng gói vào APK.
-if unzip -l "$apk" | grep -qE '[[:space:]]assets/flutter_assets/assets/blocklist\.bloom$'; then
-  echo "OK: APK có assets/flutter_assets/assets/blocklist.bloom"
+echo "== Luật APK (tool/ci/apk_rules.dart)"
+if dart run tool/ci/apk_rules.dart "${rule_args[@]}"; then
+  echo "OK: apk_rules"
 else
-  echo "FAIL: APK thiếu assets/flutter_assets/assets/blocklist.bloom (khối flutter: assets: trong pubspec.yaml?)"
+  echo "FAIL: apk_rules"
   failed=1
 fi
 
