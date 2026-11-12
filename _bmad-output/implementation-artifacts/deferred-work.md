@@ -164,3 +164,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-13-integration-test-cho-api-native.md`
   summary: Integration test chỉ chạy bản debug; chưa có kiểm khi chạy thật cho bản release (R8/minify có thể làm hỏng đăng ký Pigeon).
   evidence: Job integration-android dùng `flutter test` (debug); lỗi chỉ xuất hiện ở release vẫn để CI xanh.
+
+## Deferred from: code review of spec-1-13-integration-test-cho-api-native.md (2026-11-12)
+
+- AC1/AC2 của story 1.13 chưa có bằng chứng chạy xanh: hai job `integration-android`/`integration-ios`, `check_workflow_secrets.dart`, và kiểm âm "gỡ `PlatformApi.setUp` → CI đỏ" chưa chạy. Xác nhận qua GitHub Actions của PR và một nhánh tạm bỏ đăng ký native.

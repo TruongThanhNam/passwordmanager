@@ -71,6 +71,22 @@ context: []
 - Given PR, when CI chạy, then hai job integration chạy test trên emulator Android và simulator iOS và pass.
 - Given repo, when `flutter analyze --fatal-infos --fatal-warnings`, `flutter test`, `dart run tool/ci/check_stack.dart`, `dart run tool/ci/check_workflow_secrets.dart ../.github/workflows/ci.yml`, then đều sạch.
 
+### Review Findings
+
+- [x] [Review][Patch] `fsyncDirectory` chưa gọi trên `pakDir` thật (Always: "`fsyncDirectory(pakDir)` không ném") — chỉ gọi trên thư mục tạm; thêm `await PlatformApi().fsyncDirectory(pakDir)` trong `nfr8_storage_bootstrap_ready` [pak_manager/integration_test/platform_api_test.dart:65]
+- [x] [Review][Defer] AC1/AC2 chưa có bằng chứng chạy xanh (job integration, `check_workflow_secrets.dart`) và kiểm âm "gỡ đăng ký → đỏ" chưa chạy [.github/workflows/ci.yml] — deferred: maybe-false (medium nếu đúng); xác nhận bằng kết quả GitHub Actions của PR và một nhánh tạm bỏ `PlatformApi.setUp`
+
+**Rejected:**
+- Lệch trạng thái spec `done` / sprint `review` (low) — sprint được đồng bộ ở bước cuối review; sửa là sửa spec.
+- Android `isExcludedFromBackup` hằng `false` (false) — đúng ràng buộc spec đã duyệt.
+- Android/iOS khác hành vi khi đường dẫn không tồn tại (low) — test luôn truyền đường dẫn tồn tại; đã reject ở triage trước.
+- Kiểm âm chưa chạy (low) — gộp vào mục defer về CI.
+- Phụ thuộc thứ tự test / first-run (false) — test chạy tuần tự theo thứ tự khai báo; `nfr8` đứng trước `ad11`, và CI dùng máy ảo mới nên first-run luôn được chạy.
+- Simulator iOS không ghim runtime (low) — sửa thêm phức tạp, chưa gặp lỗi thực tế.
+- Không upload log khi fail (low) — cần action mới, bị spec cấm.
+- Mục Verification thiếu lệnh / bảng thiếu dòng trống (low) — sửa spec.
+- `monotonicMs` kiểm yếu (low) — spec chỉ yêu cầu không giảm; thêm delay là thêm phức tạp.
+
 ## Implementation Notes
 
 - Thêm 6 gói kéo theo vào allowlist (`flutter_driver`, `fuchsia_remote_debug_protocol`, `process`, `sync_http`, `web`, `webdriver`); `sync_http`/`webdriver`/`web` có mã mạng nhưng chỉ vào qua dev dependency `integration_test` — ghi trong mô tả PR.

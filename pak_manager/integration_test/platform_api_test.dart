@@ -66,6 +66,8 @@ void main() {
   testWidgets('nfr8_storage_bootstrap_ready', (tester) async {
     final pakDir = await bootstrapPakDir();
     expect(Directory(pakDir).existsSync(), isTrue);
+    // fsync trên `pak/` thật trong ApplicationSupport, không chỉ thư mục tạm.
+    await PlatformApi().fsyncDirectory(pakDir);
   });
 
   testWidgets(
