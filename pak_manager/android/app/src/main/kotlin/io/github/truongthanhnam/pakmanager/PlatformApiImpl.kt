@@ -44,4 +44,7 @@ class PlatformApiImpl(context: Context) : PlatformApi {
 
   /** API level của máy; Dart chọn style thanh điều hướng theo giá trị này. */
   override fun androidSdkInt(): Long = Build.VERSION.SDK_INT.toLong()
+
+  /** Android không có cờ backup theo thư mục; manifest đã loại mọi domain (AD-11). */
+  override fun isExcludedFromBackup(dirPath: String): Boolean = false
 }

@@ -178,4 +178,26 @@ class PlatformApi {
     ;
     return pigeonVar_replyValue! as int;
   }
+
+  /// Chỉ đọc: iOS trả `isExcludedFromBackup` của [dirPath] (đọc lại từ đĩa, bỏ
+  /// cache). Android trả `false` (không có cờ tương ứng, manifest lo backup).
+  /// Dùng cho integration test (AD-11, AD-14).
+  Future<bool> isExcludedFromBackup(String dirPath) async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.pak_manager.PlatformApi.isExcludedFromBackup$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[dirPath]);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: false,
+    )
+    ;
+    return pigeonVar_replyValue! as bool;
+  }
 }

@@ -69,4 +69,12 @@ final class PlatformApiImpl: PlatformApi {
   func androidSdkInt() throws -> Int64 {
     return 0
   }
+
+  /// Chỉ đọc cờ `isExcludedFromBackup` của thư mục, bỏ cache trước (AD-11).
+  func isExcludedFromBackup(dirPath: String) throws -> Bool {
+    var url = URL(fileURLWithPath: dirPath, isDirectory: true)
+    url.removeAllCachedResourceValues()
+    let values = try url.resourceValues(forKeys: [.isExcludedFromBackupKey])
+    return values.isExcludedFromBackup == true
+  }
 }

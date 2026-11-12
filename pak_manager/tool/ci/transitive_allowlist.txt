@@ -26,7 +26,9 @@ fake_async
 ffi
 file
 fixnum
+flutter_driver
 freezed_annotation
+fuchsia_remote_debug_protocol
 glob
 graphs
 hooks
@@ -55,6 +57,7 @@ path_provider_windows
 platform
 plugin_platform_interface
 posix
+process
 pub_semver
 record_use
 riverpod
@@ -64,6 +67,7 @@ stack_trace
 state_notifier
 stream_channel
 string_scanner
+sync_http
 term_glyph
 test_api
 typed_data
@@ -71,5 +75,7 @@ uuid
 vector_math
 vm_service
 watcher
+web
+webdriver
 xdg_directories
 yaml

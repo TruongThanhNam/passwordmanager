@@ -85,6 +85,12 @@ interface PlatformApi {
    * hướng theo khả năng của máy. iOS trả `0`.
    */
   fun androidSdkInt(): Long
+  /**
+   * Chỉ đọc: iOS trả `isExcludedFromBackup` của [dirPath] (đọc lại từ đĩa, bỏ
+   * cache). Android trả `false` (không có cờ tương ứng, manifest lo backup).
+   * Dùng cho integration test (AD-11, AD-14).
+   */
+  fun isExcludedFromBackup(dirPath: String): Boolean
 
   companion object {
     /** The codec used by PlatformApi. */
@@ -167,6 +173,23 @@ interface PlatformApi {
           channel.setMessageHandler { _, reply ->
             val wrapped: List<Any?> = try {
               listOf(api.androidSdkInt())
+            } catch (exception: Throwable) {
+              PlatformApiPigeonUtils.wrapError(exception)
+            }
+            reply.reply(wrapped)
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.pak_manager.PlatformApi.isExcludedFromBackup$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { message, reply ->
+            val args = message as List<Any?>
+            val dirPathArg = args[0] as String
+            val wrapped: List<Any?> = try {
+              listOf(api.isExcludedFromBackup(dirPathArg))
             } catch (exception: Throwable) {
               PlatformApiPigeonUtils.wrapError(exception)
             }

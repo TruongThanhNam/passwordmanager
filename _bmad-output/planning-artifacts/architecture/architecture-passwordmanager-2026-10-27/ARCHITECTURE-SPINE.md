@@ -432,7 +432,7 @@ Sheet tạo mật khẩu ánh xạ chip sang `gen` theo FR-35 (123 → `digits`,
 | path_provider | 2.1.6 |
 | share_plus | 13.3.1 |
 | file_selector | 1.1.0 |
-| flutter_localizations / gen-l10n, flutter_test | theo Flutter SDK 3.47.8 |
+| flutter_localizations / gen-l10n, flutter_test, integration_test | theo Flutter SDK 3.47.8 |
 | SecLists (dữ liệu blocklist, MIT) | ghim commit trong `tool/blocklist/SOURCE` |
 | CI | GitHub Actions (runner ubuntu + macOS) |
 
