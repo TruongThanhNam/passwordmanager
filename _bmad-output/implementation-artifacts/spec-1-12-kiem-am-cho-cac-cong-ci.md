@@ -105,3 +105,24 @@ Phân tích bằng Dart thay vì bash để harness chạy được trên máy d
 | 12 | blind | Trạng thái spec/sprint/deferred lệch; ghi chú 32-bit đóng khi chưa có bằng chứng CI | low | Sprint đồng bộ ở bước cuối; luật mới không còn kiểm 32-bit nên mục đó được giải quyết theo thiết kế. reject |
 | 13 | blind | Thiếu kiểm đích resource backup, quyền dư của dev, zipalign | low | Ngoài luật đã duyệt; `uses-permission-sdk-23` vẫn bị bắt vì so chuỗi con. reject |
 | 14 | blind | Build dev tăng thời gian CI, không ghi chú | low | Chi phí đã biết khi duyệt AC badging dev. reject |
+
+### Review Findings
+
+- [x] [Review][Patch] Thêm newline cuối file cho deferred-work.md và spec này [deferred-work.md / spec-1-12-kiem-am-cho-cac-cong-ci.md]
+- [x] [Review][Defer] Lớp shell check_android_apk.sh chưa có test (hợp đồng `$work`, truyền `--expect-id`, exit code) [pak_manager/tool/ci/check_android_apk.sh:78-91] — deferred: đã ghi ở triage #11, cần harness công cụ giả trên PATH
+- [x] [Review][Defer] Cổng zipalign -c -P 16 không có kiểm âm và chưa được ghi deferred [pak_manager/tool/ci/check_android_apk.sh:58] — deferred: cần cùng harness công cụ giả
+- [x] [Review][Defer] Không test nào khẳng định ci.yml còn chạy các cổng (bước secret, `--expect-id` cho prod/dev) [.github/workflows/ci.yml:47-65] — deferred: có từ trước, cần test parse ci.yml
+
+#### Rejected
+
+- Luật secret không phân biệt hoa thường, lệch "giữ nguyên regex": cố ý theo triage #1, chặt hơn (fail-closed). Sửa thì phải sửa spec.
+- Code Map ghi subcommand `apk`; trạng thái spec `done` khác sprint `review`: sửa thì phải sửa spec.
+- `.so` viết hoa/lồng sâu, ABI chỉ có file không phải `.so`, thừa tham số: thực tế không gặp.
+- INTERNET khớp chuỗi con; `unzip || true`: fail-closed, các bước sau báo thiếu readelf.
+- Bước secret chạy sau Pub get: spec yêu cầu thế (cần dart).
+- Script phải chạy trong pak_manager/: đã ghi trong header, CI chạy ở đúng thư mục.
+- Từ "secrets" trong comment bị chặn: fail-closed theo thiết kế, comment trong ci.yml đã ghi cách lách.
+- Log khi lỗi ít chi tiết hơn bản shell cũ: vẫn nêu vi phạm và align sai; mức low.
+- allowBackup không gắn với phần tử application: aapt2 chỉ in thuộc tính này trên `<application>`.
+- `_prTarget` phân biệt hoa thường: tên event của GitHub phân biệt hoa thường.
+- Fixture `_goodPaths` thiếu x86 và fixture tự viết tay: low; fixture tự viết đã nằm trong triage #10.
