@@ -55,7 +55,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-2-thu-muc-du-lieu-rieng-ghi-nguyen-tu-loai-khoi-backup.md`
   summary: Thêm kiểm tra khi chạy thật (`integration_test` trên simulator/máy) cho API Pigeon native: bốn kênh trả lời được, và sau bootstrap thư mục `pak/` trên iOS có `isExcludedFromBackup == true`.
   evidence: CI chỉ build Android/iOS nên chỉ chứng minh native biên dịch được. Bỏ `PlatformApiSetup.setUp` hoặc `registrar(forPlugin:)` trả nil thì mọi lần khởi động đều `StorageUnavailable`, mà CI vẫn xanh. Nên làm ở story 1.6, khi `SessionGate` dùng kết quả bootstrap.
-  status: planned — story 1.13
+  status: done (story 1.13, `spec-1-13-integration-test-cho-api-native.md`) — `pak_manager/integration_test/platform_api_test.dart` gọi mọi phương thức Pigeon, chạy `StorageBootstrap` thật và đọc cờ backup iOS qua `isExcludedFromBackup`; CI job `integration-android` (emulator API 34) và `integration-ios` (simulator).
 
 ## Deferred from: code review of spec-1-2-thu-muc-du-lieu-rieng-ghi-nguyen-tu-loai-khoi-backup (2026-11-02)
 
@@ -160,3 +160,7 @@
 - Test cho lớp shell `check_android_apk.sh` (hợp đồng thư mục `$work`, truyền `--expect-id`, exit code). Bỏ `--expect-id` thì kiểm badging bị tắt mà CI vẫn xanh.
 - Kiểm âm cho cổng `zipalign -c -P 16` (APK căn sai phải làm `failed=1`); cần cùng harness công cụ giả trên PATH.
 - Test parse `ci.yml` để khẳng định các bước cổng (secret AD-18, kiểm APK prod/dev kèm `--expect-id`) vẫn còn.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-13-integration-test-cho-api-native.md`
+  summary: Integration test chỉ chạy bản debug; chưa có kiểm khi chạy thật cho bản release (R8/minify có thể làm hỏng đăng ký Pigeon).
+  evidence: Job integration-android dùng `flutter test` (debug); lỗi chỉ xuất hiện ở release vẫn để CI xanh.

@@ -114,6 +114,10 @@ protocol PlatformApi {
   /// API level Android (`Build.VERSION.SDK_INT`), để chọn style thanh điều
   /// hướng theo khả năng của máy. iOS trả `0`.
   func androidSdkInt() throws -> Int64
+  /// Chỉ đọc: iOS trả `isExcludedFromBackup` của [dirPath] (đọc lại từ đĩa, bỏ
+  /// cache). Android trả `false` (không có cờ tương ứng, manifest lo backup).
+  /// Dùng cho integration test (AD-11, AD-14).
+  func isExcludedFromBackup(dirPath: String) throws -> Bool
 }
 
 /// Generated setup class from Pigeon to handle messages through the `binaryMessenger`.
@@ -202,6 +206,24 @@ class PlatformApiSetup {
       }
     } else {
       androidSdkIntChannel.setMessageHandler(nil)
+    }
+    /// Chỉ đọc: iOS trả `isExcludedFromBackup` của [dirPath] (đọc lại từ đĩa, bỏ
+    /// cache). Android trả `false` (không có cờ tương ứng, manifest lo backup).
+    /// Dùng cho integration test (AD-11, AD-14).
+    let isExcludedFromBackupChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.pak_manager.PlatformApi.isExcludedFromBackup\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      isExcludedFromBackupChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let dirPathArg = args[0] as! String
+        do {
+          let result = try api.isExcludedFromBackup(dirPath: dirPathArg)
+          reply(wrapResult(result))
+        } catch {
+          reply(wrapError(error))
+        }
+      }
+    } else {
+      isExcludedFromBackupChannel.setMessageHandler(nil)
     }
   }
 }

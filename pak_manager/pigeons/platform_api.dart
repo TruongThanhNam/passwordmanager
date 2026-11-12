@@ -3,7 +3,7 @@
 // CI chạy lại lệnh trên và fail nếu file sinh ra khác bản đã commit.
 //
 // `@HostApi` đồng bộ, kênh mặc định, không FFI/JNI. Các nhóm: đồng hồ,
-// backup, fsync thư mục, API level Android (style thanh hệ thống). Clipboard
+// backup, fsync thư mục, API level Android (style thanh hệ thống), đọc cờ backup (test). Clipboard
 // thêm ở Epic 3.
 import 'package:pigeon/pigeon.dart';
 
@@ -43,4 +43,9 @@ abstract class PlatformApi {
   /// API level Android (`Build.VERSION.SDK_INT`), để chọn style thanh điều
   /// hướng theo khả năng của máy. iOS trả `0`.
   int androidSdkInt();
+
+  /// Chỉ đọc: iOS trả `isExcludedFromBackup` của [dirPath] (đọc lại từ đĩa, bỏ
+  /// cache). Android trả `false` (không có cờ tương ứng, manifest lo backup).
+  /// Dùng cho integration test (AD-11, AD-14).
+  bool isExcludedFromBackup(String dirPath);
 }

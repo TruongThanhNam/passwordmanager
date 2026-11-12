@@ -165,3 +165,116 @@ jobs:
 
       - name: Build iOS release
         run: flutter build ios --release --no-codesign --build-number "$GITHUB_RUN_NUMBER"
+
+  # Integration test API native trên emulator Android thật (AD-14, AD-11, NFR-8).
+  integration-android:
+    name: Integration test Android (emulator)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4.9.1
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Bật KVM cho emulator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Cài Flutter ${{ env.FLUTTER_VERSION }}
+        run: |
+          git clone --depth 1 --branch "$FLUTTER_VERSION" https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
+          # Tag có thể bị dời: so revision thật với .metadata (AD-12, AD-18).
+          expected="$(grep -m1 -E '^  revision:' .metadata | grep -oE '[0-9a-f]{40}' || true)"
+          actual="$(git -C "$RUNNER_TEMP/flutter" rev-parse HEAD)"
+          if [[ -z "$expected" || "$actual" != "$expected" ]]; then
+            echo "Flutter clone có revision $actual, khác revision '$expected' trong .metadata" >&2
+            exit 1
+          fi
+          echo "OK: Flutter revision $actual khớp .metadata"
+          echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
+
+      - name: Flutter version
+        run: |
+          flutter config --no-analytics
+          flutter --version
+
+      - name: Pub get (theo pubspec.lock)
+        run: flutter pub get --enforce-lockfile
+
+      - name: Integration test trên emulator API 34
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
+          working-directory: pak_manager
+          script: flutter test integration_test --flavor dev
+
+  # Integration test API native trên simulator iOS (AD-14, AD-11, NFR-8).
+  integration-ios:
+    name: Integration test iOS (simulator)
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Chọn Xcode 26.3
+        run: |
+          test -d /Applications/Xcode_26.3.app || { echo "Xcode 26.3 không có trên runner macos-15" >&2; exit 1; }
+          sudo xcode-select -s /Applications/Xcode_26.3.app
+          xcodebuild -version
+
+      - name: Cài Flutter ${{ env.FLUTTER_VERSION }}
+        run: |
+          git clone --depth 1 --branch "$FLUTTER_VERSION" https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
+          # Tag có thể bị dời: so revision thật với .metadata (AD-12, AD-18).
+          expected="$(grep -m1 -E '^  revision:' .metadata | grep -oE '[0-9a-f]{40}' || true)"
+          actual="$(git -C "$RUNNER_TEMP/flutter" rev-parse HEAD)"
+          if [[ -z "$expected" || "$actual" != "$expected" ]]; then
+            echo "Flutter clone có revision $actual, khác revision '$expected' trong .metadata" >&2
+            exit 1
+          fi
+          echo "OK: Flutter revision $actual khớp .metadata"
+          echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
+
+      - name: Flutter version
+        run: |
+          flutter config --no-analytics
+          flutter --version
+
+      - name: Pub get (theo pubspec.lock)
+        run: flutter pub get --enforce-lockfile
+
+      - name: Boot simulator iPhone
+        timeout-minutes: 15
+        run: |
+          # Chọn iPhone khả dụng đầu tiên của runtime iOS mới nhất.
+          udid="$(xcrun simctl list devices available -j | python3 -c '
+          import json, sys
+          data = json.load(sys.stdin)["devices"]
+          runtimes = sorted((r for r in data if "iOS" in r), key=lambda r: [int(x) for x in r.rsplit("iOS-", 1)[-1].split("-") if x.isdigit()])
+          for r in reversed(runtimes):
+              for d in data[r]:
+                  if d["name"].startswith("iPhone"):
+                      print(d["udid"]); sys.exit(0)
+          sys.exit("không tìm thấy simulator iPhone")
+          ')"
+          echo "Simulator: $udid"
+          # Đã boot sẵn thì bỏ qua; bootstatus vẫn fail nếu không boot được.
+          xcrun simctl boot "$udid" || true
+          xcrun simctl bootstatus "$udid" -b
+          echo "SIM_UDID=$udid" >> "$GITHUB_ENV"
+
+      - name: Integration test trên simulator
+        run: flutter test integration_test -d "$SIM_UDID"

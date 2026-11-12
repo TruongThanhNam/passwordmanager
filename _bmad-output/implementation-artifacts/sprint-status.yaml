@@ -48,7 +48,7 @@ development_status:
   1-10-hiệu-chỉnh-kdf-lùi-về-sàn-khi-lần-thử-đầu-lỗi: done
   1-11-ghim-chuỗi-cung-ứng-và-stack-trong-ci: done
   1-12-kiểm-âm-cho-các-cổng-ci: done
-  1-13-integration-test-cho-api-native: backlog
+  1-13-integration-test-cho-api-native: review
   1-14-flavor-dev-cho-ios-và-ghi-công-giấy-phép-blocklist: backlog
   epic-1-retrospective: optional
 
