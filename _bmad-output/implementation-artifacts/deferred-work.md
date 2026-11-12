@@ -28,19 +28,19 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-1-khoi-tao-du-an-flutter-structural-seed-ci.md`
   summary: (Chưa xác minh, nếu đúng thì medium) Kiểm ELF 16 KB trong `tool/ci/check_android_apk.sh` có thể fail oan với `.so` 32-bit (armeabi-v7a, x86); quy định 16 KB của Google chỉ áp cho ABI 64-bit.
   evidence: Lần chạy CI đầu sẽ cho biết: nếu chỉ `lib/armeabi-v7a/*.so` hoặc `lib/x86/*.so` báo align `0x1000` thì giới hạn kiểm ELF vào `arm64-v8a` và `x86_64`.
-  status: planned — story 1.12
+  status: done (story 1.12, `spec-1-12-kiem-am-cho-cac-cong-ci.md`) — luật tách ra `tool/ci/apk_rules.dart` và `tool/ci/check_workflow_secrets.dart`, kiểm âm trong `test/tool/`; ELF 16 KB chỉ kiểm `arm64-v8a`/`x86_64`; CI kiểm badging APK prod và dev.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-1-khoi-tao-du-an-flutter-structural-seed-ci.md`
   summary: Thêm kiểm âm cho `check_android_apk.sh` (APK hoặc output `aapt2`/`readelf` giả có `INTERNET`, `.so` align 4 KB) để chắc cổng thực sự fail.
   evidence: Script chỉ chạy trên APK kỳ vọng pass; nếu pattern grep lệch định dạng output, mọi APK đều qua. Nên làm trước khi plugin đầu tiên (story 1.2) có thể kéo quyền vào manifest.
-  status: planned — story 1.12
+  status: done (story 1.12, `spec-1-12-kiem-am-cho-cac-cong-ci.md`) — luật tách ra `tool/ci/apk_rules.dart` và `tool/ci/check_workflow_secrets.dart`, kiểm âm trong `test/tool/`; ELF 16 KB chỉ kiểm `arm64-v8a`/`x86_64`; CI kiểm badging APK prod và dev.
 
 ## Deferred from: code review of spec-1-1-khoi-tao-du-an-flutter-structural-seed-ci (2026-11-02)
 
 - Kiểm `applicationId` của APK prod (`io.github.truongthanhnam.pakmanager`) và hậu tố `.dev` của flavor dev bằng `aapt2 dump badging`; hiện xóa `applicationIdSuffix` hoặc tạo lại template đều không làm CI fail. Làm cùng harness kiểm âm của `check_android_apk.sh`.
-  status: planned — story 1.12
+  status: done (story 1.12, `spec-1-12-kiem-am-cho-cac-cong-ci.md`) — luật tách ra `tool/ci/apk_rules.dart` và `tool/ci/check_workflow_secrets.dart`, kiểm âm trong `test/tool/`; ELF 16 KB chỉ kiểm `arm64-v8a`/`x86_64`; CI kiểm badging APK prod và dev.
 - Kiểm âm cho bước chặn secret của `ci.yml` (`secrets.X`, `secrets['X']`, `toJSON(secrets)`); hiện thu hẹp regex vẫn xanh. Dùng chung harness kiểm âm.
-  status: planned — story 1.12
+  status: done (story 1.12, `spec-1-12-kiem-am-cho-cac-cong-ci.md`) — luật tách ra `tool/ci/apk_rules.dart` và `tool/ci/check_workflow_secrets.dart`, kiểm âm trong `test/tool/`; ELF 16 KB chỉ kiểm `arm64-v8a`/`x86_64`; CI kiểm badging APK prod và dev.
 - Bước chặn secret chỉ quét `ci.yml`; khi story 7.2 thêm workflow release dùng secret trên `main`/tag, cần quét mọi workflow có trigger `pull_request` (và cấm `pull_request_target` ở mọi file).
   status: planned — story 7.2
 - Isolate phụ (`Sodium.runIsolated`, `compute`, `Isolate.run`) không thừa hưởng zone nuốt `print`, `debugPrint` no-op và `PlatformDispatcher.onError` của isolate chính; story 1.4 (KDF trong isolate) phải cài chính sách lỗi release bên trong isolate.
@@ -48,7 +48,7 @@
 - Bước CI kiểm code Pigeon sinh ra đã cập nhật (AD-19) được dời từ 1.1 sang story 1.2 cùng `pigeons/platform_api.dart`; story 1.2 phải thêm bước này vào `.github/workflows/ci.yml`.
   status: done (story 1.2, `spec-1-2-thu-muc-du-lieu-rieng-ghi-nguyen-tu-loai-khoi-backup.md`) — bước "Code Pigeon sinh ra đã cập nhật" trong job `android` của `ci.yml`.
 - Kiểm ELF 16 KB cả `.so` 32-bit (đã ghi ở mục review trong build phía trên); xác nhận bằng lần CI đầu.
-  status: planned — story 1.12
+  status: done (story 1.12, `spec-1-12-kiem-am-cho-cac-cong-ci.md`) — luật tách ra `tool/ci/apk_rules.dart` và `tool/ci/check_workflow_secrets.dart`, kiểm âm trong `test/tool/`; ELF 16 KB chỉ kiểm `arm64-v8a`/`x86_64`; CI kiểm badging APK prod và dev.
 
 ## Deferred from: build review of spec-1-2-thu-muc-du-lieu-rieng-ghi-nguyen-tu-loai-khoi-backup (2026-11-02)
 
@@ -62,7 +62,7 @@
 - `runPakApp` bỏ kết quả `StorageBootstrap.run()`; story 1.6 phải truyền `StorageBootstrapResult` vào `PakApp`/`SessionGate` và chặn mọi đọc/ghi dữ liệu khi nhận `StorageUnavailable` (quyết định fail-closed của story 1.2). Hiện chỉ có comment trong `lib/main.dart` nhắc việc này.
   status: done (story 1.6, `spec-1-6-tao-tai-khoan-va-vao-khung-3-tab.md`) — `runPakApp` nối kết quả vào `bootstrapResultProvider`; `StorageUnavailable` → không dựng `AccountService`, gate hiện S1 với nút vô hiệu và `create.unavailable` (test `nfr8_run_app_waits_for_storage_bootstrap`).
 - Các regex kiểm `allowBackup`/`dataExtractionRules`/`fullBackupContent` mới trong `check_android_apk.sh` chưa có kiểm âm trên output `aapt2` xấu; nếu định dạng output lệch thì kiểm sai trên APK thật (fail oan hoặc lọt). Làm cùng harness kiểm âm của script APK, mục đã ghi từ story 1.1.
-  status: planned — story 1.12
+  status: done (story 1.12, `spec-1-12-kiem-am-cho-cac-cong-ci.md`) — luật tách ra `tool/ci/apk_rules.dart` và `tool/ci/check_workflow_secrets.dart`, kiểm âm trong `test/tool/`; ELF 16 KB chỉ kiểm `arm64-v8a`/`x86_64`; CI kiểm badging APK prod và dev.
 
 ## Deferred from: build review of spec-1-3-giao-dien-sang-toi-hai-ngon-ngu-cai-dat-mac-dinh (2026-11-09)
 
@@ -147,3 +147,10 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-11-ghim-chuoi-cung-ung-va-stack-trong-ci.md`
   summary: Xác thực `gradle-wrapper.jar` đã commit (vd `gradle/actions/wrapper-validation` ghim SHA).
   evidence: `distributionSha256Sum` chỉ phủ bản phân phối tải về, không phủ JAR wrapper trong repo.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-12-kiem-am-cho-cac-cong-ci.md`
+  summary: Thay output `aapt2`/`unzip -l`/`readelf -lW` tự viết trong `apk_rules_test.dart` bằng output thật lấy từ APK prod/dev của CI làm golden fixture.
+  evidence: Fixture hiện là xấp xỉ; nếu định dạng thật lệch thì test vẫn xanh còn CI fail oan (hoặc lọt).
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-12-kiem-am-cho-cac-cong-ci.md`
+  summary: Thêm test cho lớp shell `check_android_apk.sh` (công cụ giả trên PATH) để chứng minh `--expect-id` tới `apk_rules.dart` và lỗi luật làm script fail.
+  evidence: Bỏ `$expect_id` khỏi `rule_args` thì `run()` bỏ qua badging, mọi test Dart và CI trên APK tốt vẫn xanh.

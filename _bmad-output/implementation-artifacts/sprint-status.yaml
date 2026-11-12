@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 11-02-2026 16:41
-last_updated: 2026-11-10
+last_updated: 2026-11-12
 project: passwordmanager
 project_key: NOKEY
 tracking_system: file-system
@@ -47,7 +47,7 @@ development_status:
   1-9-tự-khóa-khi-chạy-nền-và-giới-hạn-phiên: done
   1-10-hiệu-chỉnh-kdf-lùi-về-sàn-khi-lần-thử-đầu-lỗi: done
   1-11-ghim-chuỗi-cung-ứng-và-stack-trong-ci: done
-  1-12-kiểm-âm-cho-các-cổng-ci: backlog
+  1-12-kiểm-âm-cho-các-cổng-ci: review
   1-13-integration-test-cho-api-native: backlog
   1-14-flavor-dev-cho-ios-và-ghi-công-giấy-phép-blocklist: backlog
   epic-1-retrospective: optional

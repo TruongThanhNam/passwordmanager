@@ -1,5 +1,5 @@
 # CI cho mọi PR và push lên main (AD-19).
-# Workflow PR chỉ đọc repo và không tham chiếu GitHub Secrets (AD-18).
+# Workflow PR chỉ đọc repo và không tham chiếu secret của GitHub (AD-18).
 name: CI
 
 on:
@@ -33,16 +33,6 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Workflow PR không dùng secret
-        working-directory: .
-        run: |
-          # Bắt mọi dạng truy cập context secret: dấu chấm, ngoặc vuông, toJSON(...).
-          if grep -nE 'secret[s]([^A-Za-z0-9_]|$)|pull_request[_]target' .github/workflows/ci.yml; then
-            echo "ci.yml không được tham chiếu secret hay dùng trigger pull-request-target (AD-18)" >&2
-            exit 1
-          fi
-          echo "OK: ci.yml không tham chiếu secret"
-
       - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4.9.1
         with:
           distribution: temurin
@@ -68,6 +58,11 @@ jobs:
 
       - name: Pub get (theo pubspec.lock)
         run: flutter pub get --enforce-lockfile
+
+      - name: Workflow PR không dùng secret (AD-18)
+        # Luật và kiểm âm ở test/tool/. Glob `secret[s]` để chính dòng này
+        # không khớp luật quét (bash mở glob thành tên file thật).
+        run: dart run tool/ci/check_workflow_secret[s].dart ../.github/workflows/ci.yml
 
       - name: Kiểm Stack (AD-12)
         run: dart run tool/ci/check_stack.dart
@@ -123,8 +118,14 @@ jobs:
       - name: Build APK release (prod)
         run: flutter build apk --release --flavor prod --build-number "$GITHUB_RUN_NUMBER"
 
-      - name: Kiểm APK (INTERNET, backup, 16 KB)
-        run: bash tool/ci/check_android_apk.sh build/app/outputs/flutter-apk/app-prod-release.apk
+      - name: Kiểm APK prod (INTERNET, backup, 16 KB, applicationId)
+        run: bash tool/ci/check_android_apk.sh build/app/outputs/flutter-apk/app-prod-release.apk --expect-id io.github.truongthanhnam.pakmanager
+
+      - name: Build APK release (dev)
+        run: flutter build apk --release --flavor dev --build-number "$GITHUB_RUN_NUMBER"
+
+      - name: Kiểm APK dev (INTERNET, backup, 16 KB, applicationId)
+        run: bash tool/ci/check_android_apk.sh build/app/outputs/flutter-apk/app-dev-release.apk --expect-id io.github.truongthanhnam.pakmanager.dev
 
   ios:
     name: Build iOS (no codesign)
