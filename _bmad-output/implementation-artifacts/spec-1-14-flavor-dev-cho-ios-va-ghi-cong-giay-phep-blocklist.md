@@ -102,3 +102,20 @@ Flutter chọn scheme = tên flavor và cấu hình `<Mode>-<flavor>`; không c�
 
 **Manual checks (if no CLI):**
 - Job `ios` và `integration-ios` trên PR GitHub Actions xanh.
+
+### Review Findings
+
+- [x] [Review][Patch] README vẫn ghi "iOS chưa có flavor: build không kèm `--flavor`" — sai sau story này; cần mô tả flavor iOS prod/dev và lệnh `flutter run --flavor dev` [pak_manager/README.md:31]
+- [x] [Review][Patch] Build không cờ (scheme Runner, cấu hình Debug/Release gốc) không được kiểm `CFBundleDisplayName`/`CFBundleIdentifier`; xoá/gõ sai `APP_DISPLAY_NAME` ở cấu hình gốc sẽ cho tên rỗng mà CI vẫn xanh — thêm bước PlistBuddy cho build không cờ [.github/workflows/ci.yml:170]
+
+**Rejected:**
+- false — Podfile không cập nhật mapping cấu hình: dự án không có `ios/Podfile`, xcconfig chỉ include `Generated.xcconfig`.
+- false — RunnerTests flavor thiếu `baseConfigurationReference`: cấu hình RunnerTests gốc cũng không có, bản sao khớp.
+- low — CFBundleName không kiểm: cùng biến `APP_DISPLAY_NAME` với CFBundleDisplayName đã kiểm.
+- low — CI chỉ build release, không build Debug-*/Profile-*: cấu hình sao chép cơ học, cần job thêm; không đáng.
+- low — Icon dev giống prod: ngoài phạm vi spec.
+- low — Hai bước kiểm CI trùng lặp / đường dẫn Runner.app dùng lại: build dev ghi đè sản phẩm, kiểm id khác nhau nên đọc nhầm sẽ fail.
+- low — Không có test so khớp NOTICE/SOURCE/FORMAT.md; script kiểm ID trùng pbxproj không commit: chi phí thêm cơ chế lớn hơn rủi ro.
+- false — App phát hành chưa mang NOTICE: đã ghi vào deferred-work (LicenseRegistry) theo spec.
+- low — Nguồn gốc Pwdb/xato trong NOTICE: NOTICE ghi giấy phép SecLists bao trùm repo; không có hại cụ thể.
+- false — status spec 'done' vs sprint 'review', bookkeeping spec, định dạng deferred-work, sửa build_blocklist.dart: hành chính / sửa spec, không phải lỗi code.

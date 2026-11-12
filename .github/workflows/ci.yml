@@ -167,7 +167,24 @@ jobs:
       - name: Kiểm cú pháp project.pbxproj
         run: plutil -lint ios/Runner.xcodeproj/project.pbxproj
 
-      # Build không cờ (scheme Runner) được giữ bởi job integration-ios (AD-19).
+      # Build không cờ (scheme Runner, cấu hình gốc) — phải giữ id và tên prod (AD-19).
+      - name: Build iOS release (không cờ)
+        run: flutter build ios --release --no-codesign --build-number "$GITHUB_RUN_NUMBER"
+
+      - name: Kiểm bundle id build không cờ
+        run: |
+          actual="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' build/ios/iphoneos/Runner.app/Info.plist)"
+          if [[ "$actual" != "io.github.truongthanhnam.pakmanager" ]]; then
+            echo "Bundle id build không cờ sai: '$actual'" >&2
+            exit 1
+          fi
+          name="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' build/ios/iphoneos/Runner.app/Info.plist)"
+          if [[ "$name" != "PAK Manager" ]]; then
+            echo "Tên hiển thị build không cờ sai: '$name'" >&2
+            exit 1
+          fi
+          echo "OK: build không cờ $actual, tên hiển thị $name"
+
       - name: Build iOS release (flavor prod)
         run: flutter build ios --release --no-codesign --flavor prod --build-number "$GITHUB_RUN_NUMBER"
 

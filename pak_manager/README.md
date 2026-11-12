@@ -26,8 +26,10 @@ commit của tag (`flutter upgrade` không tự cập nhật `.metadata`).
 
 ## Flavor
 
-Android có hai flavor: `prod` (`io.github.truongthanhnam.pakmanager`) và `dev`
+Android và iOS có hai flavor: `prod` (`io.github.truongthanhnam.pakmanager`) và `dev`
 (hậu tố `.dev`, nhãn "PAK Manager Dev"). Mọi lệnh build/run Android phải ghi rõ
-`--flavor prod` hoặc `--flavor dev`. iOS chưa có flavor: build không kèm `--flavor`.
+`--flavor prod` hoặc `--flavor dev`. Trên iOS, chạy bản dev bằng
+`flutter run --flavor dev`; build không kèm `--flavor` (scheme `Runner`) dùng bundle id
+prod và sẽ ghi đè app thật cùng vault trên máy.
 
 Build Android release chỉ chạy trên GitHub Actions (AD-19).
