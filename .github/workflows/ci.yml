@@ -163,8 +163,61 @@ jobs:
       - name: Pub get (theo pubspec.lock)
         run: flutter pub get --enforce-lockfile
 
-      - name: Build iOS release
+      # pbxproj sửa tay (story 1.14): kiểm cú pháp trước để lỗi rõ ràng.
+      - name: Kiểm cú pháp project.pbxproj
+        run: plutil -lint ios/Runner.xcodeproj/project.pbxproj
+
+      # Build không cờ (scheme Runner, cấu hình gốc) — phải giữ id và tên prod (AD-19).
+      - name: Build iOS release (không cờ)
         run: flutter build ios --release --no-codesign --build-number "$GITHUB_RUN_NUMBER"
+
+      - name: Kiểm bundle id build không cờ
+        run: |
+          actual="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' build/ios/iphoneos/Runner.app/Info.plist)"
+          if [[ "$actual" != "io.github.truongthanhnam.pakmanager" ]]; then
+            echo "Bundle id build không cờ sai: '$actual'" >&2
+            exit 1
+          fi
+          name="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' build/ios/iphoneos/Runner.app/Info.plist)"
+          if [[ "$name" != "PAK Manager" ]]; then
+            echo "Tên hiển thị build không cờ sai: '$name'" >&2
+            exit 1
+          fi
+          echo "OK: build không cờ $actual, tên hiển thị $name"
+
+      - name: Build iOS release (flavor prod)
+        run: flutter build ios --release --no-codesign --flavor prod --build-number "$GITHUB_RUN_NUMBER"
+
+      - name: Kiểm bundle id prod
+        run: |
+          actual="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' build/ios/iphoneos/Runner.app/Info.plist)"
+          if [[ "$actual" != "io.github.truongthanhnam.pakmanager" ]]; then
+            echo "Bundle id prod sai: '$actual'" >&2
+            exit 1
+          fi
+          name="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' build/ios/iphoneos/Runner.app/Info.plist)"
+          if [[ "$name" != "PAK Manager" ]]; then
+            echo "Tên hiển thị prod sai: '$name'" >&2
+            exit 1
+          fi
+          echo "OK: bundle id prod $actual, tên hiển thị $name"
+
+      - name: Build iOS release (flavor dev)
+        run: flutter build ios --release --no-codesign --flavor dev --build-number "$GITHUB_RUN_NUMBER"
+
+      - name: Kiểm bundle id dev
+        run: |
+          actual="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' build/ios/iphoneos/Runner.app/Info.plist)"
+          if [[ "$actual" != "io.github.truongthanhnam.pakmanager.dev" ]]; then
+            echo "Bundle id dev sai: '$actual'" >&2
+            exit 1
+          fi
+          name="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' build/ios/iphoneos/Runner.app/Info.plist)"
+          if [[ "$name" != "PAK Manager Dev" ]]; then
+            echo "Tên hiển thị dev sai: '$name'" >&2
+            exit 1
+          fi
+          echo "OK: bundle id dev $actual, tên hiển thị $name"
 
   # Integration test API native trên emulator Android thật (AD-14, AD-11, NFR-8).
   integration-android:

@@ -402,7 +402,8 @@ Chuỗi "có trong blocklist" khi cả `k` bit đều bật.
 
 ## Nguồn
 
-Repo `${source.repo}`, commit `${source.commit}`, giấy phép ${source.license}.
+Repo `${source.repo}`, commit `${source.commit}`, giấy phép ${source.license}
+(nguyên văn và ghi công trong `NOTICE` ở gốc `pak_manager/`).
 Chỉ giữ dòng ASCII in được (0x20–0x7E) dài $minEntryLength–$maxEntryLength
 sau khi bỏ `\\r` cuối dòng, chuyển chữ thường, khử trùng.
 

@@ -5,6 +5,7 @@
 #
 # SecLists (Daniel Miessler và cộng sự) phát hành theo giấy phép MIT:
 # https://github.com/danielmiessler/SecLists/blob/master/LICENSE
+# Nguyên văn giấy phép và ghi công nằm trong file NOTICE ở gốc pak_manager/.
 repo: danielmiessler/SecLists
 commit: a1a06ab57c3f4efc450d80738a72c11597aac81a
 license: MIT

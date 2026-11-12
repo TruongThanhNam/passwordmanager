@@ -1,0 +1,43 @@
+PAK Manager — ghi công bên thứ ba
+
+Ghi công này áp dụng cho:
+- assets/blocklist.bloom (Bloom filter dẫn xuất từ các danh sách mật khẩu bên dưới)
+- test/fixtures/blocklist/sample.txt (dòng mẫu trích từ cùng nguồn)
+
+Nguồn: SecLists (Daniel Miessler và cộng sự)
+Repo: https://github.com/danielmiessler/SecLists
+Commit: a1a06ab57c3f4efc450d80738a72c11597aac81a
+Các path dùng (khai báo trong tool/blocklist/SOURCE):
+- Passwords/Common-Credentials/Pwdb_top-10000000.txt
+- Passwords/Common-Credentials/xato-net-10-million-passwords.txt
+- Passwords/Leaked-Databases/rockyou.txt.tar.gz
+
+Ghi chú: rockyou là dữ liệu mật khẩu bị lộ từ vụ rò rỉ RockYou, không do
+SecLists viết; SecLists chỉ thu thập và phân phối lại. Giấy phép MIT bên dưới
+là giấy phép của repo SecLists.
+
+Nguyên văn LICENSE của SecLists tại commit trên:
+
+----------------------------------------------------------------------
+MIT License
+
+Copyright (c) 2018 Daniel Miessler
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+

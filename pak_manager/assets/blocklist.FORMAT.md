@@ -38,7 +38,8 @@ Chuỗi "có trong blocklist" khi cả `k` bit đều bật.
 
 ## Nguồn
 
-Repo `danielmiessler/SecLists`, commit `a1a06ab57c3f4efc450d80738a72c11597aac81a`, giấy phép MIT.
+Repo `danielmiessler/SecLists`, commit `a1a06ab57c3f4efc450d80738a72c11597aac81a`, giấy phép MIT
+(nguyên văn và ghi công trong `NOTICE` ở gốc `pak_manager/`).
 Chỉ giữ dòng ASCII in được (0x20–0x7E) dài 15–128
 sau khi bỏ `\r` cuối dòng, chuyển chữ thường, khử trùng.
 
