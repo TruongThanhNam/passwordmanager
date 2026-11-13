@@ -843,6 +843,60 @@ So that tôi thử app an toàn trên máy của mình và repo tuân thủ gi�
 **Then** có file `NOTICE` (hoặc `THIRD_PARTY_LICENSES`) chứa nguyên văn giấy phép MIT của SecLists và ghi rõ nguồn; `tool/blocklist/SOURCE` trỏ tới file đó
 **And** việc đăng ký giấy phép trong app (`LicenseRegistry`) được ghi lại cho story có màn giấy phép
 
+### Story 1.15: Kiểm lớp shell của các cổng CI
+
+As a chủ sản phẩm,
+I want lớp shell gọi các cổng CI cũng được chứng minh là fail trên đầu vào xấu,
+So that một tham số bị bỏ sót hoặc một điều kiện bị đảo trong script không âm thầm tắt cổng (AD-18, AD-19, NFR-7).
+
+**Acceptance Criteria:**
+
+**Given** harness test trong `test/tool/` chạy `tool/ci/check_android_apk.sh` với `aapt2`, `zipalign`, `readelf`, `unzip` giả (qua `ANDROID_HOME` và `PATH` tạm)
+**When** chạy script với `--expect-id`
+**Then** `apk_rules.dart` nhận đúng thư mục `$work` (có `manifest.txt`, `listing.txt`, `readelf/<abi>/<tên>.so.txt`, `badging.txt`) và đúng `applicationId` kỳ vọng
+**And** `badging` giả sai `applicationId` làm script exit khác 0
+**And** output giả vi phạm một luật (vd. có `android.permission.INTERNET`) làm script exit khác 0
+**And** `zipalign` giả trả lỗi làm script exit khác 0 dù mọi luật khác pass
+**And** bộ công cụ giả hợp lệ cho exit 0
+**And** harness chạy trong job ubuntu của CI; trên máy không có `bash` thì test tự bỏ qua kèm lý do
+
+**Given** khối shell so revision Flutter với `.metadata` đang lặp ở các job của `ci.yml`
+**When** gom vào một script trong `tool/ci/`
+**Then** mọi job gọi cùng script đó, `ci.yml` không còn bản sao của khối so sánh
+**And** test kiểm âm: revision khác `.metadata` thì fail; `.metadata` thiếu dòng `revision` thì fail; khớp thì pass
+
+**Given** APK prod và dev do CI build
+**When** CI chạy `check_android_apk.sh`
+**Then** output thô của `aapt2 dump xmltree`, `aapt2 dump badging`, `unzip -l`, `readelf -lW` được lưu thành artifact của lần chạy (action upload ghim theo SHA)
+**And** `test/fixtures/` có golden fixture lấy từ artifact đó cho cả prod và dev, ghi rõ commit và phiên bản build-tools nguồn
+**And** `apk_rules_test.dart` pass trên golden fixture; các ca kiểm âm được dựng bằng cách sửa golden, không dùng output viết tay nữa
+
+### Story 1.16: Ghim toolchain và bảo vệ cấu trúc ci.yml
+
+As a chủ sản phẩm,
+I want phiên bản toolchain của CI khớp bảng Stack và các bước cổng không thể bị gỡ khỏi `ci.yml` mà không ai biết,
+So that spine, CI và build thật không lệch nhau, và một lần sửa workflow không âm thầm tắt cổng an toàn (AD-12, AD-18).
+
+**Acceptance Criteria:**
+
+**Given** `.github/workflows/ci.yml`
+**When** chạy test cấu trúc workflow trong `test/tool/`
+**Then** test fail nếu thiếu một trong các bước: kiểm secret (`check_workflow_secrets.dart`), kiểm Stack (`check_stack.dart`), so revision Flutter ở mọi job cài Flutter, kiểm APK prod kèm `--expect-id io.github.truongthanhnam.pakmanager`, kiểm APK dev kèm `--expect-id` có hậu tố `.dev`
+**And** test fail nếu một bước cổng có `continue-on-error: true` hoặc điều kiện `if:` làm nó bị bỏ qua
+**And** có kiểm âm trên bản `ci.yml` mẫu bị gỡ từng bước
+
+**Given** bảng Stack của ARCHITECTURE-SPINE được bổ sung dòng Gradle và Xcode (giá trị đang dùng: Gradle 9.3.1, Xcode 26.3)
+**When** CI chạy bước kiểm Stack
+**Then** fail khi `FLUTTER_VERSION` trong `ci.yml` khác phiên bản Flutter SDK của bảng Stack
+**And** fail khi phiên bản trong `distributionUrl` của `gradle-wrapper.properties` khác dòng Gradle
+**And** fail khi phiên bản Xcode mà job macOS chọn khác dòng Xcode
+**And** có kiểm âm cho từng trường hợp lệch
+
+**Given** `gradle-wrapper.jar` đã commit trong repo
+**When** CI chạy job build Android
+**Then** JAR được xác thực bằng `gradle/actions/wrapper-validation` ghim theo commit SHA (comment ghi tag), trước mọi bước gọi Gradle
+**And** bước xác thực nằm trong danh sách bước bắt buộc của test cấu trúc workflow
+
 ## Epic 2: Chống dò mật khẩu và xóa dữ liệu
 
 Màn Login có đủ cơ chế chống dò: đếm số lần sai, chờ 30 phút không phụ thuộc đồng hồ máy, tự xóa ở lần sai thứ 10; thêm "Xóa & Tạo tài khoản mới" (giữ 3 giây), trạng thái "Dữ liệu bị hỏng" không bao giờ dẫn tới xóa, và xóa tiếp khi lần xóa trước bị gián đoạn. Hoàn thành UJ-4 và TC-3.
