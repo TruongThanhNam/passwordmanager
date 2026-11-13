@@ -119,13 +119,23 @@ jobs:
         run: flutter build apk --release --flavor prod --build-number "$GITHUB_RUN_NUMBER"
 
       - name: Kiểm APK prod (INTERNET, backup, 16 KB, applicationId)
-        run: bash tool/ci/check_android_apk.sh build/app/outputs/flutter-apk/app-prod-release.apk --expect-id io.github.truongthanhnam.pakmanager
+        run: bash tool/ci/check_android_apk.sh build/app/outputs/flutter-apk/app-prod-release.apk --expect-id io.github.truongthanhnam.pakmanager --save-raw build/apk-raw/prod
 
       - name: Build APK release (dev)
         run: flutter build apk --release --flavor dev --build-number "$GITHUB_RUN_NUMBER"
 
       - name: Kiểm APK dev (INTERNET, backup, 16 KB, applicationId)
-        run: bash tool/ci/check_android_apk.sh build/app/outputs/flutter-apk/app-dev-release.apk --expect-id io.github.truongthanhnam.pakmanager.dev
+        run: bash tool/ci/check_android_apk.sh build/app/outputs/flutter-apk/app-dev-release.apk --expect-id io.github.truongthanhnam.pakmanager.dev --save-raw build/apk-raw/dev
+
+      # Output thô của aapt2/unzip/readelf: nguồn golden fixture test/fixtures/apk/.
+      # Đường dẫn tính từ gốc repo (không theo working-directory).
+      - name: Lưu output thô kiểm APK
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: apk-raw-output
+          path: pak_manager/build/apk-raw
+          retention-days: 14
 
   ios:
     name: Build iOS (no codesign)

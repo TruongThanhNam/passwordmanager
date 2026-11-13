@@ -8,17 +8,26 @@
 #
 # Dùng (trong pak_manager/):
 #   tool/ci/check_android_apk.sh <đường-dẫn-apk> [--expect-id <applicationId>]
+#                                [--save-raw <thư-mục>]
+# --save-raw: trước khi thoát (kể cả khi fail) chép output thô và ghi
+#   build-tools.txt vào <thư-mục>; CI upload thành artifact, nguồn của golden
+#   fixture test/fixtures/apk/.
 # Cần: ANDROID_HOME (hoặc ANDROID_SDK_ROOT) có build-tools (aapt2, zipalign),
 #      readelf, unzip, dart.
 set -euo pipefail
 
-apk="${1:?Dùng: check_android_apk.sh <apk> [--expect-id <id>]}"
+apk="${1:?Dùng: check_android_apk.sh <apk> [--expect-id <id>] [--save-raw <dir>]}"
 shift
 expect_id=""
+save_raw=""
 while (($#)); do
   case "$1" in
     --expect-id)
       expect_id="${2:?--expect-id cần applicationId}"
+      shift 2
+      ;;
+    --save-raw)
+      save_raw="${2:?--save-raw cần thư mục}"
       shift 2
       ;;
     *)
@@ -51,7 +60,25 @@ echo "build-tools: $build_tools"
 
 failed=0
 work="$(mktemp -d)"
-trap 'rm -rf "$work"' EXIT
+# Chạy khi thoát, kể cả khi fail giữa chừng: lưu những output đã có rồi dọn.
+finish() {
+  if [[ -n "$save_raw" ]]; then
+    mkdir -p "$save_raw"
+    basename "$build_tools" >"$save_raw/build-tools.txt"
+    local name
+    for name in manifest.txt listing.txt badging.txt zipalign.txt; do
+      if [[ -f "$work/$name" ]]; then
+        cp "$work/$name" "$save_raw/$name"
+      fi
+    done
+    if [[ -d "$work/readelf" ]]; then
+      rm -rf "$save_raw/readelf"
+      cp -R "$work/readelf" "$save_raw/readelf"
+    fi
+  fi
+  rm -rf "$work"
+}
+trap finish EXIT
 
 echo
 echo "== zipalign 16 KB (AD-19)"
