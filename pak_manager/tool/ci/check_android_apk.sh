@@ -73,10 +73,13 @@ readelf_done=()
 finish() {
   set +e
   if [[ -n "$save_raw" ]]; then
-    # Dọn sạch trước khi ghi: thư mục có thể được tái dùng giữa các lần chạy
-    # khác cờ (vd một lần có --expect-id, lần sau không) và để lại file cũ.
-    rm -rf "$save_raw"
+    # Dọn output cũ trước khi ghi: thư mục có thể được tái dùng giữa các lần
+    # chạy khác cờ (vd một lần có --expect-id, lần sau không) và để lại file
+    # cũ. Chỉ xóa đúng những gì script này ghi, không xóa cả thư mục (người
+    # dùng có thể truyền `.` hay `build`).
     mkdir -p "$save_raw"
+    rm -rf "$save_raw/readelf"
+    rm -f "$save_raw"/{build-tools,zipalign,manifest,listing,badging}.txt
     basename "$build_tools" >"$save_raw/build-tools.txt"
     ((zipalign_ok)) && cp "$work/zipalign.txt" "$save_raw/zipalign.txt"
     ((manifest_ok)) && cp "$work/manifest.txt" "$save_raw/manifest.txt"

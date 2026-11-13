@@ -173,6 +173,11 @@
 - Test parse `ci.yml` để khẳng định các bước cổng (secret AD-18, kiểm APK prod/dev kèm `--expect-id`) vẫn còn.
   status: planned — story 1.16
 
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-15-kiem-lop-shell-cua-cac-cong-ci.md`
+  summary: Thêm kiểm âm cho các nhánh guard có sẵn từ trước của `check_android_apk.sh` (thiếu file APK, `ANDROID_HOME`/`ANDROID_SDK_ROOT` chưa đặt, thiếu `aapt2`/`zipalign`/`readelf`/`unzip`/`dart` trên PATH).
+  evidence: Review code review của story 1.15 (blind-hunter): các guard này có từ trước story 1.15, không có test shell nào kiểm, dù về mặt logic các dòng `exit 1` vẫn đúng.
+  status: planned
+
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-13-integration-test-cho-api-native.md`
   summary: Integration test chỉ chạy bản debug; chưa có kiểm khi chạy thật cho bản release (R8/minify có thể làm hỏng đăng ký Pigeon).
   evidence: Job integration-android dùng `flutter test` (debug); lỗi chỉ xuất hiện ở release vẫn để CI xanh.

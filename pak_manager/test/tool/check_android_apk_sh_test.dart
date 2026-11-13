@@ -252,6 +252,25 @@ void main() {
       expect(File('${raw.path}/manifest.txt').existsSync(), isTrue);
       expect(File('${raw.path}/listing.txt').existsSync(), isTrue);
       expect(File('${raw.path}/build-tools.txt').existsSync(), isTrue);
+      // File readelf dở dang (do redirection tạo trước khi lệnh fail) không
+      // được lưu như output thật.
+      expect(
+        File('${raw.path}/readelf/${sos.first}.txt').existsSync(),
+        isFalse,
+      );
+    });
+
+    test('ad19_save_raw_reused_dir_drops_stale_output_only', () {
+      final raw = Directory('${tools.root.path}/raw/prod');
+      var r = runScript(['--expect-id', _prodId, '--save-raw', raw.path]);
+      expect(r.exitCode, 0, reason: output(r));
+      expect(File('${raw.path}/badging.txt').existsSync(), isTrue);
+      // File không do script ghi phải còn nguyên (không xóa cả thư mục).
+      final keep = File('${raw.path}/khac.txt')..writeAsStringSync('giữ');
+      r = runScript(['--save-raw', raw.path]);
+      expect(r.exitCode, 0, reason: output(r));
+      expect(File('${raw.path}/badging.txt').existsSync(), isFalse);
+      expect(keep.readAsStringSync(), 'giữ');
     });
 
     test('ad19_save_raw_missing_directory_exit_nonzero', () {
