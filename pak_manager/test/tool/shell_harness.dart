@@ -85,12 +85,22 @@ ShellSupport detectShell({
 // Mọi công cụ giả ghi một dòng `<tên> <tham số…>` vào calls.txt.
 const _logCall = r'echo "$(basename "$0") $*" >>"$PAK_FAKE_LOG/calls.txt"';
 
+// Ghi toàn bộ tham số của MỘT lời gọi, mỗi tham số một dòng, rồi một dòng
+// `---` kết thúc lời gọi, vào `<tên công cụ>_args.txt`. Dùng cho công cụ mà
+// nhánh dispatch trong script giả chỉ nhìn một vài từ đầu (`aapt2`,
+// `readelf`): để test phát hiện được việc script thật làm rơi mất một tham
+// số (vd `--file AndroidManifest.xml`, `-lW`) mà nhánh dispatch không để ý.
+const _logArgs =
+    r'{ printf '
+    "'%s\\n' \"\$@\"; echo '---'; } >>\"\$PAK_FAKE_LOG/\$(basename \"\$0\")_args.txt\"";
+
 const _fakeAapt2 =
     '''
 #!/usr/bin/env bash
 # aapt2 giả: phát manifest.txt / badging.txt của thư mục fixture.
 set -euo pipefail
 $_logCall
+$_logArgs
 case "\${1:-} \${2:-}" in
   "dump xmltree") cat "\$PAK_FAKE_FIXTURE/manifest.txt" ;;
   "dump badging") cat "\$PAK_FAKE_FIXTURE/badging.txt" ;;
@@ -147,6 +157,7 @@ const _fakeReadelf =
 # readelf giả: `-lW <…>/<abi>/<so>` phát readelf/<abi>/<so>.txt của fixture.
 set -euo pipefail
 $_logCall
+$_logArgs
 so="\${*: -1}"
 abi="\$(basename "\$(dirname "\$so")")"
 cat "\$PAK_FAKE_FIXTURE/readelf/\$abi/\$(basename "\$so").txt"
@@ -189,8 +200,16 @@ class FakeTools {
     Directory(tools.log).createSync();
     // Bản cũ hơn, không có công cụ: `sort -V | tail -n 1` phải bỏ qua.
     Directory('${tools.sdk}/build-tools/34.0.0').createSync(recursive: true);
+    // Thứ tự chuỗi lớn hơn (ký tự '9' > '3') nhưng thứ tự phiên bản nhỏ hơn:
+    // nếu script dùng `sort` thường thay vì `sort -V`, thư mục này bị chọn
+    // nhầm. Có đủ công cụ giả nên script không crash nếu chọn nhầm, chỉ sai
+    // phiên bản trong output.
+    const decoyVersion = '9.0.0';
+    final decoyBuildTools = '${tools.sdk}/build-tools/$decoyVersion';
     final buildTools = '${tools.sdk}/build-tools/$fakeBuildToolsVersion';
     tools
+      .._writeTool('$decoyBuildTools/aapt2', _fakeAapt2)
+      .._writeTool('$decoyBuildTools/zipalign', _fakeZipalign)
       .._writeTool('$buildTools/aapt2', _fakeAapt2)
       .._writeTool('$buildTools/zipalign', _fakeZipalign)
       .._writeTool('${tools.bin}/unzip', _fakeUnzip)
@@ -241,6 +260,23 @@ class FakeTools {
     for (final line in (readLog(name) ?? '').split('\n'))
       if (line.isNotEmpty) line,
   ];
+
+  /// Toàn bộ lời gọi của công cụ giả [tool], theo thứ tự gọi: mỗi lời gọi là
+  /// `<tool> <tham số…>` ghép từ `<tool>_args.txt` (một tham số một dòng,
+  /// các lời gọi cách nhau bằng dòng `---`; xem `_logArgs`).
+  List<String> toolCalls(String tool) {
+    final calls = <String>[];
+    var current = <String>[];
+    for (final line in (readLog('${tool}_args.txt') ?? '').split('\n')) {
+      if (line == '---') {
+        calls.add(([tool, ...current]).join(' '));
+        current = [];
+      } else if (line.isNotEmpty) {
+        current.add(line);
+      }
+    }
+    return calls;
+  }
 
   /// Chạy `bash <script> <args…>` trong thư mục hiện tại (pak_manager/) với
   /// công cụ giả đứng trước `PATH` (`git` giả chỉ khi [fakeGit]). [environment] thêm biến `PAK_FAKE_*`.

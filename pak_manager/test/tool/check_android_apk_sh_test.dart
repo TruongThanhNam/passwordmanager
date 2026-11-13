@@ -131,10 +131,24 @@ void main() {
         ]),
       );
 
-      // Dùng build-tools mới nhất và đúng cờ zipalign 16 KB.
+      // Dùng build-tools mới nhất (sort -V, không phải sort thường) và đúng
+      // cờ zipalign 16 KB.
       final calls = tools.logLines('calls.txt');
       expect(calls, contains('zipalign -c -P 16 -v 4 ${tools.apk}'));
       expect(r.stdout, contains('build-tools/$fakeBuildToolsVersion'));
+
+      // Lời gọi đầy đủ, không rơi mất tham số (vd --file, -lW).
+      final work = args[2];
+      expect(tools.toolCalls('aapt2'), [
+        'aapt2 dump xmltree --file AndroidManifest.xml ${tools.apk}',
+        'aapt2 dump badging ${tools.apk}',
+      ]);
+      expect(
+        tools.toolCalls('readelf'),
+        unorderedEquals([
+          for (final so in sos) 'readelf -lW $work/apk/lib/$so',
+        ]),
+      );
 
       // Thư mục `$work` được dọn sau khi chạy.
       expect(Directory(args[2]).existsSync(), isFalse);
@@ -219,6 +233,31 @@ void main() {
       );
       expect(r.exitCode, isNot(0), reason: output(r));
       expectRawSaved(raw);
+    });
+
+    test('ad19_save_raw_keeps_partial_output_when_readelf_fails', () {
+      // readelf giả `cat` file fixture không tồn tại -> fail giữa chừng lúc
+      // thu thập (set -e), trước khi kịp gọi apk_rules.dart. zipalign.txt,
+      // manifest.txt, listing.txt phải vẫn được lưu: redirection `>` không
+      // nên bị hiểu nhầm là "đã thu thập xong".
+      final sos = soFilesInListing(
+        File('${fixture.path}/listing.txt').readAsStringSync(),
+      );
+      File('${fixture.path}/readelf/${sos.first}.txt').deleteSync();
+      final raw = Directory('${tools.root.path}/raw/prod');
+      final r = runScript(['--expect-id', _prodId, '--save-raw', raw.path]);
+      expect(r.exitCode, isNot(0), reason: output(r));
+      expect(tools.readLog('dart_args.txt'), isNull);
+      expect(File('${raw.path}/zipalign.txt').existsSync(), isTrue);
+      expect(File('${raw.path}/manifest.txt').existsSync(), isTrue);
+      expect(File('${raw.path}/listing.txt').existsSync(), isTrue);
+      expect(File('${raw.path}/build-tools.txt').existsSync(), isTrue);
+    });
+
+    test('ad19_save_raw_missing_directory_exit_nonzero', () {
+      final r = runScript(['--expect-id', _prodId, '--save-raw']);
+      expect(r.exitCode, isNot(0));
+      expect(tools.readLog('dart_args.txt'), isNull);
     });
 
     test('ad19_unknown_argument_exit_nonzero', () {
