@@ -78,6 +78,31 @@ context: []
 - Given bỏ `rule_args+=("$expect_id")` hoặc `failed=1` của zipalign trong script, when chạy harness trên máy có `bash`, then có test đỏ.
 - Given golden prod và dev, when `flutter test test/tool/apk_rules_test.dart`, then pass và file test không còn hàm dựng output viết tay.
 
+
+### Review Findings
+
+- [x] [Review][Defer] AC1: `integration-ios` chưa xanh (3/4 job) [.github/workflows/ci.yml] — deferred: lỗi runner macOS, không do thay đổi của story 1.15
+- [x] [Review][Patch] Test partial readelf không kiểm các `.so` đã thu thập trước chỗ fail (`readelf_done`) được lưu; nên xóa fixture của .so cuối theo thứ tự glob và khẳng định các .so trước đó có trong save-raw [pak_manager/test/tool/check_android_apk_sh_test.dart:238]
+- [x] [Review][Patch] `unzip` giả không ghi log tham số; bỏ `-o`/`-q`/`'lib/*'` trong script không làm test nào đỏ — dùng `_logArgs` và khẳng định cả hai lời gọi [pak_manager/test/tool/shell_harness.dart:124]
+- [x] [Review][Patch] Chưa kiểm `$work` được dọn khi script fail (trap `finish`) — thêm khẳng định ở ca fail [pak_manager/test/tool/check_android_apk_sh_test.dart]
+- [x] [Review][Patch] `git rev-parse` fail thì thoát với lỗi git thô, không có thông báo của cổng — thêm `|| { echo ... >&2; exit 1; }` [pak_manager/tool/ci/check_flutter_revision.sh:22]
+- [x] [Review][Defer] Chưa có test đọc `ci.yml` để giữ `PAK_REQUIRE_SHELL_TESTS: '1'`, `--save-raw` và bước upload [.github/workflows/ci.yml] — deferred: thuộc test cấu trúc ci.yml của story 1.16
+- [x] [Review][Defer] Khi kiểm APK prod fail, bước build/kiểm dev bị bỏ nên artifact thiếu output thô dev [.github/workflows/ci.yml] — deferred: đổi luồng job, ngoài phạm vi 1.15
+
+**Rejected**
+- Rejected (low): `expected` có thể nhiều dòng nếu dòng revision chứa 2 SHA — `.metadata` do Flutter sinh chỉ có một SHA.
+- Rejected (low): `copyTree` hỏng khi đường dẫn có `/` cuối — mọi caller truyền đường dẫn không có `/` cuối.
+- Rejected (low): `detectShell` coi file không thực thi tên bash là có bash — hiếm gặp; vẫn fail ồn ào.
+- Rejected (low): harness kế thừa env cha (`PAK_FAKE_*`, PATH thật) — không ai đặt các biến này ngoài test.
+- Rejected (low): `zipalign_ok=1` ở nhánh fail — chủ ý: output khi fail là thứ cần lưu để debug.
+- Rejected (low): `finish()` im lặng khi cp lỗi — hiếm (hết đĩa), cần thêm nhánh.
+- Rejected (low): `build-tools.txt` golden (37.0.0) khác bản giả (36.1.0) — không ảnh hưởng luật nào.
+- Rejected (low): setup fail gây `LateInitializationError` và rò thư mục tạm — chỉ khi chmod lỗi.
+- Rejected (low): test shell bị bỏ qua trên Windows — đúng ràng buộc spec.
+- Rejected (low): dòng INTERNET viết tay trong test shell — ràng buộc sửa golden áp cho `apk_rules_test.dart`.
+- Rejected (low): spec `done` khác sprint `review`; sửa `deferred-work.md`/tài liệu planning ngoài phạm vi — chỉ là sổ sách, không có hại cụ thể.
+- Rejected (false): commit 6894443 nói "xóa sạch thư mục" — commit f7d97ef đã đính chính, code chỉ xóa file do script ghi.
+
 ## Implementation Notes
 
 - `ci.yml` chỉ chạy trên `pull_request` và push lên `main`, nên pha A phải mở PR nháp #15 thì CI mới chạy; push nhánh không thôi là không đủ.

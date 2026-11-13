@@ -105,6 +105,7 @@ void main() {
       final r = runScript(_metadata(), gitRevision: _revision, gitExit: '128');
       expect(r.exitCode, isNot(0), reason: output(r));
       expect(r.stdout, isNot(contains('OK')));
+      expect(r.stderr, contains('Không đọc được revision'));
     });
 
     test('ad12_missing_metadata_file_exit_nonzero', () {

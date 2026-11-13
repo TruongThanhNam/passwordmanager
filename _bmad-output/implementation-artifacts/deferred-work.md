@@ -187,3 +187,9 @@
 
 - AC1/AC2 của story 1.13 chưa có bằng chứng chạy xanh: hai job `integration-android`/`integration-ios`, `check_workflow_secrets.dart`, và kiểm âm "gỡ `PlatformApi.setUp` → CI đỏ" chưa chạy. Xác nhận qua GitHub Actions của PR và một nhánh tạm bỏ đăng ký native.
   status: done (theo người dùng báo 2026-11-13) — hai job `integration-android` và `integration-ios` đều xanh trên CI.
+
+## Deferred from: code review of spec-1-15-kiem-lop-shell-cua-cac-cong-ci.md (2026-11-14)
+
+- Chưa có test đọc `ci.yml` giữ `PAK_REQUIRE_SHELL_TESTS: '1'` ở bước `flutter test` job `android`, `--save-raw` ở hai bước kiểm APK và bước upload `apk-raw-output`. Gộp vào test cấu trúc ci.yml của story 1.16.
+- Khi kiểm APK prod fail, build/kiểm dev bị bỏ nên artifact `apk-raw-output` thiếu output thô dev. Cân nhắc `if: ${{ !cancelled() }}` cho bước dev hoặc ghi rõ giới hạn.
+- AC1 story 1.15: job `integration-ios` fail/bị hủy ở các lần chạy pha A/B (chỉ 3/4 job xanh). Lý do hoãn: lỗi runner macOS, không do thay đổi của 1.15. Cần một lần chạy CI xanh đủ 4 job để xác nhận.

@@ -149,6 +149,10 @@ void main() {
           for (final so in sos) 'readelf -lW $work/apk/lib/$so',
         ]),
       );
+      expect(tools.toolCalls('unzip'), [
+        'unzip -l ${tools.apk}',
+        'unzip -q -o ${tools.apk} lib/* -d $work/apk',
+      ]);
 
       // Thư mục `$work` được dọn sau khi chạy.
       expect(Directory(args[2]).existsSync(), isFalse);
@@ -179,6 +183,11 @@ void main() {
       final r = runScript(['--expect-id', _prodId]);
       expect(r.exitCode, isNot(0), reason: output(r));
       expect(r.stderr, contains('INTERNET'));
+      // `$work` vẫn được dọn khi luật fail (trap finish).
+      expect(
+        Directory(tools.logLines('dart_args.txt')[2]).existsSync(),
+        isFalse,
+      );
       expect(r.stdout, contains('check_android_apk: FAIL'));
     });
 
@@ -243,7 +252,13 @@ void main() {
       final sos = soFilesInListing(
         File('${fixture.path}/listing.txt').readAsStringSync(),
       );
-      File('${fixture.path}/readelf/${sos.first}.txt').deleteSync();
+      // Xóa fixture của .so cuối theo thứ tự glob (bash sắp theo tên) để các
+      // .so trước nó đã được thu thập xong và phải được lưu.
+      final globOrder = [...sos]..sort();
+      final failing = globOrder.last;
+      final done = globOrder.sublist(0, globOrder.length - 1);
+      expect(done, isNotEmpty);
+      File('${fixture.path}/readelf/$failing.txt').deleteSync();
       final raw = Directory('${tools.root.path}/raw/prod');
       final r = runScript(['--expect-id', _prodId, '--save-raw', raw.path]);
       expect(r.exitCode, isNot(0), reason: output(r));
@@ -254,10 +269,15 @@ void main() {
       expect(File('${raw.path}/build-tools.txt').existsSync(), isTrue);
       // File readelf dở dang (do redirection tạo trước khi lệnh fail) không
       // được lưu như output thật.
-      expect(
-        File('${raw.path}/readelf/${sos.first}.txt').existsSync(),
-        isFalse,
-      );
+      expect(File('${raw.path}/readelf/$failing.txt').existsSync(), isFalse);
+      for (final so in done) {
+        final saved = File('${raw.path}/readelf/$so.txt');
+        expect(saved.existsSync(), isTrue, reason: 'thiếu readelf/$so.txt');
+        expect(
+          saved.readAsBytesSync(),
+          File('${fixture.path}/readelf/$so.txt').readAsBytesSync(),
+        );
+      }
     });
 
     test('ad19_save_raw_reused_dir_drops_stale_output_only', () {

@@ -19,7 +19,10 @@ fi
 # Dòng `  revision:` (thụt 2 dấu cách) là revision Flutter; các dòng
 # `create_revision`/`base_revision` thụt sâu hơn nên không khớp.
 expected="$(grep -m1 -E '^  revision:' "$metadata" | grep -oE '[0-9a-f]{40}' || true)"
-actual="$(git -C "$flutter_dir" rev-parse HEAD)"
+actual="$(git -C "$flutter_dir" rev-parse HEAD)" || {
+  echo "Không đọc được revision của Flutter clone: $flutter_dir" >&2
+  exit 1
+}
 if [[ -z "$expected" || "$actual" != "$expected" ]]; then
   echo "Flutter clone có revision $actual, khác revision '$expected' trong $metadata" >&2
   exit 1

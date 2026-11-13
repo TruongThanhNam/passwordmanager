@@ -88,7 +88,7 @@ const _logCall = r'echo "$(basename "$0") $*" >>"$PAK_FAKE_LOG/calls.txt"';
 // Ghi toàn bộ tham số của MỘT lời gọi, mỗi tham số một dòng, rồi một dòng
 // `---` kết thúc lời gọi, vào `<tên công cụ>_args.txt`. Dùng cho công cụ mà
 // nhánh dispatch trong script giả chỉ nhìn một vài từ đầu (`aapt2`,
-// `readelf`): để test phát hiện được việc script thật làm rơi mất một tham
+// `readelf`, `unzip`): để test phát hiện được việc script thật làm rơi mất một tham
 // số (vd `--file AndroidManifest.xml`, `-lW`) mà nhánh dispatch không để ý.
 const _logArgs =
     r'{ printf '
@@ -125,6 +125,7 @@ const _fakeUnzip =
 # listing.
 set -euo pipefail
 $_logCall
+$_logArgs
 if [[ "\${1:-}" == "-l" ]]; then
   cat "\$PAK_FAKE_FIXTURE/listing.txt"
   exit 0
