@@ -145,7 +145,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-11-ghim-chuoi-cung-ung-va-stack-trong-ci.md`
   summary: Kiểm âm bước so revision Flutter với `.metadata` và gom khối shell lặp ở hai job vào một script `tool/ci/`.
   evidence: Chỉ đường pass được chạy trên CI; đảo điều kiện hoặc bỏ `exit 1` vẫn xanh (thuộc phạm vi story 1.12).
-  status: planned — story 1.15
+  status: done — story 1.15
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-11-ghim-chuoi-cung-ung-va-stack-trong-ci.md`
   summary: Đối chiếu phiên bản Flutter (`FLUTTER_VERSION`), Gradle và Xcode trong CI với bảng Stack của spine.
   evidence: `check_stack.dart` chỉ kiểm package; spine và CI có thể lệch mà gate vẫn pass.
@@ -158,18 +158,18 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-12-kiem-am-cho-cac-cong-ci.md`
   summary: Thay output `aapt2`/`unzip -l`/`readelf -lW` tự viết trong `apk_rules_test.dart` bằng output thật lấy từ APK prod/dev của CI làm golden fixture.
   evidence: Fixture hiện là xấp xỉ; nếu định dạng thật lệch thì test vẫn xanh còn CI fail oan (hoặc lọt).
-  status: planned — story 1.15
+  status: done — story 1.15
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-12-kiem-am-cho-cac-cong-ci.md`
   summary: Thêm test cho lớp shell `check_android_apk.sh` (công cụ giả trên PATH) để chứng minh `--expect-id` tới `apk_rules.dart` và lỗi luật làm script fail.
   evidence: Bỏ `$expect_id` khỏi `rule_args` thì `run()` bỏ qua badging, mọi test Dart và CI trên APK tốt vẫn xanh.
-  status: planned — story 1.15
+  status: done — story 1.15
 
 ## Deferred from: code review of spec-1-12-kiem-am-cho-cac-cong-ci (2026-11-12)
 
 - Test cho lớp shell `check_android_apk.sh` (hợp đồng thư mục `$work`, truyền `--expect-id`, exit code). Bỏ `--expect-id` thì kiểm badging bị tắt mà CI vẫn xanh.
-  status: planned — story 1.15
+  status: done — story 1.15
 - Kiểm âm cho cổng `zipalign -c -P 16` (APK căn sai phải làm `failed=1`); cần cùng harness công cụ giả trên PATH.
-  status: planned — story 1.15
+  status: done — story 1.15
 - Test parse `ci.yml` để khẳng định các bước cổng (secret AD-18, kiểm APK prod/dev kèm `--expect-id`) vẫn còn.
   status: planned — story 1.16
 
