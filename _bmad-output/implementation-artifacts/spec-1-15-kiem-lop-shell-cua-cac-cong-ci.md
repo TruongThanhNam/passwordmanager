@@ -81,7 +81,7 @@ context: []
 
 ### Review Findings
 
-- [x] [Review][Defer] AC1: `integration-ios` chưa xanh (3/4 job) [.github/workflows/ci.yml] — deferred: lỗi runner macOS, không do thay đổi của story 1.15
+- [x] [Review][Defer] AC1: `integration-ios` chưa xanh (3/4 job) [.github/workflows/ci.yml] — resolved: theo người dùng báo 2026-11-14, cả 4 job đều xanh sau commit 1006917
 - [x] [Review][Patch] Test partial readelf không kiểm các `.so` đã thu thập trước chỗ fail (`readelf_done`) được lưu; nên xóa fixture của .so cuối theo thứ tự glob và khẳng định các .so trước đó có trong save-raw [pak_manager/test/tool/check_android_apk_sh_test.dart:238]
 - [x] [Review][Patch] `unzip` giả không ghi log tham số; bỏ `-o`/`-q`/`'lib/*'` trong script không làm test nào đỏ — dùng `_logArgs` và khẳng định cả hai lời gọi [pak_manager/test/tool/shell_harness.dart:124]
 - [x] [Review][Patch] Chưa kiểm `$work` được dọn khi script fail (trap `finish`) — thêm khẳng định ở ca fail [pak_manager/test/tool/check_android_apk_sh_test.dart]
