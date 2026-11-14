@@ -199,3 +199,4 @@
 ## Deferred from: code review of spec-1-16-ghim-toolchain-va-bao-ve-cau-truc-ci-yml.md (2026-11-14)
 
 - `distributionSha256Sum` trong `pak_manager/android/gradle/wrapper/gradle-wrapper.properties` không được cổng nào kiểm: xóa dòng này thì mọi cổng vẫn xanh. Lỗ hổng có từ story 1.11; story 1.16 chỉ thêm so phiên bản `distributionUrl` trong `check_stack.dart`. Hướng sửa: kiểm có dòng `distributionSha256Sum=` 64 hex, kèm kiểm âm.
+  status: done (theo người dùng báo 2026-11-14) — cả 4 job đều xanh sau commit 1006917.
