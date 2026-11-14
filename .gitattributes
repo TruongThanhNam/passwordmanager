@@ -3,7 +3,8 @@ pak_manager/test/fixtures/** -text
 # Bloom filter blocklist (AD-15) là nhị phân.
 pak_manager/assets/*.bloom binary
 # Gradle wrapper do Flutter sinh, commit nguyên byte để wrapper-validation
-# xác thực (story 1.16): JAR là nhị phân, gradlew giữ LF, gradlew.bat giữ CRLF.
+# xác thực (story 1.16): JAR là nhị phân, gradlew giữ LF, gradlew.bat lưu
+# nguyên byte CRLF (không chuẩn hóa).
 *.jar binary
 pak_manager/android/gradlew text eol=lf
-pak_manager/android/gradlew.bat text eol=crlf
+pak_manager/android/gradlew.bat -text

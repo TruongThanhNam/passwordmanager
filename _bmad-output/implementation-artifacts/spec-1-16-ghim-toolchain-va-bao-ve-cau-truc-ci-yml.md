@@ -80,6 +80,34 @@ context: []
 - Given nhánh của story, when `flutter test test/tool/` và `dart run tool/ci/check_stack.dart`, then pass/`OK` trên file thật.
 - Given CI chạy trên PR, when job `android` và `integration-android` chạy, then bước `wrapper-validation` xanh trước bước Gradle đầu tiên và bước Kiểm Stack xanh.
 
+### Review Findings
+
+_Code review 2026-11-14 (Blind Hunter, Edge Case Hunter, Verification Gap, Acceptance Auditor)._
+
+- [x] [Review][Patch] Nhánh vi phạm của `run()` (exit 1 + stderr) chưa có test; bước CI `dart run tool/ci/ci_structure.dart` chỉ làm đỏ job qua exit code này — thêm `ad19_run_violation_returns_1` ghi `ci.yml` thật bị gỡ một bước cổng ra file tạm, kỳ vọng 1 và stderr chứa `thiếu bước cổng` [pak_manager/tool/ci/ci_structure.dart:612]
+- [x] [Review][Patch] Chỉ job `android` bị đòi tồn tại: xóa hoặc đổi tên cả job `integration-android`/`ios`/`integration-ios` làm mất luôn cổng wrapper/clone Flutter/xcode-select mà vẫn `OK` (trái Always: wrapper ở `integration-android`; trái câu "fail khi thiếu bước cổng bắt buộc" ở `epic-1-context.md:50`) — đòi đủ 4 job, thêm kiểm âm xóa từng job [pak_manager/tool/ci/ci_structure.dart:484]
+- [x] [Review][Patch] Bước `wrapper-validation` thêm `with: allow-checksums: …` (hoặc `min-wrapper-count: 0`) vẫn được nhận là cổng, JAR bị sửa vẫn qua — cấm `with:` trên bước wrapper, thêm kiểm âm [pak_manager/tool/ci/ci_structure.dart:392]
+- [x] [Review][Patch] `uses:` cấp job (reusable workflow) ghim đúng vẫn luôn bị báo vì `job.keys` đã bỏ comment `# tag` trước khi so `_pinnedUses` — giữ giá trị thô như `CiStep.usesRaw` [pak_manager/tool/ci/ci_structure.dart:242]
+- [x] [Review][Patch] `gradlew.bat` lưu trong git ở dạng LF (`text eol=crlf` chuẩn hóa blob), không giữ nguyên byte như quyết định 2026-11-14 — đổi sang `-text` và add lại bản CRLF từ cache Flutter [.gitattributes:9]
+- [x] [Review][Patch] Mục hoãn "Cân nhắc `if: ${{ !cancelled() }}` cho bước dev" trong `deferred-work.md` chưa ghi rằng làm vậy giờ sẽ vi phạm luật `_apkDevGate` (chỉ ghi trong spec) — thêm ghi chú vào mục đó [_bmad-output/implementation-artifacts/deferred-work.md:195]
+- [x] [Review][Defer] `distributionSha256Sum` trong `gradle-wrapper.properties` không được kiểm: xóa dòng này thì mọi cổng vẫn xanh [pak_manager/tool/ci/check_stack.dart] — deferred: lỗ hổng có từ trước (story 1.11), story này chỉ thêm so phiên bản `distributionUrl`
+
+**Rejected:**
+- low — Trigger thu hẹp bằng `types:`/chỉ `tags:`, thêm `workflow_dispatch`/`pull_request_target`: trùng triage #12; `pull_request_target` cần luật AD-18 mới.
+- low — `permissions`, `defaults.run.shell`, `shell:` cấp bước, `set +e`/`exit 0` trước lệnh cổng không bị kiểm: cần thêm luật mới; phá theo cách này lộ rõ trong diff của PR.
+- low — `_callsGradle` không nhận `flutter run`/`drive`/`build aar`: trùng triage #21.
+- low — `runs-on` dạng matrix/danh sách/`self-hosted` né luật `-latest` và cổng Xcode: trùng triage #19.
+- low — Test hardcode `3.47.8`/`9.3.1`/`26.3` và đường dẫn `ci.yml`: khi nâng phiên bản test fail ồn ào; sửa bằng cách đọc từ spine thêm độ phức tạp.
+- low — `_stripComment` cắt ở ` #`; `'1' # x` không bỏ được comment: chỉ gây báo nhầm ồn ào, không làm lọt (mọi `if:` khác giá trị cho phép đều bị báo).
+- low — Job cổng bị bỏ qua qua `needs:`: trùng triage #14.
+- low — Merge key `<<: *anchor` mang `if:`: trùng triage #19.
+- low — Đặt lại `FLUTTER_VERSION=` trong shell trước `git clone`: phá có chủ ý, lộ trong diff; neo `^git clone` không đóng được dạng `export`.
+- low — Báo nhầm action cục bộ `./`/`docker://`: trùng triage #15.
+- false — Trạng thái lệch giữa sprint-status, spec và deferred-work: trùng triage #16, đúng vòng đời BMAD.
+- low — `_mentionsFlutter` chỉ xét `run`/`with`/`uses`, không xét `env:`: trùng triage #8; cả 4 job thật đều bị đòi clone.
+- false — CI chưa chạy để xác nhận wrapper-validation nhận JAR 2.10: đã ghi ở Verification/Manual checks, không phải lỗi code.
+- false — Mục AC1 của 1.15 (cần một lần chạy xanh đủ 4 job) không được cập nhật: không do thay đổi của story này.
+
 ## Implementation Notes
 
 - File wrapper lấy từ cache Flutter (`bin/cache/artifacts/gradle_wrapper`), giống từng byte. JAR có manifest Gradle 2.10 (checksum khớp bản chính thức nên `wrapper-validation` nhận) và vẫn đọc `distributionSha256Sum`. Chưa kiểm cục bộ được rằng Flutter giữ nguyên file đã commit lúc build (máy không có Android SDK).

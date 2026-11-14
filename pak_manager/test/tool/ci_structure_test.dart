@@ -447,6 +447,31 @@ void main() {
       );
     });
 
+    test('ad12_wrapper_validation_with_options_rejected', () {
+      // `allow-checksums`/`min-wrapper-count` nới lỏng xác thực JAR.
+      for (final job in ['android', 'integration-android']) {
+        for (final opt in [
+          ['        with:', '          allow-checksums: deadbeef'],
+          ['        with:', '          min-wrapper-count: 0'],
+          ['        with: {min-wrapper-count: 0}'],
+        ]) {
+          final lines = _ci.split('\n');
+          final (s, e) = _stepRange(
+            lines,
+            job,
+            'gradle/actions/wrapper-validation',
+          );
+          lines.insertAll(e, opt);
+          final yaml = lines.join('\n');
+          expect(
+            checkCiStructure(yaml),
+            _violation(['job $job', 'wrapper', 'with:']),
+            reason: '$job ${opt.join(' ')} (bước $s)',
+          );
+        }
+      }
+    });
+
     test('ad12_wrapper_validation_after_emulator_runner_rejected', () {
       final yaml = _moveStepAfter(
         'integration-android',
@@ -489,6 +514,29 @@ void main() {
       expect(checkCiStructure(yaml), _violation(['actions/checkout@11d5960']));
     });
 
+    test('ad12_job_level_uses_pinned_accepted_unpinned_rejected', () {
+      const sha = '0123456789abcdef0123456789abcdef01234567';
+      final pinned = _addJobKey(
+        'ios',
+        'uses: org/repo/.github/workflows/x.yml@$sha # v1.0.0',
+      );
+      expect(
+        checkCiStructure(pinned).where((v) => v.contains('uses')),
+        isEmpty,
+      );
+      for (final ref in ['@v1', '@$sha']) {
+        final yaml = _addJobKey(
+          'ios',
+          'uses: org/repo/.github/workflows/x.yml$ref',
+        );
+        expect(
+          checkCiStructure(yaml),
+          _violation(['job ios', 'uses', 'SHA']),
+          reason: ref,
+        );
+      }
+    });
+
     test('ad12_runs_on_latest_rejected', () {
       for (final (from, to) in [
         ('runs-on: ubuntu-24.04', 'runs-on: ubuntu-latest'),
@@ -528,6 +576,34 @@ void main() {
       expect(yaml, isNot(_ci));
       expect(checkCiStructure(yaml), _violation(['pull_request', 'paths']));
     });
+  });
+
+  test('ad19_missing_job_rejected', () {
+    for (final job in _jobs) {
+      final lines = _ci.split('\n');
+      final (s, e) = _jobRange(lines, job);
+      lines.removeRange(s, e);
+      expect(
+        checkCiStructure(lines.join('\n')),
+        _violation(['thiếu job $job']),
+        reason: job,
+      );
+    }
+  });
+
+  test('ad19_run_violation_returns_1', () {
+    final dir = Directory.systemTemp.createTempSync('ci_structure_');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    final file = File('${dir.path}/ci.yml')
+      ..writeAsStringSync(
+        _removeStep('android', 'dart run tool/ci/check_stack.dart'),
+      );
+    final out = StringBuffer();
+    final err = StringBuffer();
+    expect(run([file.path], out: out, err: err), 1);
+    expect(err.toString(), contains('thiếu bước cổng'));
+    expect(err.toString(), contains('kiểm Stack'));
+    expect(out.toString(), isNot(contains('OK')));
   });
 
   test('ad19_run_missing_file_returns_1', () {

@@ -24,6 +24,15 @@ const androidJob = 'android';
 /// Job integration test Android (gọi Gradle qua emulator runner).
 const integrationAndroidJob = 'integration-android';
 
+/// Job bắt buộc phải có: xóa hay đổi tên một job sẽ làm mất các bước cổng
+/// của nó (clone Flutter, xcode-select, wrapper-validation).
+const requiredJobs = [
+  androidJob,
+  'ios',
+  integrationAndroidJob,
+  'integration-ios',
+];
+
 const _prodId = 'io.github.truongthanhnam.pakmanager';
 const _devId = 'io.github.truongthanhnam.pakmanager.dev';
 
@@ -68,6 +77,9 @@ class CiJob {
   final int line;
   final Map<String, String> keys = {};
   final List<CiStep> steps = [];
+
+  /// Giá trị thô của `uses:` cấp job (giữ comment cuối dòng để kiểm tag).
+  String? usesRaw;
 
   /// Dòng của khóa cấp job (để báo vi phạm).
   final Map<String, int> keyLines = {};
@@ -241,6 +253,9 @@ CiWorkflow parseCiWorkflow(String yaml) {
       if (p != null) {
         job.keys[p.key] = _unquote(_stripComment(p.value));
         job.keyLines[p.key] = i + 1;
+        if (p.key == 'uses') {
+          job.usesRaw = p.value;
+        }
       }
       continue;
     }
@@ -282,6 +297,8 @@ CiWorkflow parseCiWorkflow(String yaml) {
         }
       case 'with':
       case 'env':
+        // Ghi nhận khóa cả khi giá trị inline (vd `with: {a: b}`).
+        step.keys[p.key] = p.value;
         if (p.value.isEmpty) {
           block = p.key;
           blockIndent = keyIndent;
@@ -308,12 +325,20 @@ CiWorkflow parseCiWorkflow(String yaml) {
 }
 
 /// Bước cổng: [label] dùng trong thông báo, [matches] nhận bước theo nội
-/// dung, [allowedIf] là giá trị `if:` duy nhất được phép (null = cấm `if:`).
+/// dung, [allowedIf] là giá trị `if:` duy nhất được phép (null = cấm `if:`),
+/// [allowWith] = false khi `with:` có thể nới lỏng cổng (vd `allow-checksums`
+/// của wrapper-validation).
 class _Gate {
-  const _Gate(this.label, this.matches, {this.allowedIf});
+  const _Gate(
+    this.label,
+    this.matches, {
+    this.allowedIf,
+    this.allowWith = true,
+  });
   final String label;
   final bool Function(CiStep) matches;
   final String? allowedIf;
+  final bool allowWith;
 }
 
 bool _usesAction(CiStep s, String action) =>
@@ -392,6 +417,7 @@ final _uploadGate = _Gate(
 final _wrapperGate = _Gate(
   'xác thực Gradle wrapper (gradle/actions/wrapper-validation)',
   (s) => _usesAction(s, 'gradle/actions/wrapper-validation'),
+  allowWith: false,
 );
 
 final _flutterCloneGate = _Gate(
@@ -481,8 +507,10 @@ List<String> checkCiStructure(String yaml) {
     violations.add('ci.yml: không đọc được job nào');
     return violations;
   }
-  if (wf.job(androidJob) == null) {
-    violations.add('ci.yml: thiếu job $androidJob');
+  for (final id in requiredJobs) {
+    if (wf.job(id) == null) {
+      violations.add('ci.yml: thiếu job $id');
+    }
   }
 
   for (final job in wf.jobs) {
@@ -494,7 +522,7 @@ List<String> checkCiStructure(String yaml) {
         'phải ghim phiên bản runner (AD-12)',
       );
     }
-    final jobUses = job.keys['uses'];
+    final jobUses = job.usesRaw;
     if (jobUses != null && !_pinnedUses.hasMatch(jobUses)) {
       violations.add(
         'dòng ${job.keyLines['uses']}: $where uses "$jobUses" phải ghim SHA '
@@ -558,6 +586,12 @@ List<String> checkCiStructure(String yaml) {
           violations.add(
             'dòng ${s.line}: $where bước cổng ${gate.label} có '
             '"continue-on-error: $coe"',
+          );
+        }
+        if (!gate.allowWith && s.keys.containsKey('with')) {
+          violations.add(
+            'dòng ${s.line}: $where bước cổng ${gate.label} không được có '
+            '"with:" (có thể nới lỏng kiểm tra)',
           );
         }
       }
