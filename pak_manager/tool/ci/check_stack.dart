@@ -1,7 +1,9 @@
-// Kiểm dependency khớp bảng Stack của ARCHITECTURE-SPINE (AD-12, AD-18).
+// Kiểm dependency và toolchain CI (Flutter, Gradle wrapper, Xcode) khớp bảng
+// Stack của ARCHITECTURE-SPINE (AD-12, AD-18).
 //
 // Dart thuần, không dependency. Chạy trong pak_manager/:
-//   dart run tool/ci/check_stack.dart [pubspecDir] [spinePath]
+//   dart run tool/ci/check_stack.dart [pubspecDir] [spinePath] [ciPath]
+//       [gradleWrapperPropertiesPath]
 // Exit 0 và in "OK" khi sạch; exit 1 khi có vi phạm (in mỗi vi phạm một dòng
 // ra stderr).
 
@@ -14,6 +16,12 @@ const defaultSpinePath =
 
 /// Đường dẫn allowlist gói kéo theo, tính từ thư mục pubspec.
 const allowlistRelPath = 'tool/ci/transitive_allowlist.txt';
+
+/// Đường dẫn workflow CI, tính từ thư mục pubspec.
+const ciRelPath = '../.github/workflows/ci.yml';
+
+/// Đường dẫn cấu hình Gradle wrapper, tính từ thư mục pubspec.
+const gradlePropsRelPath = 'android/gradle/wrapper/gradle-wrapper.properties';
 
 /// Đọc bảng `## Stack` thành map tên -> phiên bản (token đầu cột Version).
 /// Trả `null` khi không có mục `## Stack` hoặc bảng rỗng.
@@ -305,17 +313,91 @@ List<String> checkStack(
   return violations;
 }
 
+/// So `FLUTTER_VERSION` và Xcode (`Xcode_X.app`) trong [ciYaml], phiên bản
+/// trong `distributionUrl` của [gradleProps] với dòng `Flutter`, `Gradle`,
+/// `Xcode` của bảng [stack]; trả vi phạm (rỗng khi khớp).
+List<String> checkToolchain(
+  Map<String, String> stack,
+  String ciYaml,
+  String gradleProps,
+) {
+  final violations = <String>[];
+
+  /// So từng giá trị [found] (số dòng trong ci.yml nếu có, giá trị) với bảng.
+  void compare(String tool, List<(int?, String)> found) {
+    final expected = stack[tool];
+    if (expected == null) {
+      violations.add('bảng Stack thiếu dòng $tool (AD-12)');
+      return;
+    }
+    for (final (line, actual) in found) {
+      if (actual != expected) {
+        final where = line == null ? '' : ' (ci.yml dòng $line)';
+        violations.add(
+          '$tool: CI dùng $actual$where khác bảng Stack $expected (AD-12)',
+        );
+      }
+    }
+  }
+
+  // Dòng ci.yml không phải comment YAML, kèm số dòng (đếm từ 1).
+  final ciLines = ciYaml.replaceAll('\r', '').split('\n');
+  final ciCode = [
+    for (var i = 0; i < ciLines.length; i++)
+      if (!ciLines[i].trimLeft().startsWith('#')) (i + 1, ciLines[i]),
+  ];
+
+  final flutterRe = RegExp(r'''^\s*FLUTTER_VERSION:\s*['"]?([^'"\s#]+)''');
+  final flutter = <(int?, String)>[
+    for (final (n, l) in ciCode)
+      if (flutterRe.firstMatch(l) case final m?) (n, m.group(1)!),
+  ];
+  if (flutter.isEmpty) {
+    violations.add('ci.yml: không tìm thấy FLUTTER_VERSION (AD-12)');
+  }
+  compare('Flutter', flutter);
+
+  final gradleRe = RegExp(
+    r'^\s*distributionUrl\s*=.*/gradle-([0-9][^/]*?)-(?:all|bin)\.zip\s*$',
+  );
+  final gradle = <(int?, String)>[
+    for (final l in gradleProps.replaceAll('\r', '').split('\n'))
+      if (gradleRe.firstMatch(l) case final m?) (null, m.group(1)!),
+  ];
+  if (gradle.isEmpty) {
+    violations.add(
+      'gradle-wrapper.properties: không tìm thấy phiên bản Gradle trong '
+      'distributionUrl (AD-12)',
+    );
+  }
+  compare('Gradle', gradle);
+
+  final xcodeRe = RegExp(r'Xcode_([0-9][0-9.]*?)\.app');
+  final xcode = <(int?, String)>[
+    for (final (n, l) in ciCode)
+      for (final m in xcodeRe.allMatches(l)) (n, m.group(1)!),
+  ];
+  if (xcode.isEmpty) {
+    violations.add('ci.yml: không tìm thấy Xcode_*.app (AD-12)');
+  }
+  compare('Xcode', xcode);
+  return violations;
+}
+
 String? _readOrNull(String path) {
   final file = File(path);
   return file.existsSync() ? file.readAsStringSync() : null;
 }
 
-/// Chạy kiểm trong [args] = `[pubspecDir, spinePath]`; trả exit code.
+/// Chạy kiểm trong [args] = `[pubspecDir, spinePath, ciPath,
+/// gradleWrapperPropertiesPath]`; trả exit code.
 int run(List<String> args, {StringSink? out, StringSink? err}) {
   final output = out ?? stdout;
   final errors = err ?? stderr;
   final dir = args.isNotEmpty ? args[0] : '.';
   final spinePath = args.length > 1 ? args[1] : '$dir/$defaultSpinePath';
+  final ciPath = args.length > 2 ? args[2] : '$dir/$ciRelPath';
+  final propsPath = args.length > 3 ? args[3] : '$dir/$gradlePropsRelPath';
   final violations = <String>[];
   final pubspec = _readOrNull('$dir/pubspec.yaml');
   final lock = _readOrNull('$dir/pubspec.lock');
@@ -329,10 +411,23 @@ int run(List<String> args, {StringSink? out, StringSink? err}) {
   if (allowlist == null) {
     violations.add('không đọc được $dir/$allowlistRelPath');
   }
-  if (violations.isEmpty) {
-    violations.addAll(
-      checkStack(pubspec!, lock!, _readOrNull(spinePath), allowlist!),
-    );
+  final ci = _readOrNull(ciPath);
+  final props = _readOrNull(propsPath);
+  if (ci == null) {
+    violations.add('không đọc được $ciPath');
+  }
+  if (props == null) {
+    violations.add('không đọc được $propsPath');
+  }
+  final spine = _readOrNull(spinePath);
+  if (pubspec != null && lock != null && allowlist != null) {
+    violations.addAll(checkStack(pubspec, lock, spine, allowlist));
+  }
+  // Bảng Stack không đọc được đã là vi phạm của checkStack; chỉ so toolchain
+  // khi có bảng.
+  final stack = spine == null ? null : parseStackTable(spine);
+  if (stack != null && ci != null && props != null) {
+    violations.addAll(checkToolchain(stack, ci, props));
   }
   if (violations.isEmpty) {
     output.writeln('OK');
