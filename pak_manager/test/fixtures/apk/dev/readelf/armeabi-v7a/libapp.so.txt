@@ -1,0 +1,24 @@
+
+Elf file type is DYN (Shared object file)
+Entry point 0x0
+There are 7 program headers, starting at offset 52
+
+Program Headers:
+  Type           Offset   VirtAddr   PhysAddr   FileSiz MemSiz  Flg Align
+  PHDR           0x000034 0x00000034 0x00000034 0x000e0 0x000e0 R   0x4
+  LOAD           0x000000 0x00000000 0x00000000 0x6a6aad 0x6a6aad R   0x4000
+  LOAD           0x6a8000 0x006a8000 0x006a8000 0x2ac0d0 0x2ac0d0 R E 0x4000
+  LOAD           0x958000 0x00958000 0x00958000 0x00034 0x00034 RW  0x4000
+  NOTE           0x000114 0x00000114 0x00000114 0x00020 0x00020 R   0x4
+  DYNAMIC        0x958000 0x00958000 0x00958000 0x00030 0x00030 RW  0x4
+  GNU_STACK      0x000000 0x00000000 0x00000000 0x00000 0x00000 RW  0x1
+
+ Section to Segment mapping:
+  Segment Sections...
+   00     
+   01     .note.gnu.build-id .dynstr .dynsym .hash .rodata .eh_frame 
+   02     .text 
+   03     .dynamic .bss 
+   04     .note.gnu.build-id 
+   05     .dynamic 
+   06     

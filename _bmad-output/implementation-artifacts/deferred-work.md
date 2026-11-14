@@ -13,17 +13,17 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-1-khoi-tao-du-an-flutter-structural-seed-ci.md`
   summary: Thêm bước CI so `pubspec.yaml` (kể cả `dev_dependencies`) với bảng Stack của ARCHITECTURE-SPINE và từ chối ràng buộc không ghim chính xác.
   evidence: AD-12 hiện chỉ được nhắc bằng comment trong `pubspec.yaml`; một lần `flutter pub add` ngoài Stack vẫn qua mọi cổng CI.
-  status: planned — story 1.11
+  status: done (story 1.11, `spec-1-11-ghim-chuoi-cung-ung-va-stack-trong-ci.md`) — bước `dart run tool/ci/check_stack.dart` trong `ci.yml` so `pubspec.yaml`/`pubspec.lock` với bảng Stack; gói transitive phải có trong `tool/ci/transitive_allowlist.txt`.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-1-khoi-tao-du-an-flutter-structural-seed-ci.md`
   summary: Ghim chuỗi cung ứng của CI: action theo commit SHA, kiểm revision Flutter sau khi clone (khớp `.metadata`), `distributionSha256Sum` cho Gradle wrapper.
   evidence: `actions/checkout@v4`/`setup-java@v4` là tag đổi được; clone Flutter theo tag không xác minh revision; Gradle wrapper không có checksum — rủi ro với repo public của app mật khẩu.
-  status: planned — story 1.11
+  status: done (story 1.11) — mọi `uses:` trong `ci.yml` ghim commit SHA; có bước so revision Flutter với `.metadata`; `gradle-wrapper.properties` có `distributionSha256Sum`. Còn mở ở các mục riêng bên dưới: kiểm âm bước so revision, xác thực `gradle-wrapper.jar`.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-1-khoi-tao-du-an-flutter-structural-seed-ci.md`
   summary: (Chưa xác minh, nếu đúng thì medium) Ghim image runner (`macos-15` + Xcode cụ thể, `ubuntu-24.04`) để build không gãy khi `*-latest` đổi.
   evidence: Chưa thấy lỗi; theo dõi các lần CI đầu và khi GitHub đổi `macos-latest`. Gãy build không do thay đổi repo là dấu hiệu cần ghim.
-  status: planned — story 1.11
+  status: done (story 1.11) — runner ghim `ubuntu-24.04` và `macos-15`; job macOS chọn Xcode 26.3 và fail nếu runner không có.
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-1-khoi-tao-du-an-flutter-structural-seed-ci.md`
   summary: (Chưa xác minh, nếu đúng thì medium) Kiểm ELF 16 KB trong `tool/ci/check_android_apk.sh` có thể fail oan với `.so` 32-bit (armeabi-v7a, x86); quy định 16 KB của Google chỉ áp cho ABI 64-bit.
@@ -79,7 +79,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-4-ma-hoa-vault-bang-khoa-hai-tang-va-argon2id.md`
   summary: (Chưa xác minh, nếu đúng thì high) Hiệu chỉnh KDF trả `null` khi lần probe (3, 64 MiB) lỗi, không lùi về sàn (2, 19 MiB), nên máy không cấp được 64 MiB sẽ không tạo được tài khoản (story 1.6).
   evidence: Đúng Design Notes bước 4 của story 1.4. Cần chạy `calibrateVaultKdf` trên máy mốc yếu nhất (Android 7, RAM 2 GB; iPhone 6s/SE đời 1) để biết Argon2id 64 MiB có cấp được bộ nhớ không. Nếu không, thêm lần thử ở sàn sau khi probe lỗi.
-  status: planned — story 1.10 (phần code); đo trên máy mốc vẫn ở 7.1
+  status: partly done (story 1.10, `spec-1-10-hieu-chinh-kdf-lui-ve-san-khi-lan-thu-dau-loi.md`) — probe lỗi thì `calibrateVaultKdf` (`lib/core/crypto/kdf_calibration.dart`) thử lại đúng một lần ở `KdfParams.floor` (2, 19 MiB). Còn mở: đo trên máy mốc yếu nhất (story 7.1).
 
 ## Deferred from: code review of spec-1-4-ma-hoa-vault-bang-khoa-hai-tang-va-argon2id (2026-11-09)
 
@@ -124,7 +124,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-6-tao-tai-khoan-va-vao-khung-3-tab.md`
   summary: (low) `flutter_riverpod` 3.4.3 kéo theo `riverpod`, `listen`, `state_notifier`, `uuid` (chỉ để sinh id debug/devtools); cần tính vào bước CI so `pubspec` với Stack (mục deferred của 1.1).
   evidence: Thấy trong `pubspec.lock` khi thêm package; không dùng mạng, không plugin native.
-  status: planned — story 1.11
+  status: done (story 1.11) — `riverpod`, `listen`, `state_notifier`, `uuid` có trong `tool/ci/transitive_allowlist.txt`, `check_stack.dart` từ chối gói transitive ngoài danh sách.
 
 ## Deferred from: build review of spec-1-6-tao-tai-khoan-va-vao-khung-3-tab (2026-11-10)
 
@@ -145,30 +145,51 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-11-ghim-chuoi-cung-ung-va-stack-trong-ci.md`
   summary: Kiểm âm bước so revision Flutter với `.metadata` và gom khối shell lặp ở hai job vào một script `tool/ci/`.
   evidence: Chỉ đường pass được chạy trên CI; đảo điều kiện hoặc bỏ `exit 1` vẫn xanh (thuộc phạm vi story 1.12).
+  status: done — story 1.15
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-11-ghim-chuoi-cung-ung-va-stack-trong-ci.md`
   summary: Đối chiếu phiên bản Flutter (`FLUTTER_VERSION`), Gradle và Xcode trong CI với bảng Stack của spine.
   evidence: `check_stack.dart` chỉ kiểm package; spine và CI có thể lệch mà gate vẫn pass.
+  status: planned — story 1.16
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-11-ghim-chuoi-cung-ung-va-stack-trong-ci.md`
   summary: Xác thực `gradle-wrapper.jar` đã commit (vd `gradle/actions/wrapper-validation` ghim SHA).
   evidence: `distributionSha256Sum` chỉ phủ bản phân phối tải về, không phủ JAR wrapper trong repo.
+  status: planned — story 1.16
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-12-kiem-am-cho-cac-cong-ci.md`
   summary: Thay output `aapt2`/`unzip -l`/`readelf -lW` tự viết trong `apk_rules_test.dart` bằng output thật lấy từ APK prod/dev của CI làm golden fixture.
   evidence: Fixture hiện là xấp xỉ; nếu định dạng thật lệch thì test vẫn xanh còn CI fail oan (hoặc lọt).
+  status: done — story 1.15
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-12-kiem-am-cho-cac-cong-ci.md`
   summary: Thêm test cho lớp shell `check_android_apk.sh` (công cụ giả trên PATH) để chứng minh `--expect-id` tới `apk_rules.dart` và lỗi luật làm script fail.
   evidence: Bỏ `$expect_id` khỏi `rule_args` thì `run()` bỏ qua badging, mọi test Dart và CI trên APK tốt vẫn xanh.
+  status: done — story 1.15
 
 ## Deferred from: code review of spec-1-12-kiem-am-cho-cac-cong-ci (2026-11-12)
 
 - Test cho lớp shell `check_android_apk.sh` (hợp đồng thư mục `$work`, truyền `--expect-id`, exit code). Bỏ `--expect-id` thì kiểm badging bị tắt mà CI vẫn xanh.
+  status: done — story 1.15
 - Kiểm âm cho cổng `zipalign -c -P 16` (APK căn sai phải làm `failed=1`); cần cùng harness công cụ giả trên PATH.
+  status: done — story 1.15
 - Test parse `ci.yml` để khẳng định các bước cổng (secret AD-18, kiểm APK prod/dev kèm `--expect-id`) vẫn còn.
+  status: planned — story 1.16
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-1-15-kiem-lop-shell-cua-cac-cong-ci.md`
+  summary: Thêm kiểm âm cho các nhánh guard có sẵn từ trước của `check_android_apk.sh` (thiếu file APK, `ANDROID_HOME`/`ANDROID_SDK_ROOT` chưa đặt, thiếu `aapt2`/`zipalign`/`readelf`/`unzip`/`dart` trên PATH).
+  evidence: Review code review của story 1.15 (blind-hunter): các guard này có từ trước story 1.15, không có test shell nào kiểm, dù về mặt logic các dòng `exit 1` vẫn đúng.
+  status: planned
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-13-integration-test-cho-api-native.md`
   summary: Integration test chỉ chạy bản debug; chưa có kiểm khi chạy thật cho bản release (R8/minify có thể làm hỏng đăng ký Pigeon).
   evidence: Job integration-android dùng `flutter test` (debug); lỗi chỉ xuất hiện ở release vẫn để CI xanh.
+  status: planned — story 7.2
 
 ## Deferred from: code review of spec-1-13-integration-test-cho-api-native.md (2026-11-12)
 
 - AC1/AC2 của story 1.13 chưa có bằng chứng chạy xanh: hai job `integration-android`/`integration-ios`, `check_workflow_secrets.dart`, và kiểm âm "gỡ `PlatformApi.setUp` → CI đỏ" chưa chạy. Xác nhận qua GitHub Actions của PR và một nhánh tạm bỏ đăng ký native.
+  status: done (theo người dùng báo 2026-11-13) — hai job `integration-android` và `integration-ios` đều xanh trên CI.
+
+## Deferred from: code review of spec-1-15-kiem-lop-shell-cua-cac-cong-ci.md (2026-11-14)
+
+- Chưa có test đọc `ci.yml` giữ `PAK_REQUIRE_SHELL_TESTS: '1'` ở bước `flutter test` job `android`, `--save-raw` ở hai bước kiểm APK và bước upload `apk-raw-output`. Gộp vào test cấu trúc ci.yml của story 1.16.
+- Khi kiểm APK prod fail, build/kiểm dev bị bỏ nên artifact `apk-raw-output` thiếu output thô dev. Cân nhắc `if: ${{ !cancelled() }}` cho bước dev hoặc ghi rõ giới hạn.
+- AC1 story 1.15: job `integration-ios` fail/bị hủy ở các lần chạy pha A/B (chỉ 3/4 job xanh). Lý do hoãn: lỗi runner macOS, không do thay đổi của 1.15. Cần một lần chạy CI xanh đủ 4 job để xác nhận.

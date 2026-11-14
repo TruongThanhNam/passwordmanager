@@ -8,17 +8,26 @@
 #
 # Dùng (trong pak_manager/):
 #   tool/ci/check_android_apk.sh <đường-dẫn-apk> [--expect-id <applicationId>]
+#                                [--save-raw <thư-mục>]
+# --save-raw: trước khi thoát (kể cả khi fail) chép output thô và ghi
+#   build-tools.txt vào <thư-mục>; CI upload thành artifact, nguồn của golden
+#   fixture test/fixtures/apk/.
 # Cần: ANDROID_HOME (hoặc ANDROID_SDK_ROOT) có build-tools (aapt2, zipalign),
 #      readelf, unzip, dart.
 set -euo pipefail
 
-apk="${1:?Dùng: check_android_apk.sh <apk> [--expect-id <id>]}"
+apk="${1:?Dùng: check_android_apk.sh <apk> [--expect-id <id>] [--save-raw <dir>]}"
 shift
 expect_id=""
+save_raw=""
 while (($#)); do
   case "$1" in
     --expect-id)
       expect_id="${2:?--expect-id cần applicationId}"
+      shift 2
+      ;;
+    --save-raw)
+      save_raw="${2:?--save-raw cần thư mục}"
       shift 2
       ;;
     *)
@@ -51,14 +60,51 @@ echo "build-tools: $build_tools"
 
 failed=0
 work="$(mktemp -d)"
-trap 'rm -rf "$work"' EXIT
+# Cờ "đã thu thập thành công" cho từng file: redirection `>` tạo file ngay cả
+# khi lệnh fail giữa chừng (do `set -e`), nên không thể dùng `-f "$work/..."`
+# để biết output có thật hay chỉ là file rỗng/dở dang.
+zipalign_ok=0
+manifest_ok=0
+listing_ok=0
+badging_ok=0
+readelf_done=()
+# Chạy khi thoát, kể cả khi fail giữa chừng: lưu những output đã có rồi dọn.
+# `set +e` để một bước lưu lỗi (vd hết đĩa) không chặn `rm -rf "$work"`.
+finish() {
+  set +e
+  if [[ -n "$save_raw" ]]; then
+    # Dọn output cũ trước khi ghi: thư mục có thể được tái dùng giữa các lần
+    # chạy khác cờ (vd một lần có --expect-id, lần sau không) và để lại file
+    # cũ. Chỉ xóa đúng những gì script này ghi, không xóa cả thư mục (người
+    # dùng có thể truyền `.` hay `build`).
+    mkdir -p "$save_raw"
+    rm -rf "$save_raw/readelf"
+    rm -f "$save_raw"/{build-tools,zipalign,manifest,listing,badging}.txt
+    basename "$build_tools" >"$save_raw/build-tools.txt"
+    ((zipalign_ok)) && cp "$work/zipalign.txt" "$save_raw/zipalign.txt"
+    ((manifest_ok)) && cp "$work/manifest.txt" "$save_raw/manifest.txt"
+    ((listing_ok)) && cp "$work/listing.txt" "$save_raw/listing.txt"
+    ((badging_ok)) && cp "$work/badging.txt" "$save_raw/badging.txt"
+    if ((${#readelf_done[@]})); then
+      local rel
+      for rel in "${readelf_done[@]}"; do
+        mkdir -p "$save_raw/readelf/$(dirname "$rel")"
+        cp "$work/readelf/$rel.txt" "$save_raw/readelf/$rel.txt"
+      done
+    fi
+  fi
+  rm -rf "$work"
+}
+trap finish EXIT
 
 echo
 echo "== zipalign 16 KB (AD-19)"
 if "$zipalign" -c -P 16 -v 4 "$apk" >"$work/zipalign.txt" 2>&1; then
+  zipalign_ok=1
   grep -E '\.so ' "$work/zipalign.txt" || true
   echo "OK: zipalign -c -P 16 -v 4"
 else
+  zipalign_ok=1
   grep -E '\.so |BAD|fail' "$work/zipalign.txt" || cat "$work/zipalign.txt"
   echo "FAIL: zipalign -c -P 16 -v 4"
   failed=1
@@ -67,17 +113,21 @@ fi
 echo
 echo "== Thu thập output aapt2/unzip/readelf"
 "$aapt2" dump xmltree --file AndroidManifest.xml "$apk" >"$work/manifest.txt"
+manifest_ok=1
 unzip -l "$apk" >"$work/listing.txt"
+listing_ok=1
 unzip -q -o "$apk" 'lib/*' -d "$work/apk" || true
 shopt -s nullglob
 for so in "$work"/apk/lib/*/*.so; do
   rel="${so#"$work/apk/lib/"}"
   mkdir -p "$work/readelf/$(dirname "$rel")"
   readelf -lW "$so" >"$work/readelf/$rel.txt"
+  readelf_done+=("$rel")
 done
 rule_args=("$work")
 if [[ -n "$expect_id" ]]; then
   "$aapt2" dump badging "$apk" >"$work/badging.txt"
+  badging_ok=1
   rule_args+=("$expect_id")
 fi
 

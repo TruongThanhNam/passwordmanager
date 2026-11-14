@@ -1,0 +1,8 @@
+Golden fixture: output thô của aapt2/unzip/readelf/zipalign trên APK release
+prod và dev do CI build (story 1.15). Không sửa tay; lấy lại bằng
+`gh run download <run-id> -n apk-raw-output`.
+
+commit: 843205ec432f5b70a52855a3384e09da525e9bac
+run_id: 43451120658
+artifact: apk-raw-output
+build_tools: 37.0.0

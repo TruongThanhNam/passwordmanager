@@ -42,13 +42,7 @@ jobs:
         run: |
           git clone --depth 1 --branch "$FLUTTER_VERSION" https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
           # Tag có thể bị dời: so revision thật với .metadata (AD-12, AD-18).
-          expected="$(grep -m1 -E '^  revision:' .metadata | grep -oE '[0-9a-f]{40}' || true)"
-          actual="$(git -C "$RUNNER_TEMP/flutter" rev-parse HEAD)"
-          if [[ -z "$expected" || "$actual" != "$expected" ]]; then
-            echo "Flutter clone có revision $actual, khác revision '$expected' trong .metadata" >&2
-            exit 1
-          fi
-          echo "OK: Flutter revision $actual khớp .metadata"
+          bash tool/ci/check_flutter_revision.sh "$RUNNER_TEMP/flutter"
           echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
 
       - name: Flutter version
@@ -113,19 +107,33 @@ jobs:
         run: dart run tool/check_imports.dart
 
       - name: Unit + widget test
+        # Test lớp shell (test/tool/*_sh_test.dart) phải chạy ở đây, không
+        # được âm thầm bỏ qua khi thiếu bash.
+        env:
+          PAK_REQUIRE_SHELL_TESTS: '1'
         run: flutter test
 
       - name: Build APK release (prod)
         run: flutter build apk --release --flavor prod --build-number "$GITHUB_RUN_NUMBER"
 
       - name: Kiểm APK prod (INTERNET, backup, 16 KB, applicationId)
-        run: bash tool/ci/check_android_apk.sh build/app/outputs/flutter-apk/app-prod-release.apk --expect-id io.github.truongthanhnam.pakmanager
+        run: bash tool/ci/check_android_apk.sh build/app/outputs/flutter-apk/app-prod-release.apk --expect-id io.github.truongthanhnam.pakmanager --save-raw build/apk-raw/prod
 
       - name: Build APK release (dev)
         run: flutter build apk --release --flavor dev --build-number "$GITHUB_RUN_NUMBER"
 
       - name: Kiểm APK dev (INTERNET, backup, 16 KB, applicationId)
-        run: bash tool/ci/check_android_apk.sh build/app/outputs/flutter-apk/app-dev-release.apk --expect-id io.github.truongthanhnam.pakmanager.dev
+        run: bash tool/ci/check_android_apk.sh build/app/outputs/flutter-apk/app-dev-release.apk --expect-id io.github.truongthanhnam.pakmanager.dev --save-raw build/apk-raw/dev
+
+      # Output thô của aapt2/unzip/readelf: nguồn golden fixture test/fixtures/apk/.
+      # Đường dẫn tính từ gốc repo (không theo working-directory).
+      - name: Lưu output thô kiểm APK
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: apk-raw-output
+          path: pak_manager/build/apk-raw
+          retention-days: 14
 
   ios:
     name: Build iOS (no codesign)
@@ -146,13 +154,7 @@ jobs:
         run: |
           git clone --depth 1 --branch "$FLUTTER_VERSION" https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
           # Tag có thể bị dời: so revision thật với .metadata (AD-12, AD-18).
-          expected="$(grep -m1 -E '^  revision:' .metadata | grep -oE '[0-9a-f]{40}' || true)"
-          actual="$(git -C "$RUNNER_TEMP/flutter" rev-parse HEAD)"
-          if [[ -z "$expected" || "$actual" != "$expected" ]]; then
-            echo "Flutter clone có revision $actual, khác revision '$expected' trong .metadata" >&2
-            exit 1
-          fi
-          echo "OK: Flutter revision $actual khớp .metadata"
+          bash tool/ci/check_flutter_revision.sh "$RUNNER_TEMP/flutter"
           echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
 
       - name: Flutter version
@@ -244,13 +246,7 @@ jobs:
         run: |
           git clone --depth 1 --branch "$FLUTTER_VERSION" https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
           # Tag có thể bị dời: so revision thật với .metadata (AD-12, AD-18).
-          expected="$(grep -m1 -E '^  revision:' .metadata | grep -oE '[0-9a-f]{40}' || true)"
-          actual="$(git -C "$RUNNER_TEMP/flutter" rev-parse HEAD)"
-          if [[ -z "$expected" || "$actual" != "$expected" ]]; then
-            echo "Flutter clone có revision $actual, khác revision '$expected' trong .metadata" >&2
-            exit 1
-          fi
-          echo "OK: Flutter revision $actual khớp .metadata"
+          bash tool/ci/check_flutter_revision.sh "$RUNNER_TEMP/flutter"
           echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
 
       - name: Flutter version
@@ -292,13 +288,7 @@ jobs:
         run: |
           git clone --depth 1 --branch "$FLUTTER_VERSION" https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter"
           # Tag có thể bị dời: so revision thật với .metadata (AD-12, AD-18).
-          expected="$(grep -m1 -E '^  revision:' .metadata | grep -oE '[0-9a-f]{40}' || true)"
-          actual="$(git -C "$RUNNER_TEMP/flutter" rev-parse HEAD)"
-          if [[ -z "$expected" || "$actual" != "$expected" ]]; then
-            echo "Flutter clone có revision $actual, khác revision '$expected' trong .metadata" >&2
-            exit 1
-          fi
-          echo "OK: Flutter revision $actual khớp .metadata"
+          bash tool/ci/check_flutter_revision.sh "$RUNNER_TEMP/flutter"
           echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
 
       - name: Flutter version
