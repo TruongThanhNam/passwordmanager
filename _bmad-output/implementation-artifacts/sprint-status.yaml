@@ -51,7 +51,7 @@ development_status:
   1-13-integration-test-cho-api-native: done
   1-14-flavor-dev-cho-ios-và-ghi-công-giấy-phép-blocklist: done
   1-15-kiểm-lớp-shell-của-các-cổng-ci: done
-  1-16-ghim-toolchain-và-bảo-vệ-cấu-trúc-ci-yml: backlog
+  1-16-ghim-toolchain-và-bảo-vệ-cấu-trúc-ci-yml: review
   epic-1-retrospective: optional
 
   epic-2: backlog
