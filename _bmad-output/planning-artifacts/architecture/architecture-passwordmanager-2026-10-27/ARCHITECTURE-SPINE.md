@@ -423,6 +423,8 @@ Sheet tạo mật khẩu ánh xạ chip sang `gen` theo FR-35 (123 → `digits`,
 | Flutter SDK (Dart 3.13) | 3.47.8 stable |
 | Android | minSdk 24, compileSdk 36, targetSdk 36 |
 | iOS tối thiểu | 15.0 |
+| Gradle (wrapper) | 9.3.1 |
+| Xcode (CI) | 26.3 |
 | cupertino_ui | 1.1.4 |
 | cupertino_icons | 2.0.0 |
 | sodium (libsodium 1.0.22, dùng `SodiumSumoInit`) | 4.1.2 |

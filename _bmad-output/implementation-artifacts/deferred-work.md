@@ -149,11 +149,11 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-11-ghim-chuoi-cung-ung-va-stack-trong-ci.md`
   summary: Đối chiếu phiên bản Flutter (`FLUTTER_VERSION`), Gradle và Xcode trong CI với bảng Stack của spine.
   evidence: `check_stack.dart` chỉ kiểm package; spine và CI có thể lệch mà gate vẫn pass.
-  status: planned — story 1.16
+  status: done — story 1.16
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-11-ghim-chuoi-cung-ung-va-stack-trong-ci.md`
   summary: Xác thực `gradle-wrapper.jar` đã commit (vd `gradle/actions/wrapper-validation` ghim SHA).
   evidence: `distributionSha256Sum` chỉ phủ bản phân phối tải về, không phủ JAR wrapper trong repo.
-  status: planned — story 1.16
+  status: done — story 1.16
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-12-kiem-am-cho-cac-cong-ci.md`
   summary: Thay output `aapt2`/`unzip -l`/`readelf -lW` tự viết trong `apk_rules_test.dart` bằng output thật lấy từ APK prod/dev của CI làm golden fixture.
@@ -171,7 +171,7 @@
 - Kiểm âm cho cổng `zipalign -c -P 16` (APK căn sai phải làm `failed=1`); cần cùng harness công cụ giả trên PATH.
   status: done — story 1.15
 - Test parse `ci.yml` để khẳng định các bước cổng (secret AD-18, kiểm APK prod/dev kèm `--expect-id`) vẫn còn.
-  status: planned — story 1.16
+  status: done — story 1.16
 
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-15-kiem-lop-shell-cua-cac-cong-ci.md`
   summary: Thêm kiểm âm cho các nhánh guard có sẵn từ trước của `check_android_apk.sh` (thiếu file APK, `ANDROID_HOME`/`ANDROID_SDK_ROOT` chưa đặt, thiếu `aapt2`/`zipalign`/`readelf`/`unzip`/`dart` trên PATH).
@@ -191,6 +191,12 @@
 ## Deferred from: code review of spec-1-15-kiem-lop-shell-cua-cac-cong-ci.md (2026-11-14)
 
 - Chưa có test đọc `ci.yml` giữ `PAK_REQUIRE_SHELL_TESTS: '1'` ở bước `flutter test` job `android`, `--save-raw` ở hai bước kiểm APK và bước upload `apk-raw-output`. Gộp vào test cấu trúc ci.yml của story 1.16.
+  status: done — story 1.16
 - Khi kiểm APK prod fail, build/kiểm dev bị bỏ nên artifact `apk-raw-output` thiếu output thô dev. Cân nhắc `if: ${{ !cancelled() }}` cho bước dev hoặc ghi rõ giới hạn.
+  note: từ story 1.16, luật `_apkDevGate` trong `tool/ci/ci_structure.dart` cấm mọi `if:` trên bước kiểm APK dev; làm ý tưởng này thì phải thêm `allowedIf` cho cổng đó và sửa test tương ứng.
 - AC1 story 1.15: job `integration-ios` fail/bị hủy ở các lần chạy pha A/B (chỉ 3/4 job xanh). Lý do hoãn: lỗi runner macOS, không do thay đổi của 1.15. Cần một lần chạy CI xanh đủ 4 job để xác nhận.
+
+## Deferred from: code review of spec-1-16-ghim-toolchain-va-bao-ve-cau-truc-ci-yml.md (2026-11-14)
+
+- `distributionSha256Sum` trong `pak_manager/android/gradle/wrapper/gradle-wrapper.properties` không được cổng nào kiểm: xóa dòng này thì mọi cổng vẫn xanh. Lỗ hổng có từ story 1.11; story 1.16 chỉ thêm so phiên bản `distributionUrl` trong `check_stack.dart`. Hướng sửa: kiểm có dòng `distributionSha256Sum=` 64 hex, kèm kiểm âm.
   status: done (theo người dùng báo 2026-11-14) — cả 4 job đều xanh sau commit 1006917.
