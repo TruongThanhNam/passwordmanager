@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 11-02-2026 16:41
-last_updated: 11-18-2026 22:00
+last_updated: 11-18-2026 22:42
 project: passwordmanager
 project_key: NOKEY
 tracking_system: file-system
@@ -118,13 +118,13 @@ action_items:
     action: "Sửa deferred-work.md: trả dòng status về mục AC1 story 1.15, mở lại mục
       distributionSha256Sum"
     owner: "namtruong"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-1-retro-2026-11-18.md"
   - id: "epic-1-retro-item-4-chạy-lại-ci-trên-main-7f9abda-để-có-run"
     epic: 1
     action: "Chạy lại CI trên main @ 7f9abda để có run macOS xanh và ghi id run"
     owner: "namtruong"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-1-retro-2026-11-18.md"
   - id: "epic-1-retro-item-5-đối-chiếu-đặc-tả-epics-md-ngoại-lệ-lock"
     epic: 1
