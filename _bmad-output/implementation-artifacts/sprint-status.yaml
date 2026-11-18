@@ -29,13 +29,13 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 11-02-2026 16:41
-last_updated: 2026-11-14
+last_updated: 11-18-2026 22:00
 project: passwordmanager
 project_key: NOKEY
 tracking_system: file-system
 story_location: _bmad-output/implementation-artifacts
 development_status:
-  epic-1: in-progress
+  epic-1: done
   1-1-khởi-tạo-dự-án-flutter-theo-structural-seed-và-cổng-ci: done
   1-2-thư-mục-dữ-liệu-riêng-ghi-nguyên-tử-và-loại-khỏi-backup: done
   1-3-giao-diện-sáng-tối-hai-ngôn-ngữ-và-cài-đặt-mặc-định: done
@@ -52,7 +52,7 @@ development_status:
   1-14-flavor-dev-cho-ios-và-ghi-công-giấy-phép-blocklist: done
   1-15-kiểm-lớp-shell-của-các-cổng-ci: done
   1-16-ghim-toolchain-và-bảo-vệ-cấu-trúc-ci-yml: done
-  epic-1-retrospective: optional
+  epic-1-retrospective: done
 
   epic-2: backlog
   2-1-đếm-lần-nhập-sai-bền-vững: backlog
@@ -97,3 +97,89 @@ development_status:
   7-2-ký-app-và-phát-hành-qua-ci: backlog
   7-3-chính-sách-quyền-riêng-tư-và-hồ-sơ-store: backlog
   epic-7-retrospective: optional
+action_items:
+  - id: "epic-1-retro-item-1-mở-rộng-ci_structure-để-đòi-mọi-bước-cổn"
+    epic: 1
+    action: "Mở rộng ci_structure để đòi mọi bước cổng trong ci.yml (check_imports,
+      analyze, Pigeon, l10n/fixture, --enforce-lockfile, integration_test hai job,
+      bundle id iOS) kèm kiểm âm; gom parser YAML dùng chung"
+    owner: "dev (Amelia)"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-1-retro-2026-11-18.md"
+  - id: "epic-1-retro-item-2-thêm-cổng-kiểm-distributionsha256sum-64"
+    epic: 1
+    action: "Thêm cổng kiểm distributionSha256Sum 64 hex trong gradle-wrapper.properties
+      kèm kiểm âm"
+    owner: "dev (Amelia)"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-1-retro-2026-11-18.md"
+  - id: "epic-1-retro-item-3-sửa-deferred-work-md-trả-dòng-status-về"
+    epic: 1
+    action: "Sửa deferred-work.md: trả dòng status về mục AC1 story 1.15, mở lại mục
+      distributionSha256Sum"
+    owner: "namtruong"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-1-retro-2026-11-18.md"
+  - id: "epic-1-retro-item-4-chạy-lại-ci-trên-main-7f9abda-để-có-run"
+    epic: 1
+    action: "Chạy lại CI trên main @ 7f9abda để có run macOS xanh và ghi id run"
+    owner: "namtruong"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-1-retro-2026-11-18.md"
+  - id: "epic-1-retro-item-5-đối-chiếu-đặc-tả-epics-md-ngoại-lệ-lock"
+    epic: 1
+    action: "Đối chiếu đặc tả epics.md: ngoại lệ lock() phiên chưa giao, AC 'không
+      còn widget phiên', bỏ 'chỉ giảm' ở 1.10, chuyển ModalPresenter/toast/SecretText
+      sang AC Epic 3"
+    owner: "PM (John)"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-1-retro-2026-11-18.md"
+  - id: "epic-1-retro-item-6-story-2-5-tách-kdf-lỗi-thiếu-bộ-nhớ-khỏi"
+    epic: 1
+    action: "Story 2.5 tách KDF lỗi/thiếu bộ nhớ khỏi UnlockCorrupt và giới hạn kích
+      thước khi đọc header/cards/recent"
+    owner: "PM (John)"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-1-retro-2026-11-18.md"
+  - id: "epic-1-retro-item-7-story-3-3-sửa-cửa-sổ-lock-enter-làm-mất"
+    epic: 1
+    action: "Story 3.3 sửa cửa sổ lock→enter làm mất giới hạn phiên, kèm test; gộp
+      với mục deferred-work về _runLock"
+    owner: "dev (Amelia)"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-1-retro-2026-11-18.md"
+  - id: "epic-1-retro-item-8-quyết-định-hành-vi-khi-lần-2-3-hiệu-chỉn"
+    epic: 1
+    action: "Quyết định hành vi khi lần 2/3 hiệu chỉnh KDF lỗi (thử sàn hay null)
+      và thêm test e2e tạo ở sàn rồi unlock"
+    owner: "architect (Winston)"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-1-retro-2026-11-18.md"
+  - id: "epic-1-retro-item-9-gom-fake-port-timer-securekey-vào-test-s"
+    epic: 1
+    action: "Gom fake port/timer/SecureKey vào test/support và tách test composition
+      root khỏi test/app_test.dart trước Epic 2"
+    owner: "dev (Amelia)"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-1-retro-2026-11-18.md"
+  - id: "epic-1-retro-item-10-chốt-quy-ước-trong-project-context-tag-t"
+    epic: 1
+    action: "Chốt quy ước trong project context: tag test 2 chữ số, commit type(story-X.Y),
+      Riverpod cho mọi service, đóng mục hoãn bằng id run CI và id mục ổn định"
+    owner: "namtruong"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-1-retro-2026-11-18.md"
+  - id: "epic-1-retro-item-11-đặt-điểm-dừng-cho-làm-cứng-ci-sau-action"
+    epic: 1
+    action: "Đặt điểm dừng cho làm cứng CI: sau action 1-2, mục CI mới vào backlog
+      CI riêng, không tự thành story chen trước Epic 2"
+    owner: "PM (John)"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-1-retro-2026-11-18.md"
+  - id: "epic-1-retro-item-12-nâng-actions-checkout-và-actions-setup-j"
+    epic: 1
+    action: "Nâng actions/checkout và actions/setup-java lên bản Node 24 (v5), ghim
+      SHA kèm tag"
+    owner: "dev (Amelia)"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-1-retro-2026-11-18.md"
