@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../tool/ci/check_stack.dart';
+import '../../tool/ci/ci_yaml.dart';
 
 const _spine = '''
 # Spine
@@ -305,6 +306,96 @@ void main() {
       );
       expect(props, isNot(_realProps));
       expect(_toolchain(props: props).single, contains('distributionUrl'));
+    });
+
+    test('ad12_real_props_have_one_distribution_sha256', () {
+      expect(
+        RegExp(
+          r'^distributionSha256Sum=[0-9a-f]{64}\r?$',
+          multiLine: true,
+        ).allMatches(_realProps),
+        hasLength(1),
+      );
+    });
+
+    // Retro Epic 1, B1: thiếu hoặc hỏng checksum thì Gradle tải bản phân
+    // phối mà không xác minh.
+    final shaLine = RegExp(
+      r'^distributionSha256Sum=.*$',
+      multiLine: true,
+    ).firstMatch(_realProps.replaceAll('\r', ''))!.group(0)!;
+    final sha = shaLine.substring('distributionSha256Sum='.length);
+    for (final (name, replacement) in [
+      ('không có dòng', ''),
+      ('dòng bị comment #', '#$shaLine'),
+      ('dòng bị comment !', '!$shaLine'),
+      ('63 hex', 'distributionSha256Sum=${sha.substring(1)}'),
+      ('65 hex', 'distributionSha256Sum=${sha}0'),
+      ('ký tự không phải hex', 'distributionSha256Sum=${sha.substring(1)}g'),
+      ('giá trị rỗng', 'distributionSha256Sum='),
+      ('chỉ có khóa', 'distributionSha256Sum'),
+      ('hai dòng', '$shaLine\n$shaLine'),
+      ('hai dòng khác giá trị', '$shaLine\ndistributionSha256Sum=${'0' * 64}'),
+    ]) {
+      test('ad12_distribution_sha256_invalid_rejected: $name', () {
+        final props = _realProps
+            .replaceAll('\r', '')
+            .replaceFirst(shaLine, replacement);
+        expect(props, isNot(_realProps.replaceAll('\r', '')));
+        expect(
+          _toolchain(props: props).single,
+          contains('distributionSha256Sum'),
+        );
+      });
+    }
+
+    // Dấu phân cách hợp lệ của file properties Java.
+    for (final separator in [
+      '  distributionSha256Sum=',
+      'distributionSha256Sum = ',
+      'distributionSha256Sum:',
+      'distributionSha256Sum: ',
+    ]) {
+      test('ad12_distribution_sha256_separator_accepted: "$separator"', () {
+        final props = _realProps.replaceFirst(
+          'distributionSha256Sum=',
+          separator,
+        );
+        expect(props, isNot(_realProps));
+        expect(_toolchain(props: props), isEmpty);
+      });
+    }
+  });
+
+  group('stripComment / unquote', () {
+    test('ad12_strip_comment_after_whitespace', () {
+      expect(stripComment('  sodium: 4.1.2 # ghi chú'), '  sodium: 4.1.2');
+      expect(stripComment('key: value\t# tab'), 'key: value');
+      expect(stripComment('    # cả dòng là comment'), '');
+      expect(stripComment('# đầu dòng'), '');
+    });
+
+    test('ad12_strip_comment_keeps_hash_without_whitespace', () {
+      expect(
+        stripComment('url: https://x.dev/a#frag'),
+        'url: https://x.dev/a#frag',
+      );
+      expect(stripComment("note: don't # x"), "note: don't");
+    });
+
+    test('ad12_strip_comment_keeps_hash_inside_quotes', () {
+      expect(stripComment('a: "x # y" # z'), 'a: "x # y"');
+      expect(stripComment("a: 'x # y' # z"), "a: 'x # y'");
+      expect(stripComment(r'a: "x \" # y" # z'), r'a: "x \" # y"');
+      expect(stripComment("a: 'it''s # y' # z"), "a: 'it''s # y'");
+      expect(stripComment('  - "#x"'), '  - "#x"');
+    });
+
+    test('ad12_unquote', () {
+      expect(unquote(' "a b" '), 'a b');
+      expect(unquote("'1'"), '1');
+      expect(unquote('"a'), '"a');
+      expect(unquote('plain'), 'plain');
     });
   });
 

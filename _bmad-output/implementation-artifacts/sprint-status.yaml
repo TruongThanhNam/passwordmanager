@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 11-02-2026 16:41
-last_updated: 11-18-2026 22:42
+last_updated: 11-19-2026 22:27
 project: passwordmanager
 project_key: NOKEY
 tracking_system: file-system
@@ -104,14 +104,14 @@ action_items:
       analyze, Pigeon, l10n/fixture, --enforce-lockfile, integration_test hai job,
       bundle id iOS) kèm kiểm âm; gom parser YAML dùng chung"
     owner: "dev (Amelia)"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-1-retro-2026-11-18.md"
   - id: "epic-1-retro-item-2-thêm-cổng-kiểm-distributionsha256sum-64"
     epic: 1
     action: "Thêm cổng kiểm distributionSha256Sum 64 hex trong gradle-wrapper.properties
       kèm kiểm âm"
     owner: "dev (Amelia)"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-1-retro-2026-11-18.md"
   - id: "epic-1-retro-item-3-sửa-deferred-work-md-trả-dòng-status-về"
     epic: 1

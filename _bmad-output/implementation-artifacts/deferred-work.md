@@ -200,4 +200,4 @@
 ## Deferred from: code review of spec-1-16-ghim-toolchain-va-bao-ve-cau-truc-ci-yml.md (2026-11-14)
 
 - `distributionSha256Sum` trong `pak_manager/android/gradle/wrapper/gradle-wrapper.properties` không được cổng nào kiểm: xóa dòng này thì mọi cổng vẫn xanh. Lỗ hổng có từ story 1.11; story 1.16 chỉ thêm so phiên bản `distributionUrl` trong `check_stack.dart`. Hướng sửa: kiểm có dòng `distributionSha256Sum=` 64 hex, kèm kiểm âm.
-  status: planned — action item `epic-1-retro-item-2` (retro Epic 1, `epic-1-retro-2026-11-18.md` mục B1). Dòng status `done` trước đây ở mục này thuộc mục AC1 story 1.15 ngay trên, bị đặt lệch khi giải xung đột merge `737b616`.
+  status: done — action item `epic-1-retro-item-2` (retro Epic 1, `epic-1-retro-2026-11-18.md` mục B1): `checkToolchain` trong `tool/ci/check_stack.dart` đòi đúng một dòng `distributionSha256Sum=<64 hex>`, kèm kiểm âm ở `test/tool/check_stack_test.dart`. Chưa có id run CI. Dòng status `done` trước đây ở mục này thuộc mục AC1 story 1.15 ngay trên, bị đặt lệch khi giải xung đột merge `737b616`.
