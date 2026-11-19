@@ -96,7 +96,7 @@ String _moveStepAfter(String job, String marker, String after) {
 }
 
 /// Bước cổng: job, dấu nhận diện trong ci.yml thật, đoạn nhãn trong thông báo.
-const _gates = [
+final _gates = [
   ('android', 'check_workflow_secret[s].dart', 'kiểm secret'),
   ('android', 'dart run tool/ci/check_stack.dart', 'kiểm Stack'),
   ('android', 'dart run tool/ci/ci_structure.dart', 'kiểm cấu trúc ci.yml'),
@@ -116,7 +116,42 @@ const _gates = [
   ('integration-android', 'check_flutter_revision.sh', 'clone Flutter'),
   ('integration-ios', 'check_flutter_revision.sh', 'clone Flutter'),
   ('integration-ios', 'xcode-select -s', 'xcode-select'),
+  // Retro Epic 1, A1: mọi bước cổng còn lại của ci.yml.
+  for (final job in _jobs)
+    (job, 'flutter pub get --enforce-lockfile', 'pub get theo lockfile'),
+  ('android', 'dart run tool/check_imports.dart', 'luật import'),
+  ('android', 'flutter analyze --fatal-infos', 'phân tích tĩnh'),
+  ('android', 'flutter gen-l10n', 'code gen-l10n'),
+  ('android', 'dart run pigeon --input', 'code Pigeon'),
+  ('android', 'gen_vault_v1.dart', 'fixture vault'),
+  (
+    'integration-android',
+    'flutter test integration_test --flavor dev',
+    'integration test Android',
+  ),
+  (
+    'integration-ios',
+    'flutter test integration_test -d',
+    'integration test iOS',
+  ),
+  ('ios', '--no-codesign --build-number', 'build iOS không cờ'),
+  ('ios', 'Kiểm bundle id build không cờ', 'kiểm bundle id iOS không cờ'),
+  ('ios', '--flavor prod --build-number', 'build iOS prod'),
+  ('ios', 'Kiểm bundle id prod', 'kiểm bundle id iOS prod'),
+  ('ios', '--flavor dev --build-number', 'build iOS dev'),
+  ('ios', 'Kiểm bundle id dev', 'kiểm bundle id iOS dev'),
 ];
+
+/// Thay [from] bằng [to] (lần đầu) trong bước chứa [marker] của job [job].
+String _replaceInStep(String job, String marker, String from, String to) {
+  final lines = _ci.split('\n');
+  final (s, e) = _stepRange(lines, job, marker);
+  final step = lines.sublist(s, e).join('\n');
+  final changed = step.replaceFirst(from, to);
+  expect(changed, isNot(step), reason: 'không thấy "$from" ở bước $marker');
+  lines.replaceRange(s, e, changed.split('\n'));
+  return lines.join('\n');
+}
 
 const _jobs = ['android', 'ios', 'integration-android', 'integration-ios'];
 
@@ -150,6 +185,18 @@ void main() {
     expect(
       _ci.split('\n')[testStep.line - 1],
       contains('- name: Unit + widget'),
+    );
+    final emulator = wf
+        .job('integration-android')!
+        .steps
+        .singleWhere(
+          (s) => (s.uses ?? '').startsWith(
+            'reactivecircus/android-emulator-runner@',
+          ),
+        );
+    expect(
+      emulator.withMap['script'],
+      'flutter test integration_test --flavor dev',
     );
   });
 
@@ -319,6 +366,28 @@ void main() {
         'kiểm APK dev',
       ),
       (r'check_flutter_revision.sh "$RUNNER_TEMP/flutter"', 'clone Flutter'),
+      ('flutter pub get --enforce-lockfile', 'pub get theo lockfile'),
+      ('dart run tool/check_imports.dart', 'luật import'),
+      ('flutter analyze --fatal-infos --fatal-warnings', 'phân tích tĩnh'),
+      ('flutter gen-l10n', 'code gen-l10n'),
+      (r'changes="$(git status --porcelain -- lib/l10n)"', 'code gen-l10n'),
+      ('dart run pigeon --input pigeons/platform_api.dart', 'code Pigeon'),
+      ('dart run tool/fixtures/gen_vault_v1.dart', 'fixture vault'),
+      (
+        'flutter test integration_test --flavor dev',
+        'integration test Android',
+      ),
+      (r'flutter test integration_test -d "$SIM_UDID"', 'integration test iOS'),
+      (
+        r'flutter build ios --release --no-codesign --build-number '
+            r'"$GITHUB_RUN_NUMBER"',
+        'build iOS không cờ',
+      ),
+      (
+        r'flutter build ios --release --no-codesign --flavor prod '
+            r'--build-number "$GITHUB_RUN_NUMBER"',
+        'build iOS prod',
+      ),
     ]) {
       for (final suffix in [' || true', '; true']) {
         test('ad19_gate_command_with_suffix_rejected: $label /$suffix', () {
@@ -409,6 +478,335 @@ void main() {
       expect(
         checkCiStructure(yaml),
         _violation(['job ios', 'thiếu bước cổng', 'clone Flutter']),
+      );
+    });
+  });
+
+  group('cổng sinh lại rồi so', () {
+    for (final (marker, path, label) in [
+      ('flutter gen-l10n', 'lib/l10n', 'code gen-l10n'),
+      ('dart run pigeon --input', 'lib android ios', 'code Pigeon'),
+      ('gen_vault_v1.dart', 'test/fixtures/vault', 'fixture vault'),
+    ]) {
+      test('ad19_regen_gate_exit_0_rejected: $label', () {
+        final yaml = _replaceInStep('android', marker, 'exit 1', 'exit 0');
+        expect(
+          checkCiStructure(yaml),
+          _violation(['job android', 'thiếu bước cổng', label]),
+        );
+      });
+
+      test('ad19_regen_gate_other_path_rejected: $label', () {
+        final yaml = _replaceInStep(
+          'android',
+          marker,
+          'git status --porcelain -- $path)',
+          'git status --porcelain -- $path/x)',
+        );
+        expect(
+          checkCiStructure(yaml),
+          _violation(['job android', 'thiếu bước cổng', label]),
+        );
+      });
+
+      test('ad19_regen_gate_without_change_check_rejected: $label', () {
+        final yaml = _replaceInStep(
+          'android',
+          marker,
+          r'if [[ -n "$changes" ]]; then',
+          r'if [[ -z "$changes" ]]; then',
+        );
+        expect(
+          checkCiStructure(yaml),
+          _violation(['job android', 'thiếu bước cổng', label]),
+        );
+      });
+
+      test('ad19_regen_gate_exit_after_fi_rejected: $label', () {
+        // `exit 1` dời ra sau `fi`: không còn nằm trong nhánh có thay đổi.
+        final lines = _ci.split('\n');
+        final (s, e) = _stepRange(lines, 'android', marker);
+        final exit = lines.indexWhere((l) => l.trim() == 'exit 1', s);
+        final fi = lines.indexWhere((l) => l.trim() == 'fi', exit);
+        expect(exit > s && fi < e, isTrue);
+        final moved = lines.removeAt(exit);
+        lines.insert(fi, moved.replaceFirst('  exit 1', 'exit 1'));
+        expect(
+          checkCiStructure(lines.join('\n')),
+          _violation(['job android', 'thiếu bước cổng', label]),
+        );
+      });
+    }
+
+    test('ad19_generate_after_compare_rejected', () {
+      // Lệnh sinh đứng sau phép so thì phép so chạy trên code cũ.
+      final lines = _ci.split('\n');
+      final (s, e) = _stepRange(lines, 'android', 'flutter gen-l10n');
+      final gen = lines.indexWhere((l) => l.trim() == 'flutter gen-l10n', s);
+      final moved = lines.removeAt(gen);
+      lines.insert(e - 1, moved);
+      expect(
+        checkCiStructure(lines.join('\n')),
+        _violation(['job android', 'thiếu bước cổng', 'code gen-l10n']),
+      );
+    });
+  });
+
+  group('thu hẹp lệnh cổng', () {
+    test('ad19_analyze_without_fatal_flag_rejected', () {
+      for (final to in [
+        'flutter analyze --fatal-warnings',
+        'flutter analyze --fatal-infos',
+        'flutter analyze',
+      ]) {
+        final yaml = _ci.replaceFirst(
+          'flutter analyze --fatal-infos --fatal-warnings',
+          to,
+        );
+        expect(
+          checkCiStructure(yaml),
+          _violation(['job android', 'thiếu bước cổng', 'phân tích tĩnh']),
+          reason: to,
+        );
+      }
+    });
+
+    test('ad19_check_imports_on_other_root_rejected', () {
+      final yaml = _ci.replaceFirst(
+        'dart run tool/check_imports.dart',
+        'dart run tool/check_imports.dart test',
+      );
+      expect(
+        checkCiStructure(yaml),
+        _violation(['job android', 'thiếu bước cổng', 'luật import']),
+      );
+    });
+
+    test('ad19_pub_get_without_enforce_lockfile_rejected', () {
+      for (final job in _jobs) {
+        final yaml = _replaceInStep(
+          job,
+          'flutter pub get --enforce-lockfile',
+          'flutter pub get --enforce-lockfile',
+          'flutter pub get',
+        );
+        expect(
+          checkCiStructure(yaml),
+          _violation(['job $job', 'thiếu bước cổng', 'pub get theo lockfile']),
+          reason: job,
+        );
+      }
+    });
+
+    test('ad19_integration_android_with_name_rejected', () {
+      final yaml = _ci.replaceFirst(
+        'script: flutter test integration_test --flavor dev',
+        'script: flutter test integration_test --flavor dev --name x',
+      );
+      expect(yaml, isNot(_ci));
+      expect(
+        checkCiStructure(yaml),
+        _violation([
+          'job integration-android',
+          'thiếu bước cổng',
+          'integration test Android',
+        ]),
+      );
+    });
+
+    test('ad19_integration_android_script_outside_emulator_rejected', () {
+      // Gỡ emulator runner, chạy lệnh trong `run:` (không có emulator).
+      final lines = _ci.split('\n');
+      final (s, e) = _stepRange(
+        lines,
+        'integration-android',
+        'reactivecircus/android-emulator-runner',
+      );
+      lines.replaceRange(s, e, [
+        '      - name: Integration test',
+        '        run: flutter test integration_test --flavor dev',
+      ]);
+      expect(
+        checkCiStructure(lines.join('\n')),
+        _violation([
+          'job integration-android',
+          'thiếu bước cổng',
+          'integration test Android',
+        ]),
+      );
+    });
+
+    test('ad19_integration_ios_with_name_rejected', () {
+      final yaml = _ci.replaceFirst(
+        r'flutter test integration_test -d "$SIM_UDID"',
+        r'flutter test integration_test -d "$SIM_UDID" --name x',
+      );
+      expect(yaml, isNot(_ci));
+      expect(
+        checkCiStructure(yaml),
+        _violation([
+          'job integration-ios',
+          'thiếu bước cổng',
+          'integration test iOS',
+        ]),
+      );
+    });
+  });
+
+  group('cặp build→kiểm iOS', () {
+    test('ad19_removing_ios_prod_build_rejects_prod_check', () {
+      // Bước kiểm prod lúc này đọc plist của build không cờ (cùng id prod).
+      final yaml = _removeStep('ios', '--flavor prod --build-number');
+      expect(
+        checkCiStructure(yaml),
+        _violation(['job ios', 'thiếu bước cổng', 'kiểm bundle id iOS prod']),
+      );
+    });
+
+    test('ad19_ios_check_after_next_build_rejected', () {
+      final yaml = _moveStepAfter(
+        'ios',
+        'Kiểm bundle id prod',
+        '--flavor dev --build-number',
+      );
+      expect(
+        checkCiStructure(yaml),
+        _violation(['job ios', 'thiếu bước cổng', 'kiểm bundle id iOS prod']),
+      );
+    });
+
+    test('ad19_ios_check_before_its_build_rejected', () {
+      final yaml = _moveStepAfter(
+        'ios',
+        '--flavor dev --build-number',
+        'Kiểm bundle id dev',
+      );
+      expect(
+        checkCiStructure(yaml),
+        _violation(['job ios', 'thiếu bước cổng', 'kiểm bundle id iOS dev']),
+      );
+    });
+
+    for (final (marker, from, to, label) in [
+      (
+        'Kiểm bundle id dev',
+        '"io.github.truongthanhnam.pakmanager.dev"',
+        '"io.github.truongthanhnam.pakmanager"',
+        'kiểm bundle id iOS dev',
+      ),
+      (
+        'Kiểm bundle id prod',
+        '"PAK Manager"',
+        '"PAK Manager Dev"',
+        'kiểm bundle id iOS prod',
+      ),
+      (
+        'Kiểm bundle id build không cờ',
+        'exit 1',
+        'exit 0',
+        'kiểm bundle id iOS không cờ',
+      ),
+      (
+        'Kiểm bundle id prod',
+        'Print :CFBundleIdentifier',
+        'Print :CFBundleName',
+        'kiểm bundle id iOS prod',
+      ),
+      (
+        'Kiểm bundle id dev',
+        'build/ios/iphoneos/Runner.app/Info.plist',
+        'build/ios/iphonesimulator/Runner.app/Info.plist',
+        'kiểm bundle id iOS dev',
+      ),
+    ]) {
+      test('ad19_ios_check_loosened_rejected: $label / $to', () {
+        final yaml = _replaceInStep('ios', marker, from, to);
+        expect(
+          checkCiStructure(yaml),
+          _violation(['job ios', 'thiếu bước cổng', label]),
+        );
+      });
+    }
+
+    test('ad19_ios_build_with_extra_flag_rejected', () {
+      final yaml = _replaceInStep(
+        'ios',
+        '--flavor dev --build-number',
+        '--flavor dev --build-number',
+        '--flavor dev --debug --build-number',
+      );
+      final v = checkCiStructure(yaml);
+      expect(v, _violation(['job ios', 'thiếu bước cổng', 'build iOS dev']));
+      expect(v, _violation(['job ios', 'kiểm bundle id iOS dev']));
+    });
+
+    test('ad19_ios_check_step_with_own_build_rejected', () {
+      // Bước kiểm tự build trước khi đọc plist: plist không còn là của build
+      // cùng flavor đứng trước nó.
+      final yaml = _replaceInStep(
+        'ios',
+        'Kiểm bundle id prod',
+        'actual="',
+        'flutter build ios --release --no-codesign --build-number '
+            '"\$GITHUB_RUN_NUMBER"\n          actual="',
+      );
+      expect(
+        checkCiStructure(yaml),
+        _violation(['job ios', 'thiếu bước cổng', 'kiểm bundle id iOS prod']),
+      );
+    });
+
+    test('ad19_ios_check_exit_after_fi_rejected', () {
+      // `exit 1` đầu tiên dời ra sau `fi`: id sai không còn làm bước fail.
+      final lines = _ci.split('\n');
+      final (s, e) = _stepRange(lines, 'ios', 'Kiểm bundle id dev');
+      final exit = lines.indexWhere((l) => l.trim() == 'exit 1', s);
+      final fi = lines.indexWhere((l) => l.trim() == 'fi', exit);
+      expect(exit > s && fi < e, isTrue);
+      final moved = lines.removeAt(exit);
+      lines.insert(fi, moved.replaceFirst('  exit 1', 'exit 1'));
+      expect(
+        checkCiStructure(lines.join('\n')),
+        _violation(['job ios', 'thiếu bước cổng', 'kiểm bundle id iOS dev']),
+      );
+    });
+  });
+
+  group('shell và thư mục của bước cổng', () {
+    for (final (job, marker, label) in [
+      ('android', 'flutter gen-l10n', 'code gen-l10n'),
+      ('ios', 'Kiểm bundle id prod', 'kiểm bundle id iOS prod'),
+      (
+        'integration-android',
+        'reactivecircus/android-emulator-runner',
+        'integration test Android',
+      ),
+    ]) {
+      for (final key in ['shell: sh', 'working-directory: pak_manager/tool']) {
+        test(
+          'ad19_gate_step_shell_or_dir_override_rejected: $label / $key',
+          () {
+            final v = checkCiStructure(_addStepKey(job, marker, key));
+            expect(v, _violation(['job $job', label, '${key.split(':')[0]}:']));
+          },
+        );
+      }
+    }
+
+    test('ad19_emulator_runner_other_working_directory_rejected', () {
+      final yaml = _replaceInStep(
+        'integration-android',
+        'reactivecircus/android-emulator-runner',
+        'working-directory: pak_manager',
+        'working-directory: pak_manager/tool',
+      );
+      expect(
+        checkCiStructure(yaml),
+        _violation([
+          'job integration-android',
+          'thiếu bước cổng',
+          'integration test Android',
+        ]),
       );
     });
   });

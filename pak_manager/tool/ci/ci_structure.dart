@@ -3,10 +3,10 @@
 // `*-latest`, Gradle wrapper được xác thực trước mọi bước gọi Gradle
 // (AD-12, AD-18, AD-19).
 //
-// Dart thuần, không dependency (không dùng gói `yaml`): parser theo dòng chỉ
-// nhận đúng hình dạng `ci.yml` của repo (job thụt 2, khóa job thụt 4, `- `
-// bước thụt 6, khóa bước thụt 8). Bước cổng được nhận theo nội dung
-// (`run`/`uses`/`with`/`env`), không theo `name`, để đổi tên bước không lọt.
+// Dart thuần, không dependency. Parser theo dòng nằm ở `ci_yaml.dart` (dùng
+// chung với check_stack.dart) và được export lại từ đây. Bước cổng được nhận
+// theo nội dung (`run`/`uses`/`with`/`env`), không theo `name`, để đổi tên
+// bước không lọt; lệnh cổng phải khớp nguyên dòng.
 //
 // Chạy trong pak_manager/:
 //   dart run tool/ci/ci_structure.dart [../.github/workflows/ci.yml]
@@ -15,11 +15,18 @@
 
 import 'dart:io';
 
+import 'ci_yaml.dart';
+
+export 'ci_yaml.dart';
+
 /// Đường dẫn mặc định tới workflow, tính từ pak_manager/.
 const defaultCiPath = '../.github/workflows/ci.yml';
 
 /// Job chứa các bước cổng của ứng dụng Android.
 const androidJob = 'android';
+
+/// Job build iOS (không codesign).
+const iosJob = 'ios';
 
 /// Job integration test Android (gọi Gradle qua emulator runner).
 const integrationAndroidJob = 'integration-android';
@@ -28,317 +35,43 @@ const integrationAndroidJob = 'integration-android';
 /// của nó (clone Flutter, xcode-select, wrapper-validation).
 const requiredJobs = [
   androidJob,
-  'ios',
+  iosJob,
   integrationAndroidJob,
-  'integration-ios',
+  integrationIosJob,
 ];
 
 const _prodId = 'io.github.truongthanhnam.pakmanager';
 const _devId = 'io.github.truongthanhnam.pakmanager.dev';
+const _prodName = 'PAK Manager';
+const _devName = 'PAK Manager Dev';
 
-/// Một bước trong job, giữ dòng bắt đầu (đếm từ 1).
-class CiStep {
-  CiStep(this.line);
-
-  /// Dòng của `- ` mở bước.
-  final int line;
-
-  /// Khóa cấp bước -> giá trị (đã bỏ comment cuối dòng và dấu nháy).
-  final Map<String, String> keys = {};
-
-  /// Giá trị thô của `uses:` (giữ comment cuối dòng để kiểm tag).
-  String? usesRaw;
-
-  /// Nội dung `run` (inline hoặc khối `|`), mỗi phần tử một dòng.
-  final List<String> runLines = [];
-
-  /// Con của `with:` và `env:` cấp bước.
-  final Map<String, String> withMap = {};
-  final Map<String, String> envMap = {};
-
-  String? get uses => keys['uses'];
-
-  /// Dòng `run` không phải comment shell.
-  Iterable<String> get commandLines => runLines
-      .map((l) => l.trim())
-      .where((l) => l.isNotEmpty && !l.startsWith('#'));
-
-  /// Toàn bộ văn bản lệnh của bước (`run` và các giá trị `with`).
-  String get commandText => [...commandLines, ...withMap.values].join('\n');
-
-  String get label => keys['name'] ?? uses ?? 'bước';
-}
-
-/// Một job, giữ dòng bắt đầu và các khóa cấp job.
-class CiJob {
-  CiJob(this.id, this.line);
-
-  final String id;
-  final int line;
-  final Map<String, String> keys = {};
-  final List<CiStep> steps = [];
-
-  /// Giá trị thô của `uses:` cấp job (giữ comment cuối dòng để kiểm tag).
-  String? usesRaw;
-
-  /// Dòng của khóa cấp job (để báo vi phạm).
-  final Map<String, int> keyLines = {};
-}
-
-/// Kết quả parse: trigger và job theo thứ tự xuất hiện.
-class CiWorkflow {
-  /// Trigger -> các dòng con (đã trim) của nó.
-  final Map<String, List<String>> triggers = {};
-  final List<CiJob> jobs = [];
-
-  CiJob? job(String id) {
-    for (final j in jobs) {
-      if (j.id == id) {
-        return j;
-      }
-    }
-    return null;
-  }
-}
-
-int _indent(String line) => line.length - line.trimLeft().length;
-
-/// Bỏ comment YAML cuối dòng (chỉ khi giá trị không mở bằng dấu nháy).
-String _stripComment(String value) {
-  final t = value.trim();
-  if (t.startsWith('"') || t.startsWith("'")) {
-    return t;
-  }
-  final i = t.indexOf(' #');
-  return (i >= 0 ? t.substring(0, i) : t).trim();
-}
-
-String _unquote(String v) {
-  final t = v.trim();
-  if (t.length >= 2 &&
-      ((t.startsWith('"') && t.endsWith('"')) ||
-          (t.startsWith("'") && t.endsWith("'")))) {
-    return t.substring(1, t.length - 1);
-  }
-  return t;
-}
-
-bool _isBlockScalar(String value) => RegExp(r'^[|>][-+]?$').hasMatch(value);
-
-/// Tách `key: value`; trả null nếu dòng không phải cặp khóa.
-({String key, String value})? _pair(String text) {
-  final m = RegExp(r'''^(["']?[A-Za-z0-9_.-]+["']?)\s*:(?:\s+(.*))?$''')
-      .firstMatch(text.trim());
-  if (m == null) {
-    return null;
-  }
-  return (key: _unquote(m.group(1)!), value: (m.group(2) ?? '').trim());
-}
-
-/// Parse [yaml] theo dòng thành trigger, job và bước.
-CiWorkflow parseCiWorkflow(String yaml) {
-  final wf = CiWorkflow();
-  final lines = yaml.replaceAll('\r', '').split('\n');
-  String? top;
-  String? trigger;
-  CiJob? job;
-  var inSteps = false;
-  var stepIndent = -1;
-  CiStep? step;
-  // Khối đang đọc trong bước: 'run' (khối `|`), 'with', 'env', hoặc khóa
-  // khác bị bỏ qua.
-  String? block;
-  var blockIndent = -1;
-  String? lastChildKey;
-  Map<String, String>? childMap;
-
-  for (var i = 0; i < lines.length; i++) {
-    final raw = lines[i];
-    final trimmed = raw.trim();
-    final indent = _indent(raw);
-
-    // Nội dung khối con của bước (giữ cả dòng trống và comment shell).
-    if (step != null && block != null) {
-      if (trimmed.isEmpty) {
-        if (block == 'run') {
-          step.runLines.add('');
-        }
-        continue;
-      }
-      if (indent > blockIndent) {
-        if (block == 'run') {
-          step.runLines.add(raw);
-        } else if (childMap != null) {
-          final p = _pair(raw);
-          final childIndent = blockIndent + 2;
-          if (indent == childIndent && p != null && !trimmed.startsWith('#')) {
-            lastChildKey = p.key;
-            childMap[p.key] = _isBlockScalar(p.value)
-                ? ''
-                : _unquote(_stripComment(p.value));
-          } else if (lastChildKey != null) {
-            // Dòng tiếp của giá trị khối (vd `script: |`).
-            childMap[lastChildKey] = '${childMap[lastChildKey]}\n$trimmed'
-                .trim();
-          }
-        }
-        continue;
-      }
-      block = null;
-      childMap = null;
-      lastChildKey = null;
-    }
-
-    if (trimmed.isEmpty || trimmed.startsWith('#')) {
-      continue;
-    }
-
-    if (indent == 0) {
-      final p = _pair(raw);
-      top = p?.key;
-      trigger = null;
-      job = null;
-      step = null;
-      inSteps = false;
-      if (top == 'on' && p != null && p.value.isNotEmpty) {
-        // Dạng inline: `on: [pull_request, push]` hoặc `on: push`.
-        final v = _stripComment(p.value).replaceAll(RegExp(r'[\[\]]'), '');
-        for (final t in v.split(',')) {
-          if (t.trim().isNotEmpty) {
-            wf.triggers[t.trim()] = [];
-          }
-        }
-      }
-      continue;
-    }
-
-    if (top == 'on') {
-      if (indent == 2) {
-        final p = _pair(raw);
-        trigger = p?.key ?? trimmed.replaceFirst(RegExp(r'^-\s*'), '');
-        wf.triggers[trigger] = [];
-        if (p != null && p.value.isNotEmpty) {
-          wf.triggers[trigger]!.add(_stripComment(p.value));
-        }
-      } else if (trigger != null) {
-        wf.triggers[trigger]!.add(_stripComment(trimmed));
-      }
-      continue;
-    }
-
-    if (top != 'jobs') {
-      continue;
-    }
-
-    if (indent == 2) {
-      final p = _pair(raw);
-      if (p != null) {
-        job = CiJob(p.key, i + 1);
-        wf.jobs.add(job);
-      }
-      step = null;
-      inSteps = false;
-      stepIndent = -1;
-      continue;
-    }
-    if (job == null) {
-      continue;
-    }
-
-    if (indent == 4) {
-      final p = _pair(raw);
-      step = null;
-      inSteps = p?.key == 'steps';
-      stepIndent = -1;
-      if (p != null) {
-        job.keys[p.key] = _unquote(_stripComment(p.value));
-        job.keyLines[p.key] = i + 1;
-        if (p.key == 'uses') {
-          job.usesRaw = p.value;
-        }
-      }
-      continue;
-    }
-
-    if (!inSteps) {
-      continue;
-    }
-
-    var text = trimmed;
-    var keyIndent = indent;
-    if (trimmed.startsWith('- ') || trimmed == '-') {
-      if (stepIndent < 0) {
-        stepIndent = indent;
-      }
-      if (indent == stepIndent) {
-        step = CiStep(i + 1);
-        job.steps.add(step);
-        text = trimmed.substring(1).trim();
-        keyIndent = indent + 2;
-        if (text.isEmpty) {
-          continue;
-        }
-      }
-    }
-    if (step == null || keyIndent != stepIndent + 2) {
-      continue;
-    }
-    final p = _pair(text);
-    if (p == null) {
-      continue;
-    }
-    switch (p.key) {
-      case 'run':
-        if (_isBlockScalar(p.value)) {
-          block = 'run';
-          blockIndent = keyIndent;
-        } else {
-          step.runLines.add(_unquote(_stripComment(p.value)));
-        }
-      case 'with':
-      case 'env':
-        // Ghi nhận khóa cả khi giá trị inline (vd `with: {a: b}`).
-        step.keys[p.key] = p.value;
-        if (p.value.isEmpty) {
-          block = p.key;
-          blockIndent = keyIndent;
-          childMap = p.key == 'with' ? step.withMap : step.envMap;
-          lastChildKey = null;
-        }
-      default:
-        if (p.key == 'uses') {
-          step.usesRaw = p.value;
-        }
-        if (_isBlockScalar(p.value)) {
-          // Khóa khác có giá trị khối: bỏ qua nội dung nhưng vẫn ghi nhận
-          // khóa (vd `if: >-` phải bị coi là có điều kiện).
-          step.keys[p.key] = p.value;
-          block = 'skip';
-          blockIndent = keyIndent;
-          childMap = null;
-        } else {
-          step.keys[p.key] = _unquote(_stripComment(p.value));
-        }
-    }
-  }
-  return wf;
-}
+/// Job integration test iOS (simulator).
+const integrationIosJob = 'integration-ios';
 
 /// Bước cổng: [label] dùng trong thông báo, [matches] nhận bước theo nội
-/// dung, [allowedIf] là giá trị `if:` duy nhất được phép (null = cấm `if:`),
+/// dung, [inJob] (nếu có) đòi thêm điều kiện theo vị trí bước trong job,
+/// [allowedIf] là giá trị `if:` duy nhất được phép (null = cấm `if:`),
 /// [allowWith] = false khi `with:` có thể nới lỏng cổng (vd `allow-checksums`
 /// của wrapper-validation).
 class _Gate {
   const _Gate(
     this.label,
     this.matches, {
+    this.inJob,
     this.allowedIf,
     this.allowWith = true,
   });
   final String label;
   final bool Function(CiStep) matches;
+  final bool Function(List<CiStep> steps, int index)? inJob;
   final String? allowedIf;
   final bool allowWith;
+
+  /// Các bước của [steps] khớp cổng.
+  List<CiStep> matchedIn(List<CiStep> steps) => [
+    for (var i = 0; i < steps.length; i++)
+      if (matches(steps[i]) && (inJob == null || inJob!(steps, i))) steps[i],
+  ];
 }
 
 bool _usesAction(CiStep s, String action) =>
@@ -434,6 +167,162 @@ final _xcodeGate = _Gate(
   ),
 );
 
+/// Bước có một dòng lệnh đúng nguyên văn [command] (sau trim). Thêm hậu tố
+/// như `|| true` hay `; true` thì không còn khớp.
+bool _hasLine(CiStep s, String command) => s.commandLines.contains(command);
+
+final _pubGetGate = _Gate(
+  'pub get theo lockfile (flutter pub get --enforce-lockfile)',
+  (s) => _hasLine(s, 'flutter pub get --enforce-lockfile'),
+);
+
+final _importsGate = _Gate(
+  'luật import (dart run tool/check_imports.dart)',
+  (s) => _hasLine(s, 'dart run tool/check_imports.dart'),
+);
+
+final _analyzeGate = _Gate(
+  'phân tích tĩnh (flutter analyze --fatal-infos --fatal-warnings)',
+  (s) => _hasLine(s, 'flutter analyze --fatal-infos --fatal-warnings'),
+);
+
+/// Từ dòng [from], tìm lần lượt [assign] rồi [cond] (một `if … then`), và
+/// một dòng `exit 1` trước dòng `fi` kế tiếp; trả chỉ số dòng sau `exit 1`,
+/// hoặc -1 khi thiếu.
+int _guardedExit(List<String> lines, int from, String assign, String cond) {
+  if (from < 0) {
+    return -1;
+  }
+  final a = lines.indexOf(assign, from);
+  if (a < 0) {
+    return -1;
+  }
+  final c = lines.indexOf(cond, a + 1);
+  if (c < 0) {
+    return -1;
+  }
+  for (var i = c + 1; i < lines.length && lines[i] != 'fi'; i++) {
+    if (lines[i] == 'exit 1') {
+      return i + 1;
+    }
+  }
+  return -1;
+}
+
+/// Cổng "sinh lại rồi so": [generate], rồi `git status --porcelain` trên
+/// [paths], rồi `exit 1` khi có thay đổi.
+_Gate _regenGate(String label, String generate, String paths) =>
+    _Gate('$label ($generate rồi git status --porcelain -- $paths)', (s) {
+      final lines = s.commandLines.toList();
+      final gen = lines.indexOf(generate);
+      return _guardedExit(
+            lines,
+            gen < 0 ? -1 : gen + 1,
+            'changes="\$(git status --porcelain -- $paths)"',
+            r'if [[ -n "$changes" ]]; then',
+          ) >=
+          0;
+    });
+
+final _l10nGate = _regenGate(
+  'code gen-l10n đã cập nhật',
+  'flutter gen-l10n',
+  'lib/l10n',
+);
+
+final _pigeonGate = _regenGate(
+  'code Pigeon đã cập nhật',
+  'dart run pigeon --input pigeons/platform_api.dart',
+  'lib android ios',
+);
+
+final _fixtureGate = _regenGate(
+  'fixture vault khớp script',
+  'dart run tool/fixtures/gen_vault_v1.dart',
+  'test/fixtures/vault',
+);
+
+final _integrationAndroidGate = _Gate(
+  'integration test Android (emulator runner với script: '
+  'flutter test integration_test --flavor dev)',
+  (s) =>
+      _usesAction(s, 'reactivecircus/android-emulator-runner') &&
+      s.withMap['script'] == 'flutter test integration_test --flavor dev' &&
+      s.withMap['working-directory'] == 'pak_manager',
+);
+
+final _integrationIosGate = _Gate(
+  r'integration test iOS (flutter test integration_test -d "$SIM_UDID")',
+  (s) => _hasLine(s, r'flutter test integration_test -d "$SIM_UDID"'),
+);
+
+/// Dòng `flutter build ios` bất kỳ (kể cả bị thêm cờ hay hậu tố).
+final _iosBuildRe = RegExp(r'(^|[\s;&|(])flutter\s+build\s+ios(\s|$)');
+
+/// Dòng build iOS cuối cùng của bước, hoặc null.
+String? _lastIosBuild(CiStep s) =>
+    s.commandLines.where(_iosBuildRe.hasMatch).lastOrNull;
+
+/// Lệnh build iOS chuẩn, không cờ khi [flavor] null.
+String _iosBuildLine(String? flavor) =>
+    'flutter build ios --release --no-codesign'
+    '${flavor == null ? '' : ' --flavor $flavor'}'
+    r' --build-number "$GITHUB_RUN_NUMBER"';
+
+_Gate _iosBuildGate(String? flavor) => _Gate(
+  'build iOS ${flavor ?? 'không cờ'} (${_iosBuildLine(flavor)})',
+  (s) => _lastIosBuild(s) == _iosBuildLine(flavor),
+);
+
+const _plist = 'build/ios/iphoneos/Runner.app/Info.plist';
+
+/// Bước kiểm plist của build iOS [flavor]: đọc `CFBundleIdentifier` và
+/// `CFBundleDisplayName` bằng PlistBuddy, so đúng [id] và [name], `exit 1`
+/// khi sai. Bước build iOS gần nhất đứng trước nó phải là build [flavor]: nếu
+/// không, bước kiểm đọc plist của một build khác.
+_Gate _iosCheckGate(String? flavor, String id, String name) => _Gate(
+  'kiểm bundle id iOS ${flavor ?? 'không cờ'} '
+  '(PlistBuddy CFBundleIdentifier = $id, CFBundleDisplayName = $name, '
+  'sau build iOS ${flavor ?? 'không cờ'})',
+  (s) {
+    if (_lastIosBuild(s) != null) {
+      return false;
+    }
+    final lines = s.commandLines.toList();
+    final afterId = _guardedExit(
+      lines,
+      0,
+      'actual="\$(/usr/libexec/PlistBuddy -c \'Print :CFBundleIdentifier\' '
+          '$_plist)"',
+      'if [[ "\$actual" != "$id" ]]; then',
+    );
+    return _guardedExit(
+          lines,
+          afterId,
+          'name="\$(/usr/libexec/PlistBuddy -c \'Print :CFBundleDisplayName\' '
+              '$_plist)"',
+          'if [[ "\$name" != "$name" ]]; then',
+        ) >=
+        0;
+  },
+  inJob: (steps, i) {
+    for (var j = i - 1; j >= 0; j--) {
+      final build = _lastIosBuild(steps[j]);
+      if (build != null) {
+        return build == _iosBuildLine(flavor);
+      }
+    }
+    return false;
+  },
+);
+
+final _iosBuildPlainGate = _iosBuildGate(null);
+final _iosBuildProdGate = _iosBuildGate('prod');
+final _iosBuildDevGate = _iosBuildGate('dev');
+final _iosCheckPlainGate = _iosCheckGate(null, _prodId, _prodName);
+final _iosCheckProdGate = _iosCheckGate('prod', _prodId, _prodName);
+final _iosCheckDevGate = _iosCheckGate('dev', _devId, _devName);
+
 final _cloneRe = RegExp(
   r'git clone\b.*--branch\s+"\$FLUTTER_VERSION"\s.*flutter/flutter\.git',
 );
@@ -486,7 +375,7 @@ List<String> checkCiStructure(String yaml) {
             .skip(branchLine + 1)
             .takeWhile((l) => l.startsWith('- '))
             .map((l) => l.substring(2)),
-      ].map(_unquote).map((b) => b.trim());
+      ].map(unquote).map((b) => b.trim());
       if (!items.contains('main')) {
         violations.add('ci.yml: trigger push không gồm nhánh main (AD-19)');
       }
@@ -551,10 +440,31 @@ List<String> checkCiStructure(String yaml) {
         _apkDevGate,
         _uploadGate,
         _wrapperGate,
+        _importsGate,
+        _analyzeGate,
+        _l10nGate,
+        _pigeonGate,
+        _fixtureGate,
       ]);
     }
+    if (job.id == iosJob) {
+      gates.addAll([
+        _iosBuildPlainGate,
+        _iosCheckPlainGate,
+        _iosBuildProdGate,
+        _iosCheckProdGate,
+        _iosBuildDevGate,
+        _iosCheckDevGate,
+      ]);
+    }
+    if (job.id == integrationAndroidJob) {
+      gates.add(_integrationAndroidGate);
+    }
+    if (job.id == integrationIosJob) {
+      gates.add(_integrationIosGate);
+    }
     if (_mentionsFlutter(job)) {
-      gates.add(_flutterCloneGate);
+      gates.addAll([_flutterCloneGate, _pubGetGate]);
     }
     if (runsOn.startsWith('macos')) {
       gates.add(_xcodeGate);
@@ -568,7 +478,7 @@ List<String> checkCiStructure(String yaml) {
     }
 
     for (final gate in gates) {
-      final matched = job.steps.where(gate.matches).toList();
+      final matched = gate.matchedIn(job.steps);
       if (matched.isEmpty) {
         violations.add('$where: thiếu bước cổng ${gate.label}');
         continue;
@@ -587,6 +497,14 @@ List<String> checkCiStructure(String yaml) {
             'dòng ${s.line}: $where bước cổng ${gate.label} có '
             '"continue-on-error: $coe"',
           );
+        }
+        for (final key in ['shell', 'working-directory']) {
+          if (s.keys.containsKey(key)) {
+            violations.add(
+              'dòng ${s.line}: $where bước cổng ${gate.label} không được có '
+              '"$key:" (đổi shell hay thư mục làm lệnh cổng chạy khác)',
+            );
+          }
         }
         if (!gate.allowWith && s.keys.containsKey('with')) {
           violations.add(

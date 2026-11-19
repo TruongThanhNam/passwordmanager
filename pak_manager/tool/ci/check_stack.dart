@@ -9,6 +9,8 @@
 
 import 'dart:io';
 
+import 'ci_yaml.dart';
+
 /// Đường dẫn mặc định tới spine, tính từ pak_manager/.
 const defaultSpinePath =
     '../_bmad-output/planning-artifacts/architecture/'
@@ -73,24 +75,6 @@ class _Dep {
 
 int _indent(String line) => line.length - line.trimLeft().length;
 
-String _stripComment(String line) {
-  final i = line.indexOf(' #');
-  final s = line.trimLeft().startsWith('#')
-      ? ''
-      : (i >= 0 ? line.substring(0, i) : line);
-  return s.trimRight();
-}
-
-String _unquote(String v) {
-  final t = v.trim();
-  if (t.length >= 2 &&
-      ((t.startsWith('"') && t.endsWith('"')) ||
-          (t.startsWith("'") && t.endsWith("'")))) {
-    return t.substring(1, t.length - 1);
-  }
-  return t;
-}
-
 /// [nested] nhận các mục có dòng lồng; [topKeys] nhận mọi khóa cấp 0.
 List<_Dep> _parsePubspecDeps(
   String pubspec,
@@ -101,7 +85,7 @@ List<_Dep> _parsePubspecDeps(
   String? section;
   _Dep? current;
   for (final raw in pubspec.split('\n')) {
-    final line = _stripComment(raw.replaceAll('\r', ''));
+    final line = stripComment(raw.replaceAll('\r', ''));
     if (line.trim().isEmpty) {
       continue;
     }
@@ -126,7 +110,7 @@ List<_Dep> _parsePubspecDeps(
       }
       current = _Dep(line.substring(0, colon).trim(), section);
       final value = line.substring(colon + 1).trim();
-      current.inlineValue = value.isEmpty ? null : _unquote(value);
+      current.inlineValue = value.isEmpty ? null : unquote(value);
       deps.add(current);
     } else if (current != null) {
       current.children.add(line.trim());
@@ -172,7 +156,7 @@ Map<String, ({String dependency, String source, String version})> _parseLock(
       continue;
     }
     final key = line.substring(0, colon).trim();
-    final value = _unquote(line.substring(colon + 1));
+    final value = unquote(line.substring(colon + 1));
     if (indent == 2) {
       flush();
       name = key;
@@ -315,7 +299,8 @@ List<String> checkStack(
 
 /// So `FLUTTER_VERSION` và Xcode (`Xcode_X.app`) trong [ciYaml], phiên bản
 /// trong `distributionUrl` của [gradleProps] với dòng `Flutter`, `Gradle`,
-/// `Xcode` của bảng [stack]; trả vi phạm (rỗng khi khớp).
+/// `Xcode` của bảng [stack], và đòi [gradleProps] có đúng một dòng
+/// `distributionSha256Sum=<64 hex>`; trả vi phạm (rỗng khi khớp).
 List<String> checkToolchain(
   Map<String, String> stack,
   String ciYaml,
@@ -371,6 +356,7 @@ List<String> checkToolchain(
     );
   }
   compare('Gradle', gradle);
+  violations.addAll(_checkDistributionSha256(gradleProps));
 
   final xcodeRe = RegExp(r'Xcode_([0-9][0-9.]*?)\.app');
   final xcode = <(int?, String)>[
@@ -382,6 +368,35 @@ List<String> checkToolchain(
   }
   compare('Xcode', xcode);
   return violations;
+}
+
+/// Khóa `distributionSha256Sum` ở đầu dòng (bỏ qua dòng comment `#`/`!` của
+/// file properties), theo sau bởi `=`, `:`, khoảng trắng hoặc hết dòng.
+final _shaKeyRe = RegExp(r'^\s*distributionSha256Sum(?=[=:\s]|$)');
+final _shaLineRe = RegExp(r'^distributionSha256Sum\s*[=:]\s*[0-9a-fA-F]{64}$');
+
+/// [gradleProps] phải có đúng một dòng `distributionSha256Sum=<64 hex>`:
+/// thiếu dòng này thì Gradle tải bản phân phối mà không xác minh (retro
+/// Epic 1, B1). Không so giá trị với bản Gradle: Gradle tự xác minh khi tải.
+List<String> _checkDistributionSha256(String gradleProps) {
+  final lines = [
+    for (final l in gradleProps.replaceAll('\r', '').split('\n'))
+      if (_shaKeyRe.hasMatch(l)) l.trim(),
+  ];
+  if (lines.length != 1) {
+    final message =
+        'gradle-wrapper.properties: phải có đúng một dòng '
+        'distributionSha256Sum (đang có ${lines.length}); thiếu dòng này '
+        'Gradle tải bản phân phối mà không xác minh (AD-12, AD-18)';
+    return [message];
+  }
+  if (!_shaLineRe.hasMatch(lines.single)) {
+    final message =
+        'gradle-wrapper.properties: "${lines.single}" phải có dạng '
+        'distributionSha256Sum=<64 hex> (AD-12, AD-18)';
+    return [message];
+  }
+  return const [];
 }
 
 String? _readOrNull(String path) {
