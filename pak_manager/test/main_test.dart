@@ -1,18 +1,12 @@
-import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:cupertino_ui/cupertino_ui.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pak_manager/core/format/settings_codec.dart';
 import 'package:pak_manager/core/model/settings.dart';
-import 'package:pak_manager/core/ports/app_directory_port.dart';
-import 'package:pak_manager/core/ports/backup_port.dart';
-import 'package:pak_manager/core/ports/file_sync_port.dart';
-import 'package:pak_manager/core/ports/system_info_port.dart';
 import 'package:pak_manager/features/auth/login_screen.dart';
 import 'package:pak_manager/features/shared/content_column.dart';
 import 'package:pak_manager/features/shared/home_shell.dart';
@@ -22,26 +16,15 @@ import 'package:pak_manager/features/shared/secret_field.dart';
 import 'package:pak_manager/features/shared/session_gate.dart';
 import 'package:pak_manager/main.dart' as app;
 import 'package:pak_manager/platform/platform_api.g.dart';
-import 'package:pak_manager/services/settings_store.dart';
 import 'package:pak_manager/services/storage_bootstrap.dart';
 import 'package:sodium/sodium_sumo.dart';
 
-import 'support/account_fakes.dart' show FakeClock, fakeSession;
+import 'support/account_fakes.dart' show fakeSession;
+import 'support/port_fakes.dart';
+
+// Composition root: `main()` và `runPakApp` nối port thật/giả vào `PakApp`.
 
 void main() {
-  testWidgets('ad01_pak_app_builds_cupertino_app', (tester) async {
-    await tester.pumpWidget(
-      ProviderScope(
-        child: PakApp(settings: SettingsStore.inMemory(), androidSdkInt: 35),
-      ),
-    );
-
-    expect(find.byType(CupertinoApp), findsOneWidget);
-    expect(find.byType(CupertinoPageScaffold), findsOneWidget);
-    expect(find.byType(LoginScreen), findsOneWidget);
-    expect(tester.takeException(), isNull);
-  });
-
   testWidgets('ad18_main_keeps_handlers_outside_release_mode', (tester) async {
     final savedDebugPrint = debugPrint;
     final savedFlutterOnError = FlutterError.onError;
@@ -51,8 +34,8 @@ void main() {
     // hay hệ thống file thật.
     app.runPakApp(
       _unavailableStorage(),
-      fileSync: _RecordingFileSync(),
-      systemInfo: _FakeSystemInfo(35),
+      fileSync: RecordingFileSync(),
+      systemInfo: FakeSystemInfo(35),
       clock: FakeClock(),
       releaseMode: kReleaseMode,
     );
@@ -444,8 +427,8 @@ void main() {
 
     app.runPakApp(
       _unavailableStorage(),
-      fileSync: _RecordingFileSync(),
-      systemInfo: _FakeSystemInfo(35),
+      fileSync: RecordingFileSync(),
+      systemInfo: FakeSystemInfo(35),
       clock: FakeClock(),
       releaseMode: false,
     );
@@ -471,8 +454,8 @@ void main() {
     final clock = FakeClock();
     app.runPakApp(
       _unavailableStorage(),
-      fileSync: _RecordingFileSync(),
-      systemInfo: _FakeSystemInfo(35),
+      fileSync: RecordingFileSync(),
+      systemInfo: FakeSystemInfo(35),
       clock: clock,
       releaseMode: false,
     );
@@ -499,9 +482,9 @@ void main() {
   });
 
   testWidgets('nfr08_run_app_waits_for_storage_bootstrap', (tester) async {
-    final directories = _PendingDirectory();
-    final backup = _RecordingBackup();
-    final fileSync = _RecordingFileSync();
+    final directories = PendingDirectory();
+    final backup = RecordingBackup();
+    final fileSync = RecordingFileSync();
     final orientations = <Object?>[];
     final messenger = tester.binding.defaultBinaryMessenger;
     messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
@@ -522,7 +505,7 @@ void main() {
     app.runPakApp(
       StorageBootstrap(directories: directories, backup: backup),
       fileSync: fileSync,
-      systemInfo: _FakeSystemInfo(35),
+      systemInfo: FakeSystemInfo(35),
       clock: FakeClock(),
       releaseMode: false,
     );
@@ -554,8 +537,8 @@ void main() {
   ) async {
     app.runPakApp(
       _unavailableStorage(),
-      fileSync: _RecordingFileSync(),
-      systemInfo: _FakeSystemInfo(27),
+      fileSync: RecordingFileSync(),
+      systemInfo: FakeSystemInfo(27),
       clock: FakeClock(),
       releaseMode: false,
     );
@@ -565,8 +548,11 @@ void main() {
     // Đọc lỗi không chặn khởi động; `0` cho style an toàn nhất.
     app.runPakApp(
       _unavailableStorage(),
-      fileSync: _RecordingFileSync(),
-      systemInfo: _FakeSystemInfo(null),
+      fileSync: RecordingFileSync(),
+      systemInfo: FakeSystemInfo(
+        null,
+        error: PlatformException(code: 'unavailable'),
+      ),
       clock: FakeClock(),
       releaseMode: false,
     );
@@ -587,49 +573,7 @@ bool _sodiumAvailable() {
   }
 }
 
-/// API Android giả; `null` thì ném như kênh Pigeon lỗi.
-class _FakeSystemInfo implements SystemInfoPort {
-  _FakeSystemInfo(this.sdkInt);
-
-  final int? sdkInt;
-
-  @override
-  Future<int> androidSdkInt() async =>
-      sdkInt ?? (throw PlatformException(code: 'unavailable'));
-}
-
 StorageBootstrap _unavailableStorage() => StorageBootstrap(
-  directories: _FailingDirectory(),
-  backup: _RecordingBackup(),
+  directories: FailingDirectory(),
+  backup: RecordingBackup(),
 );
-
-class _FailingDirectory implements AppDirectoryPort {
-  @override
-  Future<String> applicationSupportPath() async =>
-      throw StateError('không có thư mục');
-}
-
-class _PendingDirectory implements AppDirectoryPort {
-  final completer = Completer<String>();
-  var calls = 0;
-
-  @override
-  Future<String> applicationSupportPath() {
-    calls++;
-    return completer.future;
-  }
-}
-
-class _RecordingFileSync implements FileSyncPort {
-  final calls = <String>[];
-
-  @override
-  Future<void> fsyncDirectory(String path) async => calls.add(path);
-}
-
-class _RecordingBackup implements BackupPort {
-  final calls = <String>[];
-
-  @override
-  Future<void> excludeFromBackup(String dirPath) async => calls.add(dirPath);
-}

@@ -16,28 +16,13 @@ import 'package:pak_manager/services/vault_session.dart';
 import 'package:sodium/sodium_sumo.dart';
 
 import '../core/vault_fixture.dart';
+import '../support/port_fakes.dart';
 
 /// Mật khẩu giả (đã qua `PasswordPolicy` trong UI).
 const _password = 'fake purple lantern 42 drift';
 
 /// KEK giả cố định mà `derive` giả trả về (không chạy Argon2id thật).
 Uint8List _kekBytes() => seq(0xA0, kekBytes);
-
-/// fsync giả: ghi lại đường dẫn; ném ở lần gọi thứ [failAt] (đếm từ 1).
-final class _RecordingFileSync implements FileSyncPort {
-  _RecordingFileSync({this.failAt});
-
-  final int? failAt;
-  final List<String> calls = [];
-
-  @override
-  Future<void> fsyncDirectory(String path) async {
-    calls.add(path);
-    if (calls.length == failAt) {
-      throw const FileSystemException('fsync giả lỗi');
-    }
-  }
-}
 
 /// [RandomSource] tất định: mỗi lần gọi trả một dãy byte mới.
 final class _CountingRandom implements RandomSource {
@@ -179,7 +164,7 @@ void main() {
 
   group('bootstrap', () {
     test('fr01_ad07_no_header_means_no_account', () async {
-      final sync = _RecordingFileSync();
+      final sync = RecordingFileSync();
       final s = service(writer: AtomicFileWriter(sync), fileSync: sync);
 
       expect(await s.bootstrap(), isA<BootstrapNoAccount>());
@@ -195,7 +180,7 @@ void main() {
     });
 
     test('fr01_ad07_header_means_has_account', () async {
-      final sync = _RecordingFileSync();
+      final sync = RecordingFileSync();
       final s = service(writer: AtomicFileWriter(sync), fileSync: sync);
       Directory(paths.vaultDir).createSync();
       File(paths.headerFile).writeAsBytesSync([9]);
@@ -207,7 +192,7 @@ void main() {
 
   group('create', () {
     test('ad07_create_commits_cards_then_recent_then_header_last', () async {
-      final sync = _RecordingFileSync();
+      final sync = RecordingFileSync();
       final commits = <String>[];
       final random = _CountingRandom();
       final s = service(
@@ -276,7 +261,7 @@ void main() {
       File(paths.cardsFile).writeAsBytesSync([1]);
       File(paths.recentFile).writeAsBytesSync([2]);
       File(paths.draftFile).writeAsBytesSync([3]);
-      final sync = _RecordingFileSync();
+      final sync = RecordingFileSync();
       final s = service(writer: AtomicFileWriter(sync), fileSync: sync);
 
       final result = await s.create(_password);
@@ -291,7 +276,7 @@ void main() {
       Directory(paths.vaultDir).createSync();
       File(paths.headerFile).writeAsBytesSync([7, 7]);
       File(paths.cardsFile).writeAsBytesSync([8]);
-      final sync = _RecordingFileSync();
+      final sync = RecordingFileSync();
       final s = service(writer: AtomicFileWriter(sync), fileSync: sync);
 
       expect(await s.create(_password), isA<CreateFailure>());
@@ -304,7 +289,7 @@ void main() {
     });
 
     test('ad07_kdf_failure_creates_nothing', () async {
-      final sync = _RecordingFileSync();
+      final sync = RecordingFileSync();
       final s = service(
         writer: AtomicFileWriter(sync),
         fileSync: sync,
@@ -320,7 +305,7 @@ void main() {
       test(
         'ad07_nfr11_write_failure_on_${failFile}_leaves_no_header',
         () async {
-          final sync = _RecordingFileSync();
+          final sync = RecordingFileSync();
           final commits = <String>[];
           final s = service(
             writer: recordingWriter(sync, commits, failFile: failFile),
@@ -339,7 +324,7 @@ void main() {
 
     test('ad07_fsync_failure_after_header_rename_removes_header', () async {
       // Lần fsync thứ 4 là `vault/` sau khi rename `header`.
-      final sync = _RecordingFileSync(failAt: 4);
+      final sync = RecordingFileSync(failAt: 4);
       final s = service(writer: AtomicFileWriter(sync), fileSync: sync);
 
       expect(await s.create(_password), isA<CreateFailure>());
@@ -353,7 +338,7 @@ void main() {
 
     test('ad07_missing_pak_dir_is_a_failure_not_a_throw', () async {
       Directory(paths.pakDir).deleteSync(recursive: true);
-      final sync = _RecordingFileSync();
+      final sync = RecordingFileSync();
       final s = service(writer: AtomicFileWriter(sync), fileSync: sync);
 
       expect(await s.create(_password), isA<CreateFailure>());
@@ -364,7 +349,7 @@ void main() {
     test('ad22_password_bytes_are_wiped_on_success_and_failure', () async {
       for (final ok in [true, false]) {
         Uint8List? seen;
-        final sync = _RecordingFileSync();
+        final sync = RecordingFileSync();
         final s = service(
           writer: AtomicFileWriter(sync),
           fileSync: sync,
@@ -392,7 +377,7 @@ void main() {
     test('ux_dr10_concurrent_create_runs_once', () async {
       final gate = Completer<void>();
       var derives = 0;
-      final sync = _RecordingFileSync();
+      final sync = RecordingFileSync();
       final s = service(
         writer: AtomicFileWriter(sync),
         fileSync: sync,
@@ -449,7 +434,7 @@ void main() {
     /// Service với KDF thật (Argon2id) bọc [_TrackedKey]; đếm số lần chạy.
     AccountService realService() {
       derives = 0;
-      final sync = _RecordingFileSync();
+      final sync = RecordingFileSync();
       final real = kekDeriver(sodium);
       return service(
         writer: AtomicFileWriter(sync),
@@ -556,7 +541,7 @@ void main() {
 
     test('fr07_kdf_failure_is_corrupt_not_a_throw', () async {
       installVault();
-      final sync = _RecordingFileSync();
+      final sync = RecordingFileSync();
       final s = service(
         writer: AtomicFileWriter(sync),
         fileSync: sync,
@@ -575,7 +560,7 @@ void main() {
     test('ad22_unlock_wipes_password_bytes', () async {
       installVault();
       final seen = <Uint8List>[];
-      final sync = _RecordingFileSync();
+      final sync = RecordingFileSync();
       final real = kekDeriver(sodium);
       final s = service(
         writer: AtomicFileWriter(sync),
@@ -599,7 +584,7 @@ void main() {
       installVault();
       final gate = Completer<void>();
       var count = 0;
-      final sync = _RecordingFileSync();
+      final sync = RecordingFileSync();
       final real = kekDeriver(sodium);
       final s = service(
         writer: AtomicFileWriter(sync),

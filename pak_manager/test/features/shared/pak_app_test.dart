@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:io';
 
 import 'package:cupertino_ui/cupertino_ui.dart';
@@ -8,7 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pak_manager/core/format/settings_codec.dart';
 import 'package:pak_manager/core/io/atomic_file_writer.dart';
 import 'package:pak_manager/core/model/settings.dart';
-import 'package:pak_manager/core/ports/file_sync_port.dart';
+import 'package:pak_manager/features/auth/login_screen.dart';
 import 'package:pak_manager/features/shared/content_column.dart';
 import 'package:pak_manager/features/shared/pak_app.dart';
 import 'package:pak_manager/features/shared/session_gate.dart';
@@ -16,24 +15,7 @@ import 'package:pak_manager/features/shared/theme/pak_colors.dart';
 import 'package:pak_manager/l10n/app_localizations.dart';
 import 'package:pak_manager/services/settings_store.dart';
 
-class _NoopFileSync implements FileSyncPort {
-  @override
-  Future<void> fsyncDirectory(String path) async {}
-}
-
-/// Timer giả không bao giờ tự chạy: chỉ `flush()` mới ghi.
-class _IdleTimer implements Timer {
-  bool _active = true;
-
-  @override
-  void cancel() => _active = false;
-
-  @override
-  bool get isActive => _active;
-
-  @override
-  int get tick => 0;
-}
+import '../../support/port_fakes.dart';
 
 BuildContext _inside(WidgetTester tester) =>
     tester.element(find.byType(ContentColumn));
@@ -274,6 +256,19 @@ void main() {
     });
   });
 
+  testWidgets('ad01_pak_app_builds_cupertino_app', (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        child: PakApp(settings: SettingsStore.inMemory(), androidSdkInt: 35),
+      ),
+    );
+
+    expect(find.byType(CupertinoApp), findsOneWidget);
+    expect(find.byType(CupertinoPageScaffold), findsOneWidget);
+    expect(find.byType(LoginScreen), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('ad01_text_scale_is_clamped_to_1_3', (tester) async {
     tester.platformDispatcher.textScaleFactorTestValue = 2.0;
     addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
@@ -352,8 +347,9 @@ void main() {
     final store = await tester.runAsync(
       () => SettingsStore.load(
         '${sandbox.path}${Platform.pathSeparator}settings',
-        AtomicFileWriter(_NoopFileSync()),
-        createTimer: (_, _) => _IdleTimer(),
+        AtomicFileWriter(RecordingFileSync()),
+        // Timer không bao giờ tự chạy: chỉ `flush()` mới ghi.
+        createTimer: FakeTimers().create,
         write: (path, bytes) async {
           writes.add(SettingsCodec.decode(bytes));
           return const AtomicWriteSuccess();

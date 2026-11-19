@@ -5,7 +5,7 @@ import 'package:pak_manager/core/model/recent_entry.dart';
 import 'package:pak_manager/core/model/vault_card.dart';
 import 'package:pak_manager/services/vault_session.dart';
 
-import '../support/account_fakes.dart';
+import '../support/port_fakes.dart';
 
 void main() {
   const card = VaultCard(
