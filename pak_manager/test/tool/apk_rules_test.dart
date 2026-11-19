@@ -130,13 +130,13 @@ void main() {
       }
     });
 
-    test('nfr8_allow_backup_true_rejected', () {
+    test('nfr08_allow_backup_true_rejected', () {
       final v = checkManifest(_withAllowBackup(_manifest(), 'true'));
       expect(v, hasLength(1));
       expect(v.single, contains('allowBackup'));
     });
 
-    test('nfr8_allow_backup_typed_zero_accepted', () {
+    test('nfr08_allow_backup_typed_zero_accepted', () {
       expect(
         checkManifest(_withAllowBackup(_manifest(), '(type 0x12)0x0')),
         isEmpty,
@@ -147,12 +147,12 @@ void main() {
       );
     });
 
-    test('nfr8_missing_allow_backup_rejected', () {
+    test('nfr08_missing_allow_backup_rejected', () {
       final m = _removeLines(_manifest(), _isAllowBackup);
       expect(checkManifest(m).single, contains('allowBackup'));
     });
 
-    test('nfr8_missing_data_extraction_rules_rejected', () {
+    test('nfr08_missing_data_extraction_rules_rejected', () {
       final m = _removeLines(
         _manifest(),
         (l) => l.contains(':dataExtractionRules('),
@@ -160,7 +160,7 @@ void main() {
       expect(checkManifest(m).single, contains('dataExtractionRules'));
     });
 
-    test('nfr8_missing_full_backup_content_rejected', () {
+    test('nfr08_missing_full_backup_content_rejected', () {
       final m = _removeLines(
         _manifest(),
         (l) => l.contains(':fullBackupContent('),

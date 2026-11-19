@@ -116,26 +116,28 @@ void main() {
           e.key.substring(0, e.key.length - 5): _argb(e.value),
     };
 
-    test('ux_dr1_design_has_32_tokens_each_with_dark_pair', () {
+    test('ux_dr01_design_has_32_tokens_each_with_dark_pair', () {
       expect(light, hasLength(32));
       expect(dark.keys.toSet(), light.keys.toSet());
       expect(PakColors.all.keys.toSet(), light.keys.toSet());
     });
 
-    testWidgets('ux_dr1_tokens_resolve_to_design_light_values', (tester) async {
+    testWidgets('ux_dr01_tokens_resolve_to_design_light_values', (
+      tester,
+    ) async {
       expect(await _resolveAll(tester, Brightness.light), light);
     });
 
-    testWidgets('ux_dr1_tokens_resolve_to_design_dark_values', (tester) async {
+    testWidgets('ux_dr01_tokens_resolve_to_design_dark_values', (tester) async {
       expect(await _resolveAll(tester, Brightness.dark), dark);
     });
 
-    test('ux_dr1_scrim_converts_rrggbbaa_to_aarrggbb', () {
+    test('ux_dr01_scrim_converts_rrggbbaa_to_aarrggbb', () {
       expect(PakColors.scrim.color.toARGB32(), 0x66000000);
       expect(PakColors.scrim.darkColor.toARGB32(), 0x99000000);
     });
 
-    test('ux_dr2_no_red_destructive_or_status_token', () {
+    test('ux_dr02_no_red_destructive_or_status_token', () {
       final banned = RegExp(
         'red|destructive|error|success|warning|danger',
         caseSensitive: false,
@@ -149,7 +151,7 @@ void main() {
   group('chữ', () {
     final design = _typography();
 
-    test('ux_dr3_eleven_text_styles_match_design', () {
+    test('ux_dr03_eleven_text_styles_match_design', () {
       expect(design, hasLength(11));
       expect(PakTextStyles.all.keys.toSet(), design.keys.toSet());
       design.forEach((name, spec) {
@@ -165,7 +167,7 @@ void main() {
       });
     });
 
-    test('ux_dr3_system_font_family_without_letter_spacing_or_color', () {
+    test('ux_dr03_system_font_family_without_letter_spacing_or_color', () {
       PakTextStyles.all.forEach((name, style) {
         expect(
           style.fontFamily,
@@ -181,7 +183,7 @@ void main() {
   });
 
   group('spacing, radius, elevation', () {
-    test('ux_dr4_spacing_matches_every_design_key', () {
+    test('ux_dr04_spacing_matches_every_design_key', () {
       final yaml = _yamlBlock('spacing');
       expect(yaml, isNotEmpty);
       expect(PakSpacing.all, {
@@ -189,14 +191,14 @@ void main() {
       });
     });
 
-    test('ux_dr4_radius_matches_design', () {
+    test('ux_dr04_radius_matches_design', () {
       final yaml = _yamlBlock('rounded');
       expect(PakRadius.all, {
         for (final e in yaml.entries) e.key: _px(e.value),
       });
     });
 
-    test('ux_dr5_only_fab_shadow_defined', () {
+    test('ux_dr05_only_fab_shadow_defined', () {
       expect(PakElevation.fabShadow, const [
         BoxShadow(
           color: Color(0x33000000),

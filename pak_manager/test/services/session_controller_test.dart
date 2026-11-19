@@ -19,7 +19,7 @@ SessionController _logged(
 );
 
 void main() {
-  test('ad9_enter_takes_session_and_bumps_epoch', () {
+  test('ad09_enter_takes_session_and_bumps_epoch', () {
     final controller = SessionController();
     var notified = 0;
     controller.addListener(() => notified++);
@@ -33,7 +33,7 @@ void main() {
     controller.dispose();
   });
 
-  test('ad9_enter_locks_previous_session', () {
+  test('ad09_enter_locks_previous_session', () {
     final controller = SessionController();
     final oldDek = FakeSecureKey();
     controller
@@ -45,7 +45,7 @@ void main() {
     controller.dispose();
   });
 
-  test('fr49_ad9_lock_runs_steps_in_order', () async {
+  test('fr49_ad09_lock_runs_steps_in_order', () async {
     final log = <String>[];
     final dek = FakeSecureKey();
     final release = Completer<void>();
@@ -90,7 +90,7 @@ void main() {
     expect(controller.epoch, 2);
   });
 
-  test('ad9_session_locked_before_clipboard_step', () async {
+  test('ad09_session_locked_before_clipboard_step', () async {
     late bool lockedAtClipboard;
     final session = fakeSession();
     final controller = SessionController(
@@ -101,7 +101,7 @@ void main() {
     expect(lockedAtClipboard, isTrue);
   });
 
-  test('ad9_lock_waits_running_op_before_destroying_dek', () async {
+  test('ad09_lock_waits_running_op_before_destroying_dek', () async {
     final dek = FakeSecureKey();
     final controller = SessionController()..enter(fakeSession(dek));
     final session = controller.session!;
@@ -123,7 +123,7 @@ void main() {
     expect(await queued, isA<SessionLocked<int>>());
   });
 
-  test('ad9_slow_cancel_hook_does_not_let_queued_op_run', () async {
+  test('ad09_slow_cancel_hook_does_not_let_queued_op_run', () async {
     final dek = FakeSecureKey();
     final controller = SessionController(
       cancelUnstarted: () => Future<void>.delayed(Duration.zero),
@@ -145,7 +145,7 @@ void main() {
     expect(dek.disposed, isTrue);
   });
 
-  test('ad9_overlapping_lock_returns_same_future_runs_once', () async {
+  test('ad09_overlapping_lock_returns_same_future_runs_once', () async {
     final log = <String>[];
     final controller = _logged(log)..enter(fakeSession());
 
@@ -158,7 +158,7 @@ void main() {
     expect(controller.epoch, 2);
   });
 
-  test('ad9_hook_error_still_locks_and_bumps_epoch', () async {
+  test('ad09_hook_error_still_locks_and_bumps_epoch', () async {
     final log = <String>[];
     final dek = FakeSecureKey();
     final controller = _logged(
@@ -174,7 +174,7 @@ void main() {
     expect(log, contains('clearClipboard'));
   });
 
-  test('ad9_background_lock_skips_clipboard', () async {
+  test('ad09_background_lock_skips_clipboard', () async {
     final log = <String>[];
     final controller = _logged(log)..enter(fakeSession());
 
@@ -184,7 +184,7 @@ void main() {
     expect(controller.session, isNull);
   });
 
-  test('ad9_is_current_rejects_result_from_old_epoch', () async {
+  test('ad09_is_current_rejects_result_from_old_epoch', () async {
     final controller = SessionController()..enter(fakeSession());
     final before = controller.epoch;
     expect(controller.isCurrent(before), isTrue);
@@ -195,7 +195,7 @@ void main() {
     expect(controller.isCurrent(controller.epoch), isTrue);
   });
 
-  test('ad9_lock_without_session_is_noop', () async {
+  test('ad09_lock_without_session_is_noop', () async {
     final log = <String>[];
     final controller = _logged(log);
     var notified = 0;
@@ -208,7 +208,7 @@ void main() {
     expect(notified, 0);
   });
 
-  test('ad9_dispose_locks_session', () {
+  test('ad09_dispose_locks_session', () {
     final dek = FakeSecureKey();
     SessionController()
       ..enter(fakeSession(dek))
@@ -291,7 +291,7 @@ void main() {
       expect(log, ['clearClipboard']);
     });
 
-    test('ad8_early_timer_reschedules_by_clock', () async {
+    test('ad08_early_timer_reschedules_by_clock', () async {
       final c = await entered();
       clock.advance(min * 4);
       timers.fireAll();
@@ -330,7 +330,7 @@ void main() {
       expect(log, isEmpty);
     });
 
-    test('ad9_resume_invalidates_pending_background_mark', () async {
+    test('ad09_resume_invalidates_pending_background_mark', () async {
       final c = await entered();
       final hold = Completer<void>();
       clock.hold = hold;
@@ -369,7 +369,7 @@ void main() {
       expect(await c.evaluate(), isTrue);
     });
 
-    test('ad9_expiry_waits_running_write', () async {
+    test('ad09_expiry_waits_running_write', () async {
       final dek = FakeSecureKey();
       final c = timed()..enter(fakeSession(dek));
       await pumpEventQueue();
@@ -386,7 +386,7 @@ void main() {
       expect(dek.disposed, isTrue);
     });
 
-    test('ad8_clock_backwards_fails_closed', () async {
+    test('ad08_clock_backwards_fails_closed', () async {
       final c = await entered();
       clock.ms -= 1;
       expect(await c.evaluate(), isTrue);
@@ -394,7 +394,7 @@ void main() {
       expect(c.session, isNull);
     });
 
-    test('ad8_clock_error_fails_closed', () async {
+    test('ad08_clock_error_fails_closed', () async {
       final c = await entered();
       clock.error = StateError('fake');
       expect(await c.evaluate(), isTrue);
@@ -402,14 +402,14 @@ void main() {
       expect(c.session, isNull);
     });
 
-    test('ad8_clock_error_on_enter_fails_closed', () async {
+    test('ad08_clock_error_on_enter_fails_closed', () async {
       clock.error = StateError('fake');
       final c = timed()..enter(fakeSession());
       await pumpEventQueue();
       expect(c.session, isNull);
     });
 
-    test('ad9_clock_result_after_epoch_change_is_dropped', () async {
+    test('ad09_clock_result_after_epoch_change_is_dropped', () async {
       final c = await entered();
       final hold = Completer<void>();
       clock.hold = hold;
@@ -429,7 +429,7 @@ void main() {
       c.dispose();
     });
 
-    test('ad8_clock_backwards_vs_background_mark_fails_closed', () async {
+    test('ad08_clock_backwards_vs_background_mark_fails_closed', () async {
       final c = await entered();
       clock.advance(min * 2);
       c.enteredBackground();
@@ -450,14 +450,14 @@ void main() {
       c.dispose();
     });
 
-    test('ad9_manual_lock_cancels_timer', () async {
+    test('ad09_manual_lock_cancels_timer', () async {
       final c = await entered();
       expect(timers.active, hasLength(1));
       await c.lock();
       expect(timers.active, isEmpty);
     });
 
-    test('ad8_without_clock_never_autolocks', () async {
+    test('ad08_without_clock_never_autolocks', () async {
       final c = SessionController()..enter(fakeSession());
       c.enteredBackground();
       expect(await c.evaluate(), isFalse);
