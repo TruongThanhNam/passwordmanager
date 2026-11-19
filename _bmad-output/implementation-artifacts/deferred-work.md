@@ -195,8 +195,9 @@
 - Khi kiểm APK prod fail, build/kiểm dev bị bỏ nên artifact `apk-raw-output` thiếu output thô dev. Cân nhắc `if: ${{ !cancelled() }}` cho bước dev hoặc ghi rõ giới hạn.
   note: từ story 1.16, luật `_apkDevGate` trong `tool/ci/ci_structure.dart` cấm mọi `if:` trên bước kiểm APK dev; làm ý tưởng này thì phải thêm `allowedIf` cho cổng đó và sửa test tương ứng.
 - AC1 story 1.15: job `integration-ios` fail/bị hủy ở các lần chạy pha A/B (chỉ 3/4 job xanh). Lý do hoãn: lỗi runner macOS, không do thay đổi của 1.15. Cần một lần chạy CI xanh đủ 4 job để xác nhận.
+  status: done (theo người dùng báo 2026-11-14) — cả 4 job đều xanh sau commit 1006917.
 
 ## Deferred from: code review of spec-1-16-ghim-toolchain-va-bao-ve-cau-truc-ci-yml.md (2026-11-14)
 
 - `distributionSha256Sum` trong `pak_manager/android/gradle/wrapper/gradle-wrapper.properties` không được cổng nào kiểm: xóa dòng này thì mọi cổng vẫn xanh. Lỗ hổng có từ story 1.11; story 1.16 chỉ thêm so phiên bản `distributionUrl` trong `check_stack.dart`. Hướng sửa: kiểm có dòng `distributionSha256Sum=` 64 hex, kèm kiểm âm.
-  status: done (theo người dùng báo 2026-11-14) — cả 4 job đều xanh sau commit 1006917.
+  status: planned — action item `epic-1-retro-item-2` (retro Epic 1, `epic-1-retro-2026-11-18.md` mục B1). Dòng status `done` trước đây ở mục này thuộc mục AC1 story 1.15 ngay trên, bị đặt lệch khi giải xung đột merge `737b616`.
