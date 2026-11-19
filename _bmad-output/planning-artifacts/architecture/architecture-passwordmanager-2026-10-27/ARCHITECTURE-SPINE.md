@@ -85,7 +85,7 @@ flowchart TD
 - **Binds:** NFR-2, NFR-3, FR-54, FR-63
 - **Prevents:** file export không mở được trên máy khác; file độc hại làm treo app; UI đứng hình khi chạy KDF.
 - **Rule:** Khởi tạo libsodium bằng `SodiumSumoInit.init()` (`package:sodium/sodium_sumo.dart`). KDF dùng `pwhash.callRaw` với Argon2id13, **p=1 cố định** (libsodium không hỗ trợ p khác).
-  - Vault: hiệu chỉnh trên máy lúc tạo tài khoản và lúc đổi mật khẩu chính. Khởi điểm m=64 MiB, t=3; mục tiêu ~1 giây; trần 2 giây; sàn m=19 MiB, t=2.
+  - Vault: hiệu chỉnh trên máy lúc tạo tài khoản và lúc đổi mật khẩu chính. Khởi điểm m=64 MiB, t=3; mục tiêu ~1 giây; trần 2 giây là **trần mềm** (lần chạy thứ 3 được nhận dù chậm; mở khóa có thể vượt 2 giây trên máy chậm — rủi ro chấp nhận, retro Epic 1); sàn m=19 MiB, t=2.
   - Export: **cố định** m=64 MiB, t=3.
   - Khi đọc header (vault hay export), tham số ngoài khoảng [m 19–128 MiB, t 2–10] bị từ chối **trước khi** chạy KDF.
   - KDF và lần chạy hiệu chỉnh luôn chạy ngoài UI isolate (`Sodium.runIsolated`). Kết quả trả về là `SecureKey`.
@@ -133,7 +133,8 @@ flowchart TD
 - **Binds:** FR-14, FR-15, FR-16, FR-49, FR-65; NFR-4
 - **Prevents:** nhiều timer khóa chạy song song; autolock không chạy sau khi máy ngủ trên iOS; khóa giữa lúc đang ghi; kết quả từ UI hệ thống rơi vào phiên đã khóa.
 - **Rule:**
-  - Chỉ `SessionController` giữ hạn phiên tuyệt đối và autolock, và gọi `lock()`.
+  - Chỉ `SessionController` giữ hạn phiên tuyệt đối và autolock, và gọi `lock()` trên phiên đã giao cho nó qua `enter()`.
+    - Ngoại lệ duy nhất: khi `unlock()`/`create()` trả phiên mà nơi nhận đã unmount hoặc không có đường giao, nơi nhận gọi `lock()` ngay, không qua trình tự khóa. Phiên đó chưa có bản nháp, clipboard hay cây UI.
   - **Mọi hạn thời gian** (phiên, autolock, Clear Clipboard, thời gian chờ guard) tính bằng `ClockPort.monotonicMs`, đồng hồ tính cả lúc máy ngủ. `Stopwatch` và `DateTime.now()` không bao giờ là nguồn sự thật; `Timer` chỉ dùng để đánh thức lần kiểm tra.
   - "Vào nền" = lần đầu nhận `AppLifecycleState.hidden` (hoặc `paused` nếu không có `hidden`) sau `resumed`. `inactive` không tính.
   - Khi `resumed`: (1) `ClipboardService.onResume()` → (2) `SessionController.evaluate()`. Khóa phát hiện ở bước (2) tính là khóa ở tiền cảnh.
@@ -330,7 +331,7 @@ Sheet tạo mật khẩu ánh xạ chip sang `gen` theo FR-35 (123 → `digits`,
   - Service sống lâu hơn phiên (`ClipboardService`, `LockoutGuard`, `SettingsStore`) chỉ giữ digest = BLAKE2b 16 byte, khóa ngẫu nhiên 32 byte sinh khi mở process và chỉ nằm trong RAM.
   - Mọi `Uint8List` chứa bản rõ được ghi đè bằng 0 ngay sau khi dùng.
   - Model chứa bí mật override `toString()` để che giá trị.
-  - Widget test xác nhận: sau `lock()`, cây UI không còn `SecretField`/`SecretText`, và không còn provider nào thuộc phiên.
+  - Widget test xác nhận sau `lock()`: cây sau đăng nhập và `ProviderScope` của phiên đã bị gỡ (không còn widget hay provider nào thuộc phiên); `SecretField` còn lại (nếu có) thuộc S3 mới và có controller rỗng; không còn `SecretText` nào.
 
 ### AD-23 — Khung điều hướng và trình bày modal
 

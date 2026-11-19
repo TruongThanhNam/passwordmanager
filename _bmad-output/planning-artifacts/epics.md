@@ -362,7 +362,7 @@ TC-1: Epic 1 · TC-2, TC-5: Epic 6 · TC-3: Epic 2 · TC-4: Epic 1 (CI) · TC-6:
 ## Epic List
 
 ### Epic 1: Tạo tài khoản, đăng nhập và khóa vault an toàn
-Người dùng cài app, tạo tài khoản với mật khẩu chính đạt chuẩn, đăng nhập vào khung 3 tab và khóa vault. App tự khóa khi chạy nền quá lâu hoặc hết thời hạn phiên. Dữ liệu được mã hóa trên máy, không nằm trong backup của OS và app không có kết nối mạng. Story đầu tiên dựng dự án Flutter theo Structural Seed kèm CI; epic này cũng dựng nền dùng chung (theme token, ARB vi/en, `ContentColumn`, `ModalPresenter`, toast, `SecretField`, `AtomicFileWriter`, codec `header`/`settings`, `VaultSession`, `SessionController`, Pigeon đồng hồ/backup/fsync). Ở epic này, nhập sai chỉ báo "Sai mật khẩu", chưa đếm lần.
+Người dùng cài app, tạo tài khoản với mật khẩu chính đạt chuẩn, đăng nhập vào khung 3 tab và khóa vault. App tự khóa khi chạy nền quá lâu hoặc hết thời hạn phiên. Dữ liệu được mã hóa trên máy, không nằm trong backup của OS và app không có kết nối mạng. Story đầu tiên dựng dự án Flutter theo Structural Seed kèm CI; epic này cũng dựng nền dùng chung (theme token, ARB vi/en, `ContentColumn`, `SecretField`, `AtomicFileWriter`, codec `header`/`settings`, `VaultSession`, `SessionController`, Pigeon đồng hồ/backup/fsync). `ModalPresenter`, toast host và `SecretText` dựng ở Epic 3 (retro Epic 1, A4). Ở epic này, nhập sai chỉ báo "Sai mật khẩu", chưa đếm lần.
 **FRs covered:** FR-1, FR-2, FR-3, FR-10, FR-11, FR-14, FR-15, FR-16, FR-45, FR-49
 
 ### Epic 2: Chống dò mật khẩu và xóa dữ liệu
@@ -370,7 +370,7 @@ Màn Login có đủ cơ chế chống dò: đếm số lần sai, chờ 30 phú
 **FRs covered:** FR-4, FR-5, FR-6, FR-7, FR-8, FR-9, FR-12
 
 ### Epic 3: Lưu và dùng thông tin đăng nhập (card)
-Người dùng tạo, sửa, xóa card; tìm theo tiêu đề không phân biệt dấu; copy tên đăng nhập và mật khẩu để dán sang app khác với clipboard tự xóa; bản nháp tự lưu nên không mất dữ liệu khi app bị khóa. Hoàn thành UJ-1. Gồm `ClipboardService` + Pigeon clipboard, và nối bước xóa clipboard vào quy trình xóa dữ liệu (FR-12).
+Người dùng tạo, sửa, xóa card; tìm theo tiêu đề không phân biệt dấu; copy tên đăng nhập và mật khẩu để dán sang app khác với clipboard tự xóa; bản nháp tự lưu nên không mất dữ liệu khi app bị khóa. Hoàn thành UJ-1. Gồm `ClipboardService` + Pigeon clipboard, và nối bước xóa clipboard vào quy trình xóa dữ liệu (FR-12). Epic này dựng nền dùng chung `ModalPresenter` (3.1), `SecretText` (3.2) và toast host (3.3), chuyển từ Epic 1 sang (retro Epic 1, A4).
 **FRs covered:** FR-17, FR-18, FR-19, FR-20, FR-21, FR-22, FR-23, FR-24 (nhập tay/dán), FR-25, FR-26, FR-64, FR-65
 
 ### Epic 4: Tạo mật khẩu mạnh và Recent
@@ -688,7 +688,7 @@ So that không ai xem được dữ liệu của tôi khi tôi đưa máy cho ng
 **When** bấm "Khóa Vault"
 **Then** app khóa ngay, không hỏi xác nhận, và về S3; app không có nút Sign out riêng
 
-**Given** `SessionController` là nơi duy nhất gọi `lock()`
+**Given** `SessionController` là nơi duy nhất gọi `lock()` trên phiên đã giao cho nó qua `enter()`; ngoại lệ duy nhất: khi `unlock()`/`create()` trả phiên mà nơi nhận đã unmount hoặc không có đường giao, nơi nhận gọi `lock()` ngay, không qua trình tự khóa, vì phiên đó chưa có bản nháp, clipboard hay cây UI (retro Epic 1, A2)
 **When** khóa
 **Then** trình tự là: flush bản nháp → chờ thao tác ghi đang chạy xong hoặc hoàn tác → hủy thao tác chưa ghi → `VaultSession.lock()` → xóa clipboard nếu khóa ở tiền cảnh → tăng epoch phiên; các bước chưa có tính năng tương ứng là hook rỗng
 
@@ -699,7 +699,7 @@ So that không ai xem được dữ liệu của tôi khi tôi đưa máy cho ng
 **Given** epoch phiên tăng
 **When** `SessionGate` dựng lại
 **Then** toàn bộ cây UI sau đăng nhập bị thay bằng S3 (không push S3 lên trên UI cũ), mọi sheet và dialog bị gỡ, không có thông báo lý do khóa (UX-DR43)
-**And** widget test xác nhận sau khi khóa cây UI không còn `SecretField`/`SecretText` và không còn provider nào thuộc phiên (AD-22)
+**And** widget test xác nhận sau khi khóa: cây sau đăng nhập (`HomeShell`, tab scaffold) và `ProviderScope` của phiên đã bị gỡ, tức không còn widget hay provider nào thuộc phiên; `SecretField` còn lại (nếu có) thuộc S3 mới và có controller rỗng; không còn `SecretText` nào (AD-22)
 
 **Given** một `await` trên port platform trả về sau khi epoch đã đổi
 **When** xử lý kết quả
@@ -762,7 +762,7 @@ So that tôi không bị chặn ngay từ bước đầu tiên chỉ vì máy í
 
 **Given** lần thử đầu thành công
 **When** hiệu chỉnh tiếp tục
-**Then** thuật toán giữ nguyên như story 1.4 (mục tiêu ~1 giây, trần 2 giây, chỉ giảm)
+**Then** thuật toán giữ nguyên như story 1.4: probe ở m=64 MiB, t=3, nhận nếu 500–1500 ms; nhanh hơn thì tăng t (tối đa 10, giữ m), chậm hơn thì giảm t rồi m (không dưới sàn); tối đa 3 lần chạy; trần 2 giây là trần mềm, lần chạy thứ 3 được nhận dù chậm
 **And** unit test với `derive` giả cho các ca: probe lỗi rồi sàn thành công, cả hai lỗi, probe ném
 
 ### Story 1.11: Ghim chuỗi cung ứng và Stack trong CI
@@ -1041,6 +1041,7 @@ So that tôi tạo lại được tài khoản và import file export để lấ
 **Given** S4 đang mở
 **When** bấm "Hủy", hoặc bấm nút Back trên Android (kể cả lúc đang giữ)
 **Then** dialog đóng hoặc lần giữ bị hủy, không xóa gì; bấm ra ngoài dialog không đóng dialog
+**And** S4 và S5 mở từ S3, ngoài cây sau đăng nhập, nên tự áp chính sách Back bằng `PopScope`, không qua `ModalPresenter` (dựng ở Epic 3)
 
 ### Story 2.5: "Dữ liệu bị hỏng" không bao giờ dẫn tới xóa
 
@@ -1072,7 +1073,7 @@ So that một file vault hỏng không bao giờ bị tính là nhập sai rồi
 
 ## Epic 3: Lưu và dùng thông tin đăng nhập (card)
 
-Người dùng tạo, sửa, xóa card; tìm theo tiêu đề không phân biệt dấu; copy tên đăng nhập và mật khẩu để dán sang app khác với clipboard tự xóa; bản nháp tự lưu nên không mất dữ liệu khi app bị khóa. Hoàn thành UJ-1.
+Người dùng tạo, sửa, xóa card; tìm theo tiêu đề không phân biệt dấu; copy tên đăng nhập và mật khẩu để dán sang app khác với clipboard tự xóa; bản nháp tự lưu nên không mất dữ liệu khi app bị khóa. Hoàn thành UJ-1. Epic này dựng nền dùng chung `ModalPresenter` (3.1), `SecretText` (3.2) và toast host (3.3), chuyển từ Epic 1 sang (retro Epic 1, A4).
 
 ### Story 3.1: Tạo card mới và xem danh sách card
 
@@ -1144,6 +1145,10 @@ So that tôi kiểm tra được thông tin mà mật khẩu vẫn ẩn theo m�
 **Given** có card đang hiện mật khẩu hoặc mở rộng Ghi chú
 **When** người dùng chuyển sang tab khác rồi quay lại, hoặc app bị khóa
 **Then** mọi mật khẩu trở về ẩn và Ghi chú trở về thu gọn (trạng thái "lượt vào tab", không được lưu)
+
+**Given** một card đang hiện mật khẩu bằng `SecretText`
+**When** app bị khóa
+**Then** widget test xác nhận cây UI không còn `SecretText` nào (AD-22)
 
 ### Story 3.3: Copy tên đăng nhập và mật khẩu với clipboard tự xóa
 
@@ -1768,7 +1773,7 @@ So that những tiêu chí chỉ kiểm được trên thiết bị thật (TC-1
 - **TC-4:** bắt gói tin trên iOS khi chạy qua mọi luồng, không có kết nối ra ngoài; xác nhận build Android không có quyền `INTERNET`
 - **TC-5:** export trên iOS rồi import trên Android, và ngược lại, khôi phục 100% card
 - **TC-6:** tắt app đột ngột khi đang lưu card, đổi mật khẩu chính, import; vault không hỏng
-- **NFR-2:** đo thời gian mở khóa trên máy mốc iPhone 6s/SE đời 1 (iOS 15) và Android 7 RAM 2 GB, đạt ~1 giây, tối đa 2 giây
+- **NFR-2:** đo thời gian mở khóa trên máy mốc iPhone 6s/SE đời 1 (iOS 15) và Android 7 RAM 2 GB, đạt ~1 giây, tối đa 2 giây. Ghi chú: trần 2 giây của hiệu chỉnh là trần mềm (lần chạy thứ 3 được nhận dù chậm, story 1.10), nên mở khóa có thể vượt 2 giây trên máy chậm hơn dự kiến; rủi ro này được chấp nhận (retro Epic 1, A6, 2026-11-19)
 - **NFR-9:** với bàn phím mặc định, Gboard và Laban Key, các ô mật khẩu không hiện đề nghị lưu mật khẩu, không gợi ý từ, không tự sửa; gõ Telex/VNI vào ô mật khẩu chính hiện `pw.nonAscii`
 - **Clipboard:** iOS hết hạn theo cài đặt và không đồng bộ Universal Clipboard; Android 13+ che nội dung trong bản xem trước, xóa khi quay lại app quá hạn; không hiện thông báo "đã dán từ clipboard" khi app kiểm tra
 - **`bootId`:** `kern.bootsessionuuid` trên iPhone thật đổi sau khi khởi động lại
