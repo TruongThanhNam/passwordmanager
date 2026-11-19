@@ -35,7 +35,7 @@ void main() {
     channels.clear();
   });
 
-  test('nfr8_exclude_from_backup_sends_dir_path', () async {
+  test('nfr08_exclude_from_backup_sends_dir_path', () async {
     final received = mock('excludeFromBackup', [null]);
 
     await PigeonPlatformPorts().excludeFromBackup('/data/pak');
@@ -45,7 +45,7 @@ void main() {
     ]);
   });
 
-  test('nfr8_exclude_from_backup_error_reply_throws', () async {
+  test('nfr08_exclude_from_backup_error_reply_throws', () async {
     mock('excludeFromBackup', ['backup', 'không đặt được cờ', null]);
 
     await expectLater(

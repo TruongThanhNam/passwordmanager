@@ -149,14 +149,14 @@ void main() {
   });
 
   group('checkSource', () {
-    test('files_outside_lib_are_not_checked', () {
+    test('ad02_files_outside_lib_are_not_checked', () {
       expect(
         checkSource('tool/x.dart', "import 'package:flutter/material.dart';"),
         isEmpty,
       );
     });
 
-    test('windows_separators_are_normalized', () {
+    test('ad02_windows_separators_are_normalized', () {
       final violations = checkSource(
         r'lib\features\auth\a.dart',
         "import '../../core/crypto/kdf.dart';",
@@ -167,7 +167,7 @@ void main() {
       );
     });
 
-    test('commented_out_import_is_ignored', () {
+    test('ad02_commented_out_import_is_ignored', () {
       const source = '''
 // import 'package:flutter/material.dart';
 /* import 'package:http/http.dart'; */
@@ -175,7 +175,7 @@ void main() {
       expect(checkSource('lib/a.dart', source), isEmpty);
     });
 
-    test('multiline_and_export_directives_are_checked', () {
+    test('ad02_multiline_and_export_directives_are_checked', () {
       const source = '''
 export 'package:flutter/material.dart'
     show Colors;
@@ -189,7 +189,7 @@ import
       ]);
     });
 
-    test('conditional_import_checks_every_uri', () {
+    test('ad02_conditional_import_checks_every_uri', () {
       const source =
           "import 'stub.dart' if (dart.library.io) 'package:http/http.dart';";
       expect(
@@ -198,14 +198,14 @@ import
       );
     });
 
-    test('hide_combinator_is_not_api_use', () {
+    test('ad02_hide_combinator_is_not_api_use', () {
       expect(
         checkSource('lib/services/a.dart', "import 'dart:io' hide HttpClient;"),
         isEmpty,
       );
     });
 
-    test('api_inside_string_interpolation_is_reported', () {
+    test('ad02_api_inside_string_interpolation_is_reported', () {
       const source = '''
 import 'dart:io';
 final s = 'x \${HttpClient()}';
@@ -215,7 +215,7 @@ final s = 'x \${HttpClient()}';
       ]);
     });
 
-    test('api_inside_plain_string_is_ignored', () {
+    test('ad02_api_inside_plain_string_is_ignored', () {
       const source = '''
 import 'dart:math';
 const s = 'Random';
@@ -283,7 +283,7 @@ import 'package:path_provider/path_provider.dart';
       expect(violations.single.reason, contains('URI không hỗ trợ'));
     });
 
-    test('raw_string_with_trailing_backslash_does_not_hide_api', () {
+    test('ad02_raw_string_with_trailing_backslash_does_not_hide_api', () {
       const source = r'''
 import 'dart:io';
 final c = [r'\', HttpClient()];
@@ -293,7 +293,7 @@ final c = [r'\', HttpClient()];
       ]);
     });
 
-    test('violation_format_is_path_line_reason', () {
+    test('ad02_violation_format_is_path_line_reason', () {
       final v = checkSource(
         'lib/a.dart',
         "import 'package:flutter/cupertino.dart';",
@@ -301,7 +301,7 @@ final c = [r'\', HttpClient()];
       expect(v.toString(), matches(RegExp(r'^lib/a\.dart:1: .+')));
     });
 
-    test('directive_without_space_before_uri_is_checked', () {
+    test('ad02_directive_without_space_before_uri_is_checked', () {
       const io = '''
 import'dart:io';
 final c = HttpClient();
@@ -338,7 +338,7 @@ final a = InternetAddress.loopbackIPv4;
       expect(violations.single.reason, contains('InternetAddress'));
     });
 
-    test('unsupported_uri_scheme_is_reported', () {
+    test('ad02_unsupported_uri_scheme_is_reported', () {
       final violations = checkSource(
         'lib/features/a.dart',
         "import 'file:///x/lib/core/crypto/kdf.dart';",
@@ -368,14 +368,14 @@ final r = math.Random.secure();
   });
 
   group('run', () {
-    test('clean_tree_exits_0_without_violations', () {
+    test('ad02_clean_tree_exits_0_without_violations', () {
       final out = StringBuffer();
       final err = StringBuffer();
       expect(run(['$_fixtures/clean'], out: out, err: err), 0);
       expect(err.toString(), isEmpty);
     });
 
-    test('dirty_tree_exits_1_and_lists_every_violation', () {
+    test('ad02_dirty_tree_exits_1_and_lists_every_violation', () {
       final out = StringBuffer();
       final err = StringBuffer();
       expect(run(['$_fixtures/forbidden_ui'], out: out, err: err), 1);
@@ -386,7 +386,7 @@ final r = math.Random.secure();
       );
     });
 
-    test('missing_lib_exits_1', () {
+    test('ad02_missing_lib_exits_1', () {
       final err = StringBuffer();
       expect(
         run(['$_fixtures/does_not_exist'], out: StringBuffer(), err: err),
@@ -395,7 +395,7 @@ final r = math.Random.secure();
       expect(err.toString(), contains('lib'));
     });
 
-    test('empty_root_means_current_directory', () {
+    test('ad02_empty_root_means_current_directory', () {
       final out = StringBuffer();
       expect(run([''], out: out, err: StringBuffer()), 0);
       expect(out.toString(), contains('check_imports: OK'));

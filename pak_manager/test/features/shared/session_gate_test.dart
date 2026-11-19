@@ -487,7 +487,7 @@ void main() {
     expect(find.byType(SecretField), findsOneWidget);
   });
 
-  testWidgets('ad9_double_tap_lock_bumps_epoch_once', (tester) async {
+  testWidgets('ad09_double_tap_lock_bumps_epoch_once', (tester) async {
     final service = FakeAccountService();
     await pumpGateApp(tester, service: service);
     await createAndEnterShell(tester, service);
@@ -552,9 +552,7 @@ void main() {
       addTearDown(() => lifecycle(tester, AppLifecycleState.resumed));
     }
 
-    testWidgets('fr16_gate_built_while_inactive_is_foreground', (
-      tester,
-    ) async {
+    testWidgets('fr16_gate_built_while_inactive_is_foreground', (tester) async {
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
       await enterShell(tester);
       await tester.pump();

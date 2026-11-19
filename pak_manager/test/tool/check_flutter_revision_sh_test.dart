@@ -32,7 +32,7 @@ migration:
 void main() {
   final shell = detectShell();
 
-  test('nfr7_shell_tests_run_when_required', () {
+  test('nfr07_shell_tests_run_when_required', () {
     expect(shell.failReason, isNull, reason: shell.failReason);
   });
 

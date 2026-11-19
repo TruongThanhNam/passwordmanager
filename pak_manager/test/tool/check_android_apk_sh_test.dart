@@ -22,18 +22,18 @@ const _internetPermission =
 void main() {
   final shell = detectShell();
 
-  test('nfr7_shell_tests_run_when_required', () {
+  test('nfr07_shell_tests_run_when_required', () {
     expect(shell.failReason, isNull, reason: shell.failReason);
   });
 
   group('detectShell', () {
-    test('nfr7_windows_skips_with_reason', () {
+    test('nfr07_windows_skips_with_reason', () {
       final s = detectShell(environment: {}, isWindows: true);
       expect(s.skipReason, contains('Windows'));
       expect(s.failReason, isNull);
     });
 
-    test('nfr7_missing_bash_skips_with_reason', () {
+    test('nfr07_missing_bash_skips_with_reason', () {
       final s = detectShell(
         environment: {},
         isWindows: false,
@@ -43,7 +43,7 @@ void main() {
       expect(s.failReason, isNull);
     });
 
-    test('nfr7_missing_bash_fails_when_required', () {
+    test('nfr07_missing_bash_fails_when_required', () {
       final s = detectShell(
         environment: {requireShellTestsVar: '1'},
         isWindows: false,
@@ -52,7 +52,7 @@ void main() {
       expect(s.failReason, contains(requireShellTestsVar));
     });
 
-    test('nfr7_bash_found_runs', () {
+    test('nfr07_bash_found_runs', () {
       final s = detectShell(
         environment: {requireShellTestsVar: '1'},
         isWindows: false,

@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 11-02-2026 16:41
-last_updated: 11-19-2026 22:27
+last_updated: 11-19-2026 23:30
 project: passwordmanager
 project_key: NOKEY
 tracking_system: file-system
@@ -132,7 +132,7 @@ action_items:
       còn widget phiên', bỏ 'chỉ giảm' ở 1.10, chuyển ModalPresenter/toast/SecretText
       sang AC Epic 3"
     owner: "PM (John)"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-1-retro-2026-11-18.md"
   - id: "epic-1-retro-item-6-story-2-5-tách-kdf-lỗi-thiếu-bộ-nhớ-khỏi"
     epic: 1
@@ -167,7 +167,7 @@ action_items:
     action: "Chốt quy ước trong project context: tag test 2 chữ số, commit type(story-X.Y),
       Riverpod cho mọi service, đóng mục hoãn bằng id run CI và id mục ổn định"
     owner: "namtruong"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-1-retro-2026-11-18.md"
   - id: "epic-1-retro-item-11-đặt-điểm-dừng-cho-làm-cứng-ci-sau-action"
     epic: 1

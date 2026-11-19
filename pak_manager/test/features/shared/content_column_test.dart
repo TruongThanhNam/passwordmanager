@@ -28,7 +28,7 @@ Future<Rect> _layout(
 }
 
 void main() {
-  testWidgets('ux_dr7_tablet_column_is_672_centered_at_top', (tester) async {
+  testWidgets('ux_dr07_tablet_column_is_672_centered_at_top', (tester) async {
     final rect = await _layout(tester, const Size(1000, 800));
 
     expect(rect.width, 672);
@@ -36,7 +36,7 @@ void main() {
     expect(rect.top, 0);
   });
 
-  testWidgets('ux_dr7_phone_column_fills_width', (tester) async {
+  testWidgets('ux_dr07_phone_column_fills_width', (tester) async {
     final rect = await _layout(tester, const Size(375, 812));
 
     expect(rect.width, 375);

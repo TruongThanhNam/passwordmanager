@@ -35,7 +35,7 @@ void main() {
     session.lock();
   });
 
-  test('fr49_nfr4_lock_destroys_dek_and_drops_plaintext', () {
+  test('fr49_nfr04_lock_destroys_dek_and_drops_plaintext', () {
     final dek = FakeSecureKey();
     final session = sessionWith(dek);
     expect(session.isLocked, isFalse);
@@ -62,7 +62,7 @@ void main() {
     session.lock();
   });
 
-  test('ad6_run_after_lock_returns_locked_and_skips_op', () async {
+  test('ad06_run_after_lock_returns_locked_and_skips_op', () async {
     final session = sessionWith()..lock();
     var ran = false;
 
@@ -72,7 +72,7 @@ void main() {
     expect(ran, isFalse);
   });
 
-  test('ad6_run_is_sequential_and_passes_dek', () async {
+  test('ad06_run_is_sequential_and_passes_dek', () async {
     final dek = FakeSecureKey();
     final session = sessionWith(dek);
     final log = <String>[];
@@ -99,7 +99,7 @@ void main() {
     session.lock();
   });
 
-  test('ad6_op_error_propagates_and_queue_continues', () async {
+  test('ad06_op_error_propagates_and_queue_continues', () async {
     final session = sessionWith();
 
     await expectLater(
@@ -110,7 +110,7 @@ void main() {
     session.lock();
   });
 
-  test('ad9_idle_waits_running_op_then_lock_cancels_queued', () async {
+  test('ad09_idle_waits_running_op_then_lock_cancels_queued', () async {
     final dek = FakeSecureKey();
     final session = sessionWith(dek);
     final gate = Completer<void>();
@@ -142,7 +142,7 @@ void main() {
     expect(dek.disposed, isTrue);
   });
 
-  test('ad6_idle_without_lock_resumes_queue', () async {
+  test('ad06_idle_without_lock_resumes_queue', () async {
     final session = sessionWith();
     final gate = Completer<void>();
     unawaited(session.run((_) => gate.future));
@@ -155,7 +155,7 @@ void main() {
     session.lock();
   });
 
-  test('ad6_idle_on_idle_session_completes', () async {
+  test('ad06_idle_on_idle_session_completes', () async {
     final session = sessionWith();
     await session.idle();
     session.lock();

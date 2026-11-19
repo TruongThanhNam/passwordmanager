@@ -29,7 +29,7 @@ import 'package:sodium/sodium_sumo.dart';
 import 'support/account_fakes.dart' show FakeClock, fakeSession;
 
 void main() {
-  testWidgets('pak_app_builds_cupertino_app', (tester) async {
+  testWidgets('ad01_pak_app_builds_cupertino_app', (tester) async {
     await tester.pumpWidget(
       ProviderScope(
         child: PakApp(settings: SettingsStore.inMemory(), androidSdkInt: 35),
@@ -74,7 +74,7 @@ void main() {
     expect(kept, (true, true, true));
   });
 
-  testWidgets('ad18_nfr8_real_main_bootstraps_storage_then_builds_app', (
+  testWidgets('ad18_nfr08_real_main_bootstraps_storage_then_builds_app', (
     tester,
   ) async {
     final savedDebugPrint = debugPrint;
@@ -498,7 +498,7 @@ void main() {
     expect(find.byType(LoginScreen), findsOneWidget);
   });
 
-  testWidgets('nfr8_run_app_waits_for_storage_bootstrap', (tester) async {
+  testWidgets('nfr08_run_app_waits_for_storage_bootstrap', (tester) async {
     final directories = _PendingDirectory();
     final backup = _RecordingBackup();
     final fileSync = _RecordingFileSync();

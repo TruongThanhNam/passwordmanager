@@ -78,7 +78,7 @@ void main() {
   }
 
   test(
-    'nfr8_fr11_first_launch_creates_pak_then_excludes_then_sweeps',
+    'nfr08_fr11_first_launch_creates_pak_then_excludes_then_sweeps',
     () async {
       final backup = _FakeBackup(log);
       final bootstrap = StorageBootstrap(
@@ -113,7 +113,7 @@ void main() {
     },
   );
 
-  test('nfr8_nfr11_existing_pak_excluded_before_tmp_swept', () async {
+  test('nfr08_nfr11_existing_pak_excluded_before_tmp_swept', () async {
     Directory('$pak${sep}vault').createSync(recursive: true);
     final tmp = File('$pak${sep}vault${sep}cards.tmp')..writeAsBytesSync([1]);
     final cards = File('$pak${sep}vault${sep}cards')..writeAsBytesSync([2]);
@@ -148,7 +148,7 @@ void main() {
     expect(cards.readAsBytesSync(), [2]);
   });
 
-  test('nfr8_path_failure_is_unavailable_without_io', () async {
+  test('nfr08_path_failure_is_unavailable_without_io', () async {
     final backup = _FakeBackup(log);
 
     final result = await StorageBootstrap(
@@ -165,7 +165,7 @@ void main() {
     expect(log, ['path']);
   });
 
-  test('nfr8_empty_path_is_unavailable', () async {
+  test('nfr08_empty_path_is_unavailable', () async {
     final result = await StorageBootstrap(
       directories: _FakeDirectory(log, path: ''),
       backup: _FakeBackup(log),
@@ -179,7 +179,7 @@ void main() {
     expect(log, ['path']);
   });
 
-  test('nfr8_create_pak_failure_is_unavailable_without_io', () async {
+  test('nfr08_create_pak_failure_is_unavailable_without_io', () async {
     // ApplicationSupport là một file: không tạo được `pak/` bên trong.
     File(support).writeAsBytesSync([0]);
 
@@ -196,7 +196,7 @@ void main() {
     expect(log, ['path']);
   });
 
-  test('nfr8_exclude_from_backup_failure_is_fail_closed', () async {
+  test('nfr08_exclude_from_backup_failure_is_fail_closed', () async {
     Directory(pak).createSync(recursive: true);
     final tmp = File('$pak${sep}a.tmp')..writeAsBytesSync([1]);
 

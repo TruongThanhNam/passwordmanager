@@ -38,7 +38,7 @@ Set<String> _excludedDomains(String section) => {
 };
 
 void main() {
-  test('nfr8_data_extraction_rules_exclude_every_domain', () {
+  test('nfr08_data_extraction_rules_exclude_every_domain', () {
     final xml = _readWithoutComments('data_extraction_rules.xml');
 
     expect(xml, isNot(contains('<include')));
@@ -49,7 +49,7 @@ void main() {
     }
   });
 
-  test('nfr8_full_backup_content_excludes_every_domain', () {
+  test('nfr08_full_backup_content_excludes_every_domain', () {
     final xml = _readWithoutComments('backup_rules.xml');
 
     expect(xml, isNot(contains('<include')));
