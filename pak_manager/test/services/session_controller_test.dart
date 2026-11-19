@@ -5,7 +5,8 @@ import 'package:pak_manager/core/model/settings.dart';
 import 'package:pak_manager/services/session_controller.dart';
 import 'package:pak_manager/services/vault_session.dart';
 
-import '../support/account_fakes.dart';
+import '../support/account_fakes.dart' show fakeSession;
+import '../support/port_fakes.dart';
 
 /// Controller có mọi hook ghi vào [log].
 SessionController _logged(

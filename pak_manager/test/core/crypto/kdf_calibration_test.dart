@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -7,37 +6,8 @@ import 'package:pak_manager/core/crypto/kdf_calibration.dart';
 import 'package:pak_manager/core/format/header_codec.dart';
 import 'package:sodium/sodium_sumo.dart';
 
+import '../../support/port_fakes.dart';
 import '../vault_fixture.dart';
-
-/// KEK giả, chỉ ghi nhận `dispose`.
-final class _FakeKey implements SecureKey {
-  _FakeKey(this.run);
-
-  final int run;
-  bool disposed = false;
-
-  @override
-  int get length => kekBytes;
-
-  @override
-  void dispose() => disposed = true;
-
-  @override
-  T runUnlockedSync<T>(SecureCallbackFn<T> callback, {bool writable = false}) =>
-      callback(Uint8List(kekBytes));
-
-  @override
-  FutureOr<T> runUnlockedAsync<T>(
-    SecureCallbackFn<FutureOr<T>> callback, {
-    bool writable = false,
-  }) => callback(Uint8List(kekBytes));
-
-  @override
-  Uint8List extractBytes() => Uint8List(kekBytes);
-
-  @override
-  SecureKey copy() => _FakeKey(run);
-}
 
 /// `derive` giả trên đồng hồ giả: lần chạy thứ i tốn `durations[i]` ms.
 /// `null` trong [durations] = KDF lỗi; [_throw] trong [durations] = `derive`
@@ -49,7 +19,10 @@ final class _Harness {
 
   final List<int?> durations;
   final List<KdfParams> calls = [];
-  final List<_FakeKey> keys = [];
+  final List<FakeSecureKey> keys = [];
+
+  /// Số thứ tự lần `derive` (đếm từ 1) đã trả `keys[i]`.
+  final List<int> runs = [];
   int _now = 0;
 
   int nowMs() => _now;
@@ -70,8 +43,9 @@ final class _Harness {
       throw StateError('derive lỗi');
     }
     _now += cost;
-    final key = _FakeKey(calls.length);
+    final key = FakeSecureKey(length: kekBytes);
     keys.add(key);
+    runs.add(calls.length);
     return key;
   }
 
@@ -84,11 +58,11 @@ final class _Harness {
 
   /// Chỉ KEK được trả về còn sống; mọi KEK khác đã dispose.
   void expectOnlyReturnedAlive(CalibratedKek? result) {
-    for (final key in keys) {
+    for (final (i, key) in keys.indexed) {
       expect(
         key.disposed,
         !identical(key, result?.kek),
-        reason: 'KEK lần ${key.run}',
+        reason: 'KEK lần ${runs[i]}',
       );
     }
   }
@@ -302,7 +276,7 @@ void main() {
   test('ad05_default_clock_measures_real_elapsed_time', () async {
     // Không truyền nowMs: đồng hồ mặc định (Stopwatch) phải đo thời gian
     // thật. 800 ms nằm giữa cửa sổ nhận [500, 1500], chừa dư cho CI chậm.
-    final keys = <_FakeKey>[];
+    final keys = <FakeSecureKey>[];
     final calls = <KdfParams>[];
 
     final result = await calibrateVaultKdf(
@@ -311,7 +285,7 @@ void main() {
       derive: (password, salt, params) async {
         calls.add(params);
         await Future<void>.delayed(const Duration(milliseconds: 800));
-        final key = _FakeKey(calls.length);
+        final key = FakeSecureKey(length: kekBytes);
         keys.add(key);
         return key;
       },

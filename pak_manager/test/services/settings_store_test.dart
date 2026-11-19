@@ -5,45 +5,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pak_manager/core/format/settings_codec.dart';
 import 'package:pak_manager/core/io/atomic_file_writer.dart';
 import 'package:pak_manager/core/model/settings.dart';
-import 'package:pak_manager/core/ports/file_sync_port.dart';
 import 'package:pak_manager/services/settings_store.dart';
 
-/// Timer giả: chỉ chạy khi test gọi [fire].
-class _FakeTimer implements Timer {
-  _FakeTimer(this.duration, this._callback);
-
-  final Duration duration;
-  final void Function() _callback;
-  bool _active = true;
-
-  void fire() {
-    if (_active) {
-      _active = false;
-      _callback();
-    }
-  }
-
-  @override
-  void cancel() => _active = false;
-
-  @override
-  bool get isActive => _active;
-
-  @override
-  int get tick => 0;
-}
-
-class _Timers {
-  final created = <_FakeTimer>[];
-
-  Timer call(Duration duration, void Function() callback) {
-    final timer = _FakeTimer(duration, callback);
-    created.add(timer);
-    return timer;
-  }
-
-  Iterable<_FakeTimer> get active => created.where((t) => t.isActive);
-}
+import '../support/port_fakes.dart';
 
 /// Writer giả: ghi lại nội dung từng lần ghi; có thể giữ lần ghi chưa xong
 /// ([hold]) hoặc trả lỗi ([fail]).
@@ -78,29 +42,22 @@ class _FakeWrite {
   void releaseNext() => _held.removeAt(0).complete();
 }
 
-class _NoopFileSync implements FileSyncPort {
-  final calls = <String>[];
-
-  @override
-  Future<void> fsyncDirectory(String path) async => calls.add(path);
-}
-
 /// Cho các future/microtask đang chờ chạy hết.
 Future<void> _settle() => Future<void>.delayed(Duration.zero);
 
 void main() {
   late Directory sandbox;
   late String path;
-  late _Timers timers;
+  late FakeTimers timers;
   late _FakeWrite write;
-  late _NoopFileSync fileSync;
+  late RecordingFileSync fileSync;
 
   setUp(() {
     sandbox = Directory.systemTemp.createTempSync('pak_settings_');
     path = '${sandbox.path}${Platform.pathSeparator}settings';
-    timers = _Timers();
+    timers = FakeTimers();
     write = _FakeWrite();
-    fileSync = _NoopFileSync();
+    fileSync = RecordingFileSync();
   });
 
   tearDown(() => sandbox.deleteSync(recursive: true));
@@ -108,7 +65,7 @@ void main() {
   Future<SettingsStore> load([String? at]) => SettingsStore.load(
     at,
     AtomicFileWriter(fileSync),
-    createTimer: timers.call,
+    createTimer: timers.create,
     write: write.call,
   );
 
@@ -458,7 +415,7 @@ void main() {
       final store = await SettingsStore.load(
         path,
         AtomicFileWriter(fileSync),
-        createTimer: timers.call,
+        createTimer: timers.create,
       );
       addTearDown(store.dispose);
 

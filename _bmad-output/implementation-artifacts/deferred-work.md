@@ -201,3 +201,18 @@
 
 - `distributionSha256Sum` trong `pak_manager/android/gradle/wrapper/gradle-wrapper.properties` không được cổng nào kiểm: xóa dòng này thì mọi cổng vẫn xanh. Lỗ hổng có từ story 1.11; story 1.16 chỉ thêm so phiên bản `distributionUrl` trong `check_stack.dart`. Hướng sửa: kiểm có dòng `distributionSha256Sum=` 64 hex, kèm kiểm âm.
   status: done — action item `epic-1-retro-item-2` (retro Epic 1, `epic-1-retro-2026-11-18.md` mục B1): `checkToolchain` trong `tool/ci/check_stack.dart` đòi đúng một dòng `distributionSha256Sum=<64 hex>`, kèm kiểm âm ở `test/tool/check_stack_test.dart`. Chưa có id run CI. Dòng status `done` trước đây ở mục này thuộc mục AC1 story 1.15 ngay trên, bị đặt lệch khi giải xung đột merge `737b616`.
+
+## Deferred from: code review of spec-epic-1-retro-item-9-gom-fake-test-support.md (2026-11-19)
+
+- id: DW-retro1.9-1
+  source_spec: `_bmad-output/implementation-artifacts/spec-epic-1-retro-item-9-gom-fake-test-support.md`
+  summary: AGENTS.md chưa có luật "fake port/timer/`SecureKey` đặt trong `test/support/port_fakes.dart`, helper UI trong `account_fakes.dart`, không chép fake inline, import trực tiếp".
+  evidence: Retro Epic 1 C2/C3 cho thấy mỗi story lại chép fake inline; Epic 2 (`LockoutGuard`, `WipeCoordinator`) cần fake clock/timer/file. Sửa chạm file ngữ cảnh agent nên hoãn; làm bằng `bmad-project-context` (refresh hoặc record).
+- id: DW-retro1.9-2
+  source_spec: `_bmad-output/implementation-artifacts/spec-epic-1-retro-item-9-gom-fake-test-support.md`
+  summary: Chưa có kiểm tự động cho bất biến "`port_fakes.dart` không import Flutter" và "fake implements port/`Timer`/`SecureKey` chỉ nằm trong `test/support/`, trừ fake cục bộ có lý do".
+  evidence: `tool/check_imports.dart:26` chỉ quét `lib/`; bất biến hiện chỉ kiểm bằng grep tay trong spec. Theo retro D1, mục CI mới vào backlog CI riêng, không thành story chen trước Epic 2.
+- id: DW-retro1.9-3
+  source_spec: `_bmad-output/implementation-artifacts/spec-epic-1-retro-item-9-gom-fake-test-support.md`
+  summary: `FakeSecureKey` dùng chung không ném khi dùng sau `dispose` và không theo dõi bản `copy()`, nên test có thể không bắt lỗi dùng-sau-hủy hay rò key.
+  evidence: Chưa xác minh (maybe-false, nếu đúng là medium). Cần rà code `lib/` gọi `runUnlocked*`/`extractBytes`/`copy` trên `SecureKey` và xem test nào dùng `FakeSecureKey` cho các đường đó; nếu có đường dùng key sau `dispose` mà test không bắt thì sửa fake ném `StateError` sau `dispose`.
