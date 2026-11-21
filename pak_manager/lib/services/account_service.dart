@@ -106,7 +106,10 @@ final class UnlockCorrupt extends UnlockResult {
   String toString() => 'UnlockCorrupt()';
 }
 
-/// Đã hết lượt thử (`failCount` = 10, AD-8): không ghi, không chạy KDF.
+/// Không được thử lúc này (AD-8): đang trong thời gian chờ 30 phút sau lần
+/// sai thứ 5–9 (đếm ngược lấy từ [AccountService.lockoutRemaining]), hoặc
+/// đã hết lượt (`failCount` = 10). Không ghi lần thử, không chạy KDF (có thể
+/// ghi mốc chờ vừa neo lại, AD-8).
 final class UnlockLockedOut extends UnlockResult {
   const UnlockLockedOut();
 
@@ -168,6 +171,12 @@ class AccountService {
   /// Số lần thử còn lại trước khi bị chặn (FR-4), đọc từ RAM của
   /// [LockoutGuard]. Nguồn số {N} của `login.attempts`.
   int get attemptsLeft => _guard.state.attemptsLeft;
+
+  /// Thời gian chờ còn lại trước khi được thử tiếp (FR-4, FR-6), trong
+  /// `[0, 30 phút]`; `Duration.zero` = không phải chờ. Nguồn duy nhất của
+  /// đếm ngược `login.lockout`. Đo bằng đồng hồ đơn điệu và `bootId` (AD-9);
+  /// đọc đồng hồ lỗi thì trả đủ 30 phút (fail closed). Không ném.
+  Future<Duration> lockoutRemaining() => _guard.waitRemaining();
 
   /// Trạng thái tài khoản lúc khởi động, chạy trước `runApp` (không có màn
   /// chờ, UX-DR30): kiểm `vault/header` có tồn tại hay không rồi nạp `guard`
@@ -294,12 +303,14 @@ class AccountService {
   ///
   /// đọc `header` → `HeaderCodec.decode` (hỏng → [UnlockCorrupt], không chạm
   /// `guard`, không chạy KDF) → `ascii.encode` → trùng chuỗi sai ngay trước
-  /// → [UnlockWrongPassword] (không đếm, không KDF) → hết lượt →
-  /// [UnlockLockedOut] → ghi `failCount + 1` xuống `guard` (lỗi →
-  /// [UnlockUnavailable], không KDF) → KDF → so `kcv` (lệch → nhớ digest,
-  /// [UnlockWrongPassword]) → khớp: `recordSuccess()` → mở bọc DEK → giải mã
-  /// `cards`/`recent`. Mọi lỗi khác → [UnlockCorrupt]; KDF lỗi sau khi đã
-  /// ghi trước thì lần thử vẫn tính (story 2.5 tách riêng).
+  /// → [UnlockWrongPassword] (không đếm, không KDF) → hết lượt hoặc đang chờ
+  /// ([lockoutRemaining] > 0) → [UnlockLockedOut] (không ghi, không KDF) →
+  /// ghi `failCount + 1` (cùng mốc chờ khi giá trị mới là 5–9) xuống `guard`
+  /// (ghi hoặc đọc đồng hồ lỗi → [UnlockUnavailable], không KDF) → KDF → so
+  /// `kcv` (lệch → nhớ digest, [UnlockWrongPassword]) → khớp:
+  /// `recordSuccess()` → mở bọc DEK → giải mã `cards`/`recent`. Mọi lỗi khác
+  /// → [UnlockCorrupt]; KDF lỗi sau khi đã ghi trước thì lần thử vẫn tính
+  /// (story 2.5 tách riêng).
   ///
   /// Chỉ ghi `guard`, không ghi hay xóa file vault nào. Bản `Uint8List` của
   /// mật khẩu luôn bị wipe; KEK luôn bị hủy; DEK bị hủy trừ khi đã chuyển cho
@@ -337,6 +348,10 @@ class AccountService {
         return const UnlockWrongPassword();
       }
       if (_guard.state.exhausted) {
+        return const UnlockLockedOut();
+      }
+      // Đang chờ sau lần sai thứ 5–9 (FR-4): từ chối trước khi đếm.
+      if (await _guard.waitRemaining() > Duration.zero) {
         return const UnlockLockedOut();
       }
       // Ghi trước KDF: tắt app giữa chừng thì lần thử vẫn tính (FR-5).

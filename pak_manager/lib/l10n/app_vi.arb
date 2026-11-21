@@ -10,6 +10,7 @@
   "loginWrong": "Sai mật khẩu.",
   "loginCorrupt": "Dữ liệu bị hỏng — Mật khẩu đúng nhưng không đọc được dữ liệu. Bạn có thể dùng \"Xóa & Tạo tài khoản mới\" rồi import lại từ file export.",
   "loginAttempts": "Còn {N} lần thử trước khi dữ liệu bị xóa.",
+  "loginLockout": "Thử lại sau {time}",
   "createWarning": "Không có cách khôi phục mật khẩu chính. Nếu quên, bạn sẽ mất toàn bộ dữ liệu.",
   "createFieldMain": "Mật khẩu chính",
   "createFieldConfirm": "Nhập lại mật khẩu chính",

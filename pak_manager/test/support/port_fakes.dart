@@ -43,12 +43,17 @@ final class FakeSecureKey implements SecureKey {
   SecureKey copy() => FakeSecureKey(length: length);
 }
 
-/// Đồng hồ đơn điệu giả: [ms] đặt tay; [error] khác `null` thì ném.
+/// Đồng hồ đơn điệu giả: [ms] đặt tay; [error] khác `null` thì ném. [boot]
+/// là `bootId` (đổi tay để mô phỏng khởi động lại máy); [bootError] khác
+/// `null` thì `bootId()` ném.
 final class FakeClock implements ClockPort {
   FakeClock([this.ms = 1000000]);
 
   int ms;
   Object? error;
+
+  String boot = 'fake-boot';
+  Object? bootError;
 
   /// Khác `null` thì [monotonicMs] chờ nó rồi mới đọc [ms]/[error].
   Completer<void>? hold;
@@ -73,7 +78,13 @@ final class FakeClock implements ClockPort {
   }
 
   @override
-  Future<String> bootId() async => 'fake-boot';
+  Future<String> bootId() async {
+    final e = bootError;
+    if (e != null) {
+      Error.throwWithStackTrace(e, StackTrace.current);
+    }
+    return boot;
+  }
 }
 
 /// Timer giả do [FakeTimers.create] dựng; chỉ chạy khi test gọi [fire].

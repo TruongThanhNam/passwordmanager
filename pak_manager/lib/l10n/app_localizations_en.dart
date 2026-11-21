@@ -49,6 +49,11 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String loginLockout(String time) {
+    return 'Try again in $time';
+  }
+
+  @override
   String get createWarning =>
       'There is no way to recover your main password. If you forget it, you lose all your data.';
 

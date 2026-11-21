@@ -158,6 +158,12 @@ abstract class AppLocalizations {
   /// **'{N, plural, =1{1 attempt left before your data is erased.} other{{N} attempts left before your data is erased.}}'**
   String loginAttempts(int N);
 
+  /// login.lockout (FR-4): inline-message on S3 while waiting after wrong attempts 5–9, above login.attempts; time is the countdown as mm:ss, updated every second.
+  ///
+  /// In en, this message translates to:
+  /// **'Try again in {time}'**
+  String loginLockout(String time);
+
   /// create.warning (FR-1): paragraph above the two fields on S2.
   ///
   /// In en, this message translates to:

@@ -1,19 +1,19 @@
 /// Số lần nhập sai tối đa; lần sai thứ [maxAttempts] chặn đăng nhập (FR-4).
 const int maxAttempts = 10;
 
-/// Từ lần sai thứ [waitFromAttempt] phải chờ [waitDuration] (FR-4). Story
-/// 2.2 dùng.
+/// Từ lần sai thứ [waitFromAttempt] phải chờ [waitDuration] (FR-4).
 const int waitFromAttempt = 5;
 
-/// Thời gian chờ sau mỗi lần sai từ thứ [waitFromAttempt] (FR-4). Story 2.2
-/// dùng.
+/// Thời gian chờ sau mỗi lần sai từ thứ [waitFromAttempt] tới thứ
+/// `maxAttempts - 1` (FR-4).
 const Duration waitDuration = Duration(minutes: 30);
 
 /// Trạng thái của file `guard` (AD-8, AD-20). Bất biến; mọi chuyển trạng
 /// thái là hàm thuần trả bản mới.
 ///
-/// Story 2.1 chỉ đổi [failCount]; [waitBootId], [waitStartMono] (mốc chờ,
-/// story 2.2) và [wiping] (story 2.3) được giữ nguyên khi đếm.
+/// Mốc chờ ([waitBootId], [waitStartMono]) đo bằng `ClockPort.bootId` và
+/// `ClockPort.monotonicMs` (AD-9); không hàm nào ở đây đọc đồng hồ, người gọi
+/// truyền giá trị vào. [wiping] (story 2.3) được giữ nguyên khi đếm.
 final class GuardState {
   const GuardState({
     required this.failCount,
@@ -43,6 +43,11 @@ final class GuardState {
   /// Đã hết lượt: không cho thử nữa.
   bool get exhausted => failCount >= maxAttempts;
 
+  /// [failCount] nằm trong khoảng phải chờ ([waitFromAttempt] tới
+  /// `maxAttempts - 1`). Chỉ trong khoảng này mốc chờ có nghĩa.
+  bool get inWaitRange =>
+      failCount >= waitFromAttempt && failCount < maxAttempts;
+
   /// Trạng thái ghi xuống đĩa **trước** KDF: [failCount] + 1, chặn ở
   /// [maxAttempts]; các trường khác giữ nguyên.
   GuardState afterAttempt() => GuardState(
@@ -54,6 +59,55 @@ final class GuardState {
 
   /// Mật khẩu đúng (`kcv` khớp): [failCount] về 0 và xóa mốc chờ.
   GuardState afterSuccess() => GuardState(failCount: 0, wiping: wiping);
+
+  /// Bản có mốc chờ = ([bootId], [mono]); các trường khác giữ nguyên.
+  GuardState withWaitMark(String bootId, int mono) => GuardState(
+    failCount: failCount,
+    waitBootId: bootId,
+    waitStartMono: mono,
+    wiping: wiping,
+  );
+
+  /// Neo lại mốc chờ lúc khởi động hoặc khi đọc thời gian còn lại (AD-8 bước
+  /// (2) rồi (3)): trong [inWaitRange] mà mốc thiếu hoặc nửa vời, `bootId`
+  /// của mốc khác [bootId] hiện tại (máy đã khởi động lại), hoặc [nowMono]
+  /// nhỏ hơn mốc (đồng hồ đơn điệu lùi) → mốc = bây giờ, tức chờ lại từ đầu.
+  ///
+  /// `null` = không cần đổi (ngoài [inWaitRange] hoặc mốc còn hợp lệ). Không
+  /// bao giờ đặt mốc về trước mốc cũ trên cùng một lần khởi động, nên thời
+  /// gian chờ chỉ có thể bị kéo dài, không bao giờ bị rút ngắn.
+  GuardState? reanchored(String bootId, int nowMono) {
+    if (!inWaitRange) {
+      return null;
+    }
+    final markBoot = waitBootId;
+    final markMono = waitStartMono;
+    if (markBoot == null ||
+        markMono == null ||
+        markBoot != bootId ||
+        nowMono < markMono) {
+      return withWaitMark(bootId, nowMono);
+    }
+    return null;
+  }
+
+  /// Thời gian chờ còn lại tại [nowMono], luôn trong `[0, waitDuration]`.
+  /// Ngoài [inWaitRange] → `Duration.zero`.
+  ///
+  /// Dùng sau [reanchored]. Mốc thiếu hoặc [nowMono] nhỏ hơn mốc (chưa neo
+  /// lại) → [waitDuration], đúng giá trị sau khi neo lại (fail closed).
+  Duration waitRemaining(int nowMono) {
+    if (!inWaitRange) {
+      return Duration.zero;
+    }
+    final markMono = waitStartMono;
+    if (waitBootId == null || markMono == null || nowMono < markMono) {
+      return waitDuration;
+    }
+    final elapsed = nowMono - markMono;
+    final left = waitDuration.inMilliseconds - elapsed;
+    return left <= 0 ? Duration.zero : Duration(milliseconds: left);
+  }
 
   @override
   bool operator ==(Object other) =>

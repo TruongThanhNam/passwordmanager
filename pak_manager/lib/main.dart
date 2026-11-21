@@ -87,6 +87,7 @@ void runPakApp(
         paths,
         writer: writer,
         fileSync: fileSync,
+        clock: clock,
       ),
       StorageUnavailable() => const _AccountWiring.unavailable(),
     };
@@ -135,13 +136,14 @@ final class _AccountWiring {
 
 /// Nối `AccountService` khi lưu trữ đã sẵn sàng: khởi tạo Sodium, nạp
 /// blocklist, dựng `StrengthEstimator` (làm nóng từ điển) và `LockoutGuard`
-/// rồi chạy `bootstrap()` (kiểm `vault/header` và nạp `guard` 4 KiB, nên
-/// không cần màn chờ, UX-DR30). Sodium hoặc blocklist lỗi →
-/// [_AccountWiring.unavailable]. Không ném.
+/// (đo thời gian chờ bằng [clock]) rồi chạy `bootstrap()` (kiểm
+/// `vault/header` và nạp `guard` 4 KiB, nên không cần màn chờ, UX-DR30).
+/// Sodium hoặc blocklist lỗi → [_AccountWiring.unavailable]. Không ném.
 Future<_AccountWiring> _wireAccount(
   PakPaths paths, {
   required AtomicFileWriter writer,
   required FileSyncPort fileSync,
+  required ClockPort clock,
 }) async {
   final SodiumSumo sodium;
   try {
@@ -169,7 +171,12 @@ Future<_AccountWiring> _wireAccount(
   }
   final LockoutGuard guard;
   try {
-    guard = LockoutGuard(sodium: sodium, writer: writer, path: paths.guardFile);
+    guard = LockoutGuard(
+      sodium: sodium,
+      writer: writer,
+      path: paths.guardFile,
+      clock: clock,
+    );
   } on Object {
     return const _AccountWiring.unavailable();
   }

@@ -39,6 +39,26 @@ final class FakeAccountService implements AccountService {
   @override
   int attemptsLeft = 10;
 
+  /// Thời gian chờ còn lại mà `lockoutRemaining` trả; test đặt tay.
+  Duration lockout = Duration.zero;
+
+  /// Số lần gọi `lockoutRemaining`.
+  int lockoutQueries = 0;
+
+  /// Khác `null` thì `lockoutRemaining` treo tới khi test hoàn tất nó và trả
+  /// giá trị của nó thay cho [lockout].
+  Completer<Duration>? lockoutHold;
+
+  @override
+  Future<Duration> lockoutRemaining() async {
+    lockoutQueries++;
+    final hold = lockoutHold;
+    if (hold != null) {
+      return hold.future;
+    }
+    return lockout;
+  }
+
   /// Mật khẩu của từng lần gọi `create`.
   final List<String> createCalls = [];
 

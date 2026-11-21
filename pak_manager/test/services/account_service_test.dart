@@ -80,6 +80,7 @@ void main() {
   late SodiumSumo sodium;
   late Directory sandbox;
   late PakPaths paths;
+  late FakeClock clock;
 
   /// Mọi KEK mà `derive` mặc định đã trả về trong test hiện tại.
   late List<_TrackedKey> keks;
@@ -96,6 +97,8 @@ void main() {
     sandbox = Directory.systemTemp.createTempSync('pak_account_');
     paths = PakPaths(sandbox.path);
     keks = [];
+    // Đủ lớn để mọi mốc chờ giả đều không âm.
+    clock = FakeClock(const Duration(hours: 10).inMilliseconds);
     // `pak/` do StorageBootstrap tạo; service không tạo thư mục cha.
     Directory(paths.pakDir).createSync();
   });
@@ -143,9 +146,11 @@ void main() {
     return file.existsSync() ? file.readAsBytesSync() : null;
   }
 
+  /// Trạng thái `guard` trên đĩa (file phải đọc được).
+  GuardState diskState() => (GuardCodec.decode(guardBytes()!) as GuardOk).state;
+
   /// `failCount` trên đĩa (file phải đọc được).
-  int diskFailCount() =>
-      (GuardCodec.decode(guardBytes()!) as GuardOk).state.failCount;
+  int diskFailCount() => diskState().failCount;
 
   void writeGuard(int failCount) => File(paths.guardFile)
       .writeAsBytesSync(GuardCodec.encode(GuardState(failCount: failCount)));
@@ -157,7 +162,7 @@ void main() {
     Future<SecureKey?> Function(Uint8List, Uint8List, KdfParams)? derive,
     LockoutGuard? guard,
   }) {
-    var clock = 0;
+    var kdfClock = 0;
     return AccountService(
       sodium: sodium,
       random: random ?? _CountingRandom(),
@@ -166,7 +171,12 @@ void main() {
       paths: paths,
       guard:
           guard ??
-          LockoutGuard(sodium: sodium, writer: writer, path: paths.guardFile),
+          LockoutGuard(
+            sodium: sodium,
+            writer: writer,
+            path: paths.guardFile,
+            clock: clock,
+          ),
       deriveKek:
           derive ??
           (_, _, _) async {
@@ -176,8 +186,8 @@ void main() {
           },
       // Mỗi lần KDF "mất" 1000 ms: hiệu chỉnh nhận ngay lần đầu.
       nowMs: () {
-        final now = clock;
-        clock += 1000;
+        final now = kdfClock;
+        kdfClock += 1000;
         return now;
       },
     );
@@ -701,6 +711,7 @@ void main() {
             },
           ),
           path: paths.guardFile,
+          clock: clock,
         );
         final s = realService(guard: guard);
         await s.bootstrap();
@@ -734,6 +745,7 @@ void main() {
           },
         ),
         path: paths.guardFile,
+        clock: clock,
       );
       final s = realService(guard: guard);
       await s.bootstrap();
@@ -764,6 +776,7 @@ void main() {
           },
         ),
         path: paths.guardFile,
+        clock: clock,
       );
       final s = realService(guard: guard);
       await s.bootstrap();
@@ -820,6 +833,7 @@ void main() {
           },
         ),
         path: paths.guardFile,
+        clock: clock,
       );
       final s = realService(guard: guard);
       await s.bootstrap();
@@ -841,14 +855,203 @@ void main() {
       writeGuard(9);
       final s = realService();
       await s.bootstrap();
+      // Lần sai thứ 9 vẫn bắt chờ: chỉ thử được khi hết giờ.
+      expect(await s.lockoutRemaining(), waitDuration);
+      clock.advance(waitDuration);
+      final readsBefore = clock.reads;
 
       expect(await s.unlock(wrongPw), isA<UnlockWrongPassword>());
       expect(diskFailCount(), 10);
       expect(s.attemptsLeft, 0);
+      // Chỉ lần kiểm chờ đọc đồng hồ; lần ghi `failCount: 10` thì không.
+      expect(clock.reads, readsBefore + 1);
+      expect(await s.lockoutRemaining(), Duration.zero);
 
       // Mật khẩu đúng cũng không được thử nữa (chưa xóa: story 2.3).
       expect(await s.unlock(fixturePw), isA<UnlockLockedOut>());
       expect(derives, 1);
+    });
+
+    test('fr04_ad08_fifth_wrong_writes_mark_before_kdf', () async {
+      installVault();
+      writeGuard(4);
+      GuardState? seenAtKdf;
+      final s = realService(onDerive: () => seenAtKdf = diskState());
+      await s.bootstrap();
+      expect(await s.lockoutRemaining(), Duration.zero);
+
+      expect(await s.unlock(wrongPw), isA<UnlockWrongPassword>());
+
+      final marked = GuardState(
+        failCount: 5,
+        waitBootId: clock.boot,
+        waitStartMono: clock.ms,
+      );
+      expect(seenAtKdf, marked);
+      expect(diskState(), marked);
+      expect(s.attemptsLeft, 5);
+      expect(await s.lockoutRemaining(), waitDuration);
+    });
+
+    test('fr04_ad09_clock_failure_on_fifth_is_unavailable', () async {
+      installVault();
+      writeGuard(4);
+      final s = realService();
+      await s.bootstrap();
+      final before = guardBytes();
+      clock.error = StateError('đồng hồ giả lỗi');
+
+      expect(await s.unlock(wrongPw), isA<UnlockUnavailable>());
+
+      expect(derives, 0);
+      expect(guardBytes(), before);
+      expect(s.attemptsLeft, 6);
+    });
+
+    test('fr04_ad08_waiting_is_locked_out_without_write_or_kdf', () async {
+      installVault();
+      writeGuard(4);
+      var renames = 0;
+      final guard = LockoutGuard(
+        sodium: sodium,
+        writer: AtomicFileWriter(
+          RecordingFileSync(),
+          onStep: (step) {
+            if (step == AtomicWriteStep.rename) {
+              renames++;
+            }
+          },
+        ),
+        path: paths.guardFile,
+        clock: clock,
+      );
+      final s = realService(guard: guard);
+      await s.bootstrap();
+      expect(await s.unlock(wrongPw), isA<UnlockWrongPassword>());
+      expect(derives, 1);
+      final before = guardBytes();
+      renames = 0;
+
+      clock.advance(const Duration(minutes: 10));
+      // Kể cả mật khẩu đúng cũng không được thử khi đang chờ.
+      expect(await s.unlock(fixturePw), isA<UnlockLockedOut>());
+      expect(await s.unlock(otherWrongPw), isA<UnlockLockedOut>());
+
+      expect(derives, 1);
+      expect(renames, 0);
+      expect(guardBytes(), before);
+      expect(s.attemptsLeft, 5);
+      expect(await s.lockoutRemaining(), const Duration(minutes: 20));
+    });
+
+    test('fr04_ad08_after_wait_next_wrong_counts_and_sets_new_mark', () async {
+      installVault();
+      writeGuard(4);
+      final s = realService();
+      await s.bootstrap();
+      expect(await s.unlock(wrongPw), isA<UnlockWrongPassword>());
+
+      clock.advance(waitDuration);
+      expect(await s.lockoutRemaining(), Duration.zero);
+      expect(await s.unlock(otherWrongPw), isA<UnlockWrongPassword>());
+
+      expect(derives, 2);
+      expect(
+        diskState(),
+        GuardState(
+          failCount: 6,
+          waitBootId: clock.boot,
+          waitStartMono: clock.ms,
+        ),
+      );
+      expect(await s.lockoutRemaining(), waitDuration);
+    });
+
+    test('fr05_ad08_correct_after_wait_clears_mark', () async {
+      installVault();
+      writeGuard(4);
+      final s = realService();
+      await s.bootstrap();
+      expect(await s.unlock(wrongPw), isA<UnlockWrongPassword>());
+      clock.advance(waitDuration);
+
+      final result = await s.unlock(fixturePw);
+
+      expect(result, isA<UnlockSuccess>());
+      expect(diskState(), GuardState.initial);
+      expect(s.attemptsLeft, 10);
+      expect(await s.lockoutRemaining(), Duration.zero);
+      (result as UnlockSuccess).session.lock();
+    });
+
+    test('ad09_clock_failure_while_waiting_is_locked_out', () async {
+      installVault();
+      writeGuard(6);
+      final s = realService();
+      await s.bootstrap();
+      clock.advance(waitDuration);
+      clock.error = StateError('đồng hồ giả lỗi');
+
+      expect(await s.lockoutRemaining(), waitDuration);
+      expect(await s.unlock(fixturePw), isA<UnlockLockedOut>());
+      expect(derives, 0);
+      expect(s.attemptsLeft, 4);
+    });
+
+    test('fr06_ad08_restart_same_boot_keeps_remaining_without_write', () async {
+      installVault();
+      writeGuard(4);
+      final s = realService();
+      await s.bootstrap();
+      expect(await s.unlock(wrongPw), isA<UnlockWrongPassword>());
+      final saved = guardBytes();
+
+      clock.advance(const Duration(minutes: 12));
+      final sync = RecordingFileSync();
+      final restarted = service(writer: AtomicFileWriter(sync), fileSync: sync);
+      expect(await restarted.bootstrap(), isA<BootstrapHasAccount>());
+
+      expect(sync.calls, isEmpty);
+      expect(guardBytes(), saved);
+      expect(await restarted.lockoutRemaining(), const Duration(minutes: 18));
+    });
+
+    test('tc03_ad08_reboot_bootstrap_writes_new_mark_first', () async {
+      installVault();
+      writeGuard(4);
+      final s = realService();
+      await s.bootstrap();
+      expect(await s.unlock(wrongPw), isA<UnlockWrongPassword>());
+
+      // Khởi động lại máy sau 20 phút: `bootId` khác, đồng hồ đơn điệu lùi.
+      clock
+        ..boot = 'fake-boot-2'
+        ..ms = 5000;
+      final restarted = realService();
+      expect(await restarted.bootstrap(), isA<BootstrapHasAccount>());
+
+      // Mốc mới đã nằm trên đĩa khi `bootstrap` trả.
+      expect(
+        diskState(),
+        const GuardState(
+          failCount: 5,
+          waitBootId: 'fake-boot-2',
+          waitStartMono: 5000,
+        ),
+      );
+      expect(await restarted.lockoutRemaining(), waitDuration);
+
+      // Ghi lỗi: RAM vẫn chờ lại từ 30:00.
+      clock
+        ..boot = 'fake-boot-3'
+        ..ms = 7000;
+      final failing = RecordingFileSync(failAlways: true);
+      final broken = service(
+        writer: AtomicFileWriter(failing),
+        fileSync: failing,
+      );
+      expect(await broken.bootstrap(), isA<BootstrapHasAccount>());
+      expect(await broken.lockoutRemaining(), waitDuration);
     });
 
     final corruptHeaders = <String, Uint8List? Function()>{
@@ -973,6 +1176,7 @@ void main() {
             },
           ),
           path: paths.guardFile,
+          clock: clock,
         );
         final s = realService(hold: gate.future, guard: guard);
         await s.bootstrap();

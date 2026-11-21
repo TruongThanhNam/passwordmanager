@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:cupertino_ui/cupertino_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pak_manager/core/model/settings.dart';
 import 'package:pak_manager/features/auth/login_screen.dart';
 import 'package:pak_manager/features/shared/pak_buttons.dart';
 import 'package:pak_manager/features/shared/secret_field.dart';
+import 'package:pak_manager/features/shared/theme/pak_colors.dart';
 import 'package:pak_manager/services/account_service.dart';
 
 import '../../support/account_fakes.dart';
@@ -20,20 +23,29 @@ const _unavailable = 'Không mở được dữ liệu của app. Hãy khởi đ
 
 String _attempts(int n) => 'Còn $n lần thử trước khi dữ liệu bị xóa.';
 
+String _lockout(String time) => 'Thử lại sau $time';
+
+const _fullWait = Duration(minutes: 30);
+
 final _field = find.byKey(const ValueKey('login.field'));
 
+/// S3 với [attemptsLeft] và thời gian chờ [lockout]; chờ xong lần hỏi
+/// `lockoutRemaining` khi mở màn.
 Future<FakeAccountService> _pumpS3(
   WidgetTester tester, {
   int attemptsLeft = 10,
+  Duration lockout = Duration.zero,
 }) async {
-  final service = FakeAccountService(
-    bootstrapResult: const BootstrapHasAccount(),
-  )..attemptsLeft = attemptsLeft;
+  final service =
+      FakeAccountService(bootstrapResult: const BootstrapHasAccount())
+        ..attemptsLeft = attemptsLeft
+        ..lockout = lockout;
   await pumpGateApp(
     tester,
     bootstrap: const BootstrapHasAccount(),
     service: service,
   );
+  await tester.pump();
   return service;
 }
 
@@ -370,5 +382,209 @@ void main() {
       find.text('1 attempt left before your data is erased.'),
       findsOneWidget,
     );
+  });
+
+  test('fr04_lockout_clock_rounds_up_to_whole_seconds', () {
+    expect(lockoutClock(const Duration(minutes: 30)), '30:00');
+    expect(
+      lockoutClock(
+        const Duration(minutes: 30) - const Duration(milliseconds: 1),
+      ),
+      '30:00',
+    );
+    expect(lockoutClock(const Duration(minutes: 29, seconds: 59)), '29:59');
+    expect(lockoutClock(const Duration(seconds: 61)), '01:01');
+    expect(lockoutClock(const Duration(seconds: 1)), '00:01');
+    expect(lockoutClock(const Duration(milliseconds: 1)), '00:01');
+    expect(lockoutClock(Duration.zero), '00:00');
+  });
+
+  testWidgets('fr04_ux_dr42_lockout_on_open_disables_field_and_button', (
+    tester,
+  ) async {
+    final service = await _pumpS3(tester, attemptsLeft: 5, lockout: _fullWait);
+
+    expect(service.lockoutQueries, 1);
+    expect(find.text(_lockout('30:00')), findsOneWidget);
+    expect(_secret(tester).enabled, isFalse);
+    expect(_button(tester).onPressed, isNull);
+    final icon = tester.widget<Icon>(
+      find.descendant(of: _field, matching: find.byType(Icon)),
+    );
+    expect(icon.color?.toARGB32(), PakColors.inkDisabled.color.toARGB32());
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pump();
+    expect(service.unlockCalls, isEmpty);
+  });
+
+  testWidgets(
+    'fr04_fr06_ux_dr21_ux_dr42_fifth_wrong_shows_lockout_above_attempts',
+    (tester) async {
+      final service = await _pumpS3(tester, attemptsLeft: 6);
+      await _type(tester, validPassword);
+      await tester.tap(find.byType(PakPrimaryButton));
+      await tester.pump();
+
+      service
+        ..attemptsLeft = 5
+        ..lockout = _fullWait;
+      service.completeUnlock(const UnlockWrongPassword());
+      await tester.pump();
+
+      // "Thử lại sau 30:00" thay chỗ "Sai mật khẩu.", nằm trên dòng số lần thử.
+      expect(find.text(_wrong), findsNothing);
+      expect(find.text(_lockout('30:00')), findsOneWidget);
+      final lockout = tester.getRect(find.text(_lockout('30:00')));
+      final attempts = tester.getRect(find.text(_attempts(5)));
+      final field = tester.getRect(_field);
+      expect(lockout.top - field.bottom, 6);
+      expect(attempts.top - lockout.bottom, 2);
+      // Ô và nút vô hiệu, ô giữ nội dung.
+      expect(_secret(tester).enabled, isFalse);
+      expect(_secret(tester).controller.text, validPassword);
+      expect(_button(tester).busy, isFalse);
+      expect(_button(tester).onPressed, isNull);
+    },
+  );
+
+  testWidgets('fr04_ux_dr42_lockout_counts_down_every_second', (tester) async {
+    final service = await _pumpS3(tester, attemptsLeft: 5, lockout: _fullWait);
+    expect(find.text(_lockout('30:00')), findsOneWidget);
+
+    service.lockout = _fullWait - const Duration(seconds: 1);
+    await tester.pump(const Duration(seconds: 1));
+
+    expect(find.text(_lockout('30:00')), findsNothing);
+    expect(find.text(_lockout('29:59')), findsOneWidget);
+    expect(service.lockoutQueries, 2);
+  });
+
+  testWidgets('fr04_ux_dr42_lockout_end_returns_to_idle_and_stops_timer', (
+    tester,
+  ) async {
+    final service = await _pumpS3(
+      tester,
+      attemptsLeft: 5,
+      lockout: const Duration(seconds: 1),
+    );
+    expect(find.text(_lockout('00:01')), findsOneWidget);
+
+    service.lockout = Duration.zero;
+    await tester.pump(const Duration(seconds: 1));
+
+    expect(find.textContaining('Thử lại sau'), findsNothing);
+    final texts = tester
+        .widgetList<Text>(find.byType(Text))
+        .map((t) => t.data)
+        .toList();
+    expect(texts, ['PAK Manager', _attempts(5), 'Đăng nhập']);
+    expect(_secret(tester).enabled, isTrue);
+    // Timer đã hủy: không hỏi lại nữa.
+    final queries = service.lockoutQueries;
+    await tester.pump(const Duration(seconds: 5));
+    expect(service.lockoutQueries, queries);
+
+    // Nút bật lại khi ô đủ điều kiện.
+    expect(_button(tester).onPressed, isNull);
+    await _type(tester, validPassword);
+    expect(_button(tester).onPressed, isNotNull);
+  });
+
+  testWidgets('fr04_ux_dr42_locked_out_result_shows_lockout', (tester) async {
+    final service = await _pumpS3(tester, attemptsLeft: 4);
+    await _type(tester, validPassword);
+    await tester.tap(find.byType(PakPrimaryButton));
+    await tester.pump();
+
+    service.lockout = const Duration(minutes: 12, seconds: 30);
+    service.completeUnlock(const UnlockLockedOut());
+    await tester.pump();
+
+    expect(find.text(_lockout('12:30')), findsOneWidget);
+    expect(find.text(_attempts(4)), findsOneWidget);
+    expect(_button(tester).onPressed, isNull);
+  });
+
+  testWidgets('ux_dr42_lockout_queried_on_open_and_after_results', (
+    tester,
+  ) async {
+    final service = await _pumpS3(tester);
+    expect(service.lockoutQueries, 1);
+    await _type(tester, validPassword);
+
+    Future<void> submit(UnlockResult result) async {
+      await tester.tap(find.byType(PakPrimaryButton));
+      await tester.pump();
+      service.completeUnlock(result);
+      await tester.pump();
+    }
+
+    await submit(const UnlockBusy());
+    expect(service.lockoutQueries, 1);
+    await submit(const UnlockWrongPassword());
+    expect(service.lockoutQueries, 2);
+    await submit(const UnlockCorrupt());
+    expect(service.lockoutQueries, 3);
+    await submit(const UnlockUnavailable());
+    expect(service.lockoutQueries, 4);
+  });
+
+  testWidgets('ux_dr42_lockout_timer_cancelled_when_leaving_screen', (
+    tester,
+  ) async {
+    final service = await _pumpS3(tester, attemptsLeft: 5, lockout: _fullWait);
+    await tester.pump(const Duration(seconds: 1));
+    final queries = service.lockoutQueries;
+    expect(queries, 2);
+
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(seconds: 5));
+
+    expect(service.lockoutQueries, queries);
+  });
+
+  testWidgets('fr04_ux_dr42_wrong_result_waits_for_lockout_before_render', (
+    tester,
+  ) async {
+    final service = await _pumpS3(tester, attemptsLeft: 6);
+    await _type(tester, validPassword);
+    await tester.tap(find.byType(PakPrimaryButton));
+    await tester.pump();
+
+    final hold = Completer<Duration>();
+    service
+      ..attemptsLeft = 5
+      ..lockoutHold = hold;
+    service.completeUnlock(const UnlockWrongPassword());
+    await tester.pump();
+
+    // Chưa có thời gian chờ: không chớp "Sai mật khẩu.", vẫn đang kiểm tra.
+    expect(find.text(_wrong), findsNothing);
+    expect(_button(tester).busy, isTrue);
+    expect(_secret(tester).enabled, isFalse);
+
+    hold.complete(_fullWait);
+    await tester.pump();
+
+    expect(find.text(_lockout('30:00')), findsOneWidget);
+    expect(find.text(_wrong), findsNothing);
+    expect(_button(tester).busy, isFalse);
+    expect(_button(tester).onPressed, isNull);
+  });
+
+  testWidgets('fr04_ux_dr42_lockout_en_string', (tester) async {
+    final service =
+        FakeAccountService(bootstrapResult: const BootstrapHasAccount())
+          ..attemptsLeft = 5
+          ..lockout = _fullWait;
+    await pumpGateApp(
+      tester,
+      bootstrap: const BootstrapHasAccount(),
+      service: service,
+      language: AppLanguage.en,
+    );
+    await tester.pump();
+
+    expect(find.text('Try again in 30:00'), findsOneWidget);
   });
 }
