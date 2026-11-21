@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 11-02-2026 16:41
-last_updated: 11-20-2026 00:30
+last_updated: 11-21-2026 18:30
 project: passwordmanager
 project_key: NOKEY
 tracking_system: file-system
@@ -54,8 +54,8 @@ development_status:
   1-16-ghim-toolchain-và-bảo-vệ-cấu-trúc-ci-yml: done
   epic-1-retrospective: done
 
-  epic-2: backlog
-  2-1-đếm-lần-nhập-sai-bền-vững: backlog
+  epic-2: in-progress
+  2-1-đếm-lần-nhập-sai-bền-vững: done
   2-2-thời-gian-chờ-30-phút-không-phụ-thuộc-đồng-hồ-máy: backlog
   2-3-tự-xóa-dữ-liệu-ở-lần-sai-thứ-10: backlog
   2-4-xóa-tạo-tài-khoản-mới-khi-quên-mật-khẩu-chính: backlog

@@ -15,6 +15,7 @@ import '../core/io/pak_paths.dart';
 import '../core/model/recent_entry.dart';
 import '../core/model/vault_card.dart';
 import '../core/ports/file_sync_port.dart';
+import 'lockout_guard.dart';
 import 'vault_session.dart';
 
 /// Kết quả [AccountService.bootstrap].
@@ -98,12 +99,37 @@ final class UnlockWrongPassword extends UnlockResult {
 
 /// Header hỏng/không đọc được, hoặc mật khẩu đúng nhưng dữ liệu không giải
 /// mã được (`login.corrupt`). Không file nào bị xóa.
-// Epic 2 thêm lớp con `lockedOut` (LockoutGuard).
 final class UnlockCorrupt extends UnlockResult {
   const UnlockCorrupt();
 
   @override
   String toString() => 'UnlockCorrupt()';
+}
+
+/// Đã hết lượt thử (`failCount` = 10, AD-8): không ghi, không chạy KDF.
+final class UnlockLockedOut extends UnlockResult {
+  const UnlockLockedOut();
+
+  @override
+  String toString() => 'UnlockLockedOut()';
+}
+
+/// Không ghi được lần thử xuống `guard` trước KDF (AD-8): lần thử bị hủy,
+/// không chạy KDF, số lần thử còn lại không đổi (`create.unavailable`).
+final class UnlockUnavailable extends UnlockResult {
+  const UnlockUnavailable();
+
+  @override
+  String toString() => 'UnlockUnavailable()';
+}
+
+/// Một lần [AccountService.unlock] khác đang chạy: lần gọi này không làm gì
+/// (không ghi `guard`, không chạy KDF).
+final class UnlockBusy extends UnlockResult {
+  const UnlockBusy();
+
+  @override
+  String toString() => 'UnlockBusy()';
 }
 
 /// Lối vào duy nhất cho vòng đời tài khoản (AD-6): [bootstrap], [create],
@@ -117,6 +143,7 @@ class AccountService {
     required this._writer,
     required this._fileSync,
     required this._paths,
+    required this._guard,
     KekDeriver? deriveKek,
     this._nowMs,
   }) : _sodium = sodium,
@@ -127,6 +154,7 @@ class AccountService {
   final AtomicFileWriter _writer;
   final FileSyncPort _fileSync;
   final PakPaths _paths;
+  final LockoutGuard _guard;
   final KekDeriver _deriveKek;
 
   /// Đồng hồ của hiệu chỉnh KDF; `null` = `Stopwatch` mặc định.
@@ -134,33 +162,39 @@ class AccountService {
 
   bool _creating = false;
 
-  /// Lần [unlock] đang chạy; gọi chồng thì trả lại chính `Future` này.
-  Future<UnlockResult>? _unlocking;
+  /// Có một lần [unlock] đang chạy; gọi chồng thì trả [UnlockBusy].
+  bool _unlocking = false;
+
+  /// Số lần thử còn lại trước khi bị chặn (FR-4), đọc từ RAM của
+  /// [LockoutGuard]. Nguồn số {N} của `login.attempts`.
+  int get attemptsLeft => _guard.state.attemptsLeft;
 
   /// Trạng thái tài khoản lúc khởi động, chạy trước `runApp` (không có màn
-  /// chờ, UX-DR30). Chỉ kiểm `vault/header` có tồn tại hay không; không đọc,
-  /// không ghi, không xóa gì.
+  /// chờ, UX-DR30): kiểm `vault/header` có tồn tại hay không rồi nạp `guard`
+  /// (`LockoutGuard.normalize`). Không đọc vault, không xóa gì; chỉ ghi
+  /// `guard` khi có `header` mà `guard` thiếu hoặc không đọc được (AD-8).
   ///
   /// Thiếu `header` nghĩa là chưa có tài khoản đã commit (AD-7), kể cả khi
   /// `vault/` còn `cards`/`recent` từ lần tạo bị tắt giữa chừng: phần đó được
   /// [create] dọn.
   Future<BootstrapResult> bootstrap() async {
-    // Epic 2 chèn các bước của mình vào đây, trước khi kiểm `header`:
-    // - đọc `guard` (LockoutGuard): đếm số lần sai, đang khóa tạm hay không;
-    // - phát hiện lần xóa bị gián đoạn (WipeCoordinator) → làm tiếp rồi về S1.
-    // Kết quả mới (vd lockout, đang xóa) thêm thành lớp con của
+    // Story 2.3 chèn `WipeCoordinator.resumeIfNeeded()` trước bước này
+    // (AD-26); kết quả mới (vd đang xóa) thêm thành lớp con của
     // [BootstrapResult].
+    final bool hasAccount;
     try {
       final type = await FileSystemEntity.type(
         _paths.headerFile,
         followLinks: false,
       );
-      return type == FileSystemEntityType.notFound
-          ? const BootstrapNoAccount()
-          : const BootstrapHasAccount();
+      hasAccount = type != FileSystemEntityType.notFound;
     } on Object {
       return const BootstrapUnavailable();
     }
+    await _guard.normalize(hasAccount: hasAccount);
+    return hasAccount
+        ? const BootstrapHasAccount()
+        : const BootstrapNoAccount();
   }
 
   /// Tạo tài khoản với mật khẩu chính [password] (đã qua `PasswordPolicy`,
@@ -256,23 +290,32 @@ class AccountService {
     }
   }
 
-  /// Mở khóa bằng mật khẩu chính [password] (AD-5):
+  /// Mở khóa bằng mật khẩu chính [password] (AD-4, AD-5, AD-8):
   ///
-  /// đọc `header` → `HeaderCodec.decode` (hỏng → [UnlockCorrupt], không chạy
-  /// KDF) → `ascii.encode` → KDF → so `kcv` (lệch → [UnlockWrongPassword]) →
-  /// mở bọc DEK → giải mã `cards`/`recent`. Mọi lỗi khác → [UnlockCorrupt].
+  /// đọc `header` → `HeaderCodec.decode` (hỏng → [UnlockCorrupt], không chạm
+  /// `guard`, không chạy KDF) → `ascii.encode` → trùng chuỗi sai ngay trước
+  /// → [UnlockWrongPassword] (không đếm, không KDF) → hết lượt →
+  /// [UnlockLockedOut] → ghi `failCount + 1` xuống `guard` (lỗi →
+  /// [UnlockUnavailable], không KDF) → KDF → so `kcv` (lệch → nhớ digest,
+  /// [UnlockWrongPassword]) → khớp: `recordSuccess()` → mở bọc DEK → giải mã
+  /// `cards`/`recent`. Mọi lỗi khác → [UnlockCorrupt]; KDF lỗi sau khi đã
+  /// ghi trước thì lần thử vẫn tính (story 2.5 tách riêng).
   ///
-  /// Không ghi, không xóa file nào. Bản `Uint8List` của mật khẩu luôn bị
-  /// wipe; KEK luôn bị hủy; DEK bị hủy trừ khi đã chuyển cho [VaultSession].
-  /// Gọi chồng khi lần trước chưa xong thì nhận kết quả của lần đang chạy.
-  Future<UnlockResult> unlock(String password) {
-    final running = _unlocking;
-    if (running != null) {
-      return running;
+  /// Chỉ ghi `guard`, không ghi hay xóa file vault nào. Bản `Uint8List` của
+  /// mật khẩu luôn bị wipe; KEK luôn bị hủy; DEK bị hủy trừ khi đã chuyển cho
+  /// [VaultSession]. Gọi chồng khi lần trước chưa xong thì trả [UnlockBusy]
+  /// ngay: chỉ người gọi đầu nhận phiên.
+  Future<UnlockResult> unlock(String password) async {
+    // Kiểm và đặt cờ trước `await` đầu tiên: lần gọi chồng luôn thấy cờ.
+    if (_unlocking) {
+      return const UnlockBusy();
     }
-    final future = _unlock(password);
-    _unlocking = future;
-    return future.whenComplete(() => _unlocking = null);
+    _unlocking = true;
+    try {
+      return await _unlock(password);
+    } finally {
+      _unlocking = false;
+    }
   }
 
   Future<UnlockResult> _unlock(String password) async {
@@ -290,16 +333,27 @@ class AccountService {
         return const UnlockCorrupt();
       }
       pw = ascii.encode(password);
-      // Epic 2: LockoutGuard ghi lần thử vào `guard` TRƯỚC KDF (tắt app giữa
-      // chừng vẫn tính); đang khóa tạm thì trả `lockedOut`, không chạy KDF.
+      if (_guard.isRepeatOfLastWrong(pw)) {
+        return const UnlockWrongPassword();
+      }
+      if (_guard.state.exhausted) {
+        return const UnlockLockedOut();
+      }
+      // Ghi trước KDF: tắt app giữa chừng thì lần thử vẫn tính (FR-5).
+      if (!await _guard.recordAttempt()) {
+        return const UnlockUnavailable();
+      }
       kek = await _deriveKek(pw, header.salt, header.kdf);
       if (kek == null) {
         return const UnlockCorrupt();
       }
       if (!codec.kcvMatches(header, kek)) {
+        _guard.rememberWrong(pw);
         return const UnlockWrongPassword();
       }
-      // Epic 2: `kcv` khớp → LockoutGuard reset bộ đếm.
+      // Mật khẩu đúng: đặt lại bộ đếm trước mọi bước sau, kể cả khi dữ liệu
+      // hỏng (AD-4).
+      await _guard.recordSuccess();
       dek = codec.unwrapDek(header, kek);
       if (dek == null) {
         return const UnlockCorrupt();

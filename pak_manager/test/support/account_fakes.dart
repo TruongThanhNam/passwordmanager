@@ -35,6 +35,10 @@ final class FakeAccountService implements AccountService {
 
   final BootstrapResult bootstrapResult;
 
+  /// Số lần thử còn lại; test đặt tay (ví dụ trước khi `completeUnlock`).
+  @override
+  int attemptsLeft = 10;
+
   /// Mật khẩu của từng lần gọi `create`.
   final List<String> createCalls = [];
 

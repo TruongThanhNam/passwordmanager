@@ -22,6 +22,7 @@ import 'features/shared/providers.dart';
 import 'platform/path_provider_directory.dart';
 import 'platform/pigeon_ports.dart';
 import 'services/account_service.dart';
+import 'services/lockout_guard.dart';
 import 'services/session_controller.dart';
 import 'services/settings_store.dart';
 import 'services/storage_bootstrap.dart';
@@ -133,9 +134,10 @@ final class _AccountWiring {
 }
 
 /// Nối `AccountService` khi lưu trữ đã sẵn sàng: khởi tạo Sodium, nạp
-/// blocklist, dựng `StrengthEstimator` (làm nóng từ điển) rồi chạy
-/// `bootstrap()` (chỉ kiểm `vault/header`, nên không cần màn chờ, UX-DR30).
-/// Sodium hoặc blocklist lỗi → [_AccountWiring.unavailable]. Không ném.
+/// blocklist, dựng `StrengthEstimator` (làm nóng từ điển) và `LockoutGuard`
+/// rồi chạy `bootstrap()` (kiểm `vault/header` và nạp `guard` 4 KiB, nên
+/// không cần màn chờ, UX-DR30). Sodium hoặc blocklist lỗi →
+/// [_AccountWiring.unavailable]. Không ném.
 Future<_AccountWiring> _wireAccount(
   PakPaths paths, {
   required AtomicFileWriter writer,
@@ -165,12 +167,19 @@ Future<_AccountWiring> _wireAccount(
   } on Object {
     return const _AccountWiring.unavailable();
   }
+  final LockoutGuard guard;
+  try {
+    guard = LockoutGuard(sodium: sodium, writer: writer, path: paths.guardFile);
+  } on Object {
+    return const _AccountWiring.unavailable();
+  }
   final service = AccountService(
     sodium: sodium,
     random: SodiumRandomSource(sodium),
     writer: writer,
     fileSync: fileSync,
     paths: paths,
+    guard: guard,
   );
   final bootstrap = await service.bootstrap();
   if (bootstrap is BootstrapUnavailable) {

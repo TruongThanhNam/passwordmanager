@@ -216,3 +216,22 @@
   source_spec: `_bmad-output/implementation-artifacts/spec-epic-1-retro-item-9-gom-fake-test-support.md`
   summary: `FakeSecureKey` dùng chung không ném khi dùng sau `dispose` và không theo dõi bản `copy()`, nên test có thể không bắt lỗi dùng-sau-hủy hay rò key.
   evidence: Chưa xác minh (maybe-false, nếu đúng là medium). Cần rà code `lib/` gọi `runUnlocked*`/`extractBytes`/`copy` trên `SecureKey` và xem test nào dùng `FakeSecureKey` cho các đường đó; nếu có đường dùng key sau `dispose` mà test không bắt thì sửa fake ném `StateError` sau `dispose`.
+
+## Deferred from: code review of spec-2-1-dem-lan-nhap-sai-ben-vung.md (2026-11-21)
+
+- id: DW-2.1-1
+  source_spec: `_bmad-output/implementation-artifacts/spec-2-1-dem-lan-nhap-sai-ben-vung.md`
+  summary: Trên Windows, `tearDown` gọi `sandbox.deleteSync(recursive: true)` thỉnh thoảng fail với errno 145 (thư mục chưa rỗng), làm test pass bị báo fail (`account_service_test`, `settings_store_test`, `lockout_guard_test`).
+  evidence: Có từ trước story 2.1: baseline `92c25d2` fail 2/8 lần chạy `account_service_test` + `settings_store_test` với đúng lỗi này; nhánh 2.1 fail 1 test ở 2/2 lần chạy đầy đủ (`lockout_guard_test` dọn thư mục cùng cách). CI chạy ubuntu nên không gặp. Hướng sửa: helper dọn sandbox dùng chung trong `test/support/` có thử lại vài lần.
+- id: DW-2.1-2
+  source_spec: `_bmad-output/implementation-artifacts/spec-2-1-dem-lan-nhap-sai-ben-vung.md`
+  summary: Tài khoản mới có thể kế thừa trạng thái guard của tài khoản trước: `normalize(hasAccount: false)` nạp `failCount` từ `guard` còn sót, `create()` không đặt lại file lẫn digest chuỗi sai trong RAM; `failCount` cũ là 10 thì tài khoản mới bị chặn ngay.
+  evidence: Medium. Story 2.1 chưa có đường nào để lại `guard` mà mất `header` (chỉ khi `header` bị mất ngoài ý muốn); digest chỉ lọt qua khi có S3 → S1 cùng process (chưa có). Spec 2.1 cấm `create()` chạm `guard`. Story 2.3/2.4 phải bảo đảm `WipeCoordinator` gọi `LockoutGuard.reset()` (đặt file về 0 và bỏ digest), và cân nhắc `normalize` không nạp `failCount` khi không có `header`; test hiện có `ad08_create_never_reads_or_writes_guard` không chạy `bootstrap()` trước `create()` nên không bắt được.
+- id: DW-2.1-3
+  source_spec: `_bmad-output/implementation-artifacts/spec-2-1-dem-lan-nhap-sai-ben-vung.md`
+  summary: Mật khẩu đúng nhưng lần ghi `recordSuccess()` lỗi thì đĩa vẫn giữ `failCount` đã tăng; tắt app trước lần thử kế tiếp thì lần mở sau thấy số cũ, ở lần thứ 10 sẽ bị chặn (và bị xóa khi 2.3 nối `normalize` → `WipeCoordinator`) dù người dùng đã đăng nhập đúng.
+  evidence: Medium, hiếm (lần ghi ngay sau một lần ghi thành công phải lỗi). Spec 2.1 chủ ý cho đăng nhập tiếp khi ghi lỗi. Story 2.3 cần chốt cách xử lý trước khi nối xóa ở `failCount ≥ 10`, ví dụ thử ghi lại khi khóa phiên, hoặc từ chối mở khóa khi không ghi được lần đặt lại.
+- id: DW-2.1-4
+  source_spec: `_bmad-output/implementation-artifacts/spec-2-1-dem-lan-nhap-sai-ben-vung.md`
+  summary: Tài liệu kế hoạch chưa có hai kết quả mới của `unlock`. UX-DR42 (EXPERIENCE.md, epics.md) không có trạng thái S3 cho `UnlockUnavailable` (không ghi được lần thử xuống `guard`), S3 dùng lại `create.unavailable` mà UX chưa chốt. Danh sách `UnlockResult` ở ARCHITECTURE-SPINE.md:414 và epics.md chỉ ghi `success`/`wrongPassword`/`lockedOut`/`corrupt` (spine ghi "vd", không bắt buộc đủ).
+  evidence: Low. Code review vòng 2 story 2.1 (blind-hunter). Spec 2.1 (Always) chủ ý dùng `createUnavailable`, nên code đúng spec; chỉ tài liệu UX/kiến trúc lệch. Sửa bằng `docs(ux)`/`docs(planning)`, nên làm trước story 2.5, vì 2.5 thêm một kết quả "thử lại" vào cùng chỗ.
