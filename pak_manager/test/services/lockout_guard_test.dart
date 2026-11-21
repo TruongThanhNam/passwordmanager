@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -24,8 +25,12 @@ Uint8List _bytes(String s) => ascii.encode(s);
 
 void main() {
   late SodiumSumo sodium;
+
+  /// Số lần ghi `guard` (đếm bước tạo file tạm) qua mọi guard của test.
+  var writes = 0;
   late Directory sandbox;
   late PakPaths paths;
+  late FakeClock clock;
 
   setUpAll(() async => sodium = await initSodium());
 
@@ -33,6 +38,9 @@ void main() {
     sandbox = Directory.systemTemp.createTempSync('pak_guard_');
     paths = PakPaths(sandbox.path);
     Directory(paths.pakDir).createSync();
+    // Đủ lớn để đặt mốc cũ trước thời điểm hiện tại mà không âm.
+    clock = FakeClock(const Duration(hours: 10).inMilliseconds);
+    writes = 0;
   });
   tearDown(() => sandbox.deleteSync(recursive: true));
 
@@ -64,13 +72,26 @@ void main() {
     writer: AtomicFileWriter(
       sync ?? RecordingFileSync(),
       onStep: (step) {
+        if (step == AtomicWriteStep.createTmp) {
+          writes++;
+        }
         if (failAt?.call() == step) {
           throw _SimulatedCrash();
         }
       },
     ),
     path: paths.guardFile,
+    clock: clock,
   );
+
+  /// [failCount] với mốc chờ tại thời điểm hiện tại của [clock].
+  GuardState markedNow(int failCount) => GuardState(
+    failCount: failCount,
+    waitBootId: clock.boot,
+    waitStartMono: clock.ms,
+  );
+
+  const minute = Duration(minutes: 1);
 
   group('normalize', () {
     test('ad08_with_account_recreates_missing_guard', () async {
@@ -118,10 +139,11 @@ void main() {
     }
 
     test('ad08_valid_guard_is_loaded_without_writing', () async {
-      const saved = GuardState(
+      // Mốc hợp lệ: cùng lần khởi động, trước thời điểm hiện tại.
+      final saved = GuardState(
         failCount: 7,
-        waitBootId: 'fake-boot-1',
-        waitStartMono: 1800000,
+        waitBootId: clock.boot,
+        waitStartMono: clock.ms - 60000,
       );
       writeDisk(saved);
       final before = diskBytes();
@@ -192,24 +214,26 @@ void main() {
       expect(g.state.attemptsLeft, 0);
     });
 
-    test('ad08_attempt_keeps_wait_and_wiping_fields', () async {
-      const saved = GuardState(
-        failCount: 6,
-        waitBootId: 'fake-boot-1',
-        waitStartMono: 1800000,
+    test('ad08_tenth_attempt_keeps_old_mark_and_never_reads_clock', () async {
+      final saved = GuardState(
+        failCount: 9,
+        waitBootId: clock.boot,
+        waitStartMono: clock.ms - waitDuration.inMilliseconds,
       );
       writeDisk(saved);
       final g = guard();
       await g.normalize(hasAccount: true);
+      clock.error = StateError('đồng hồ giả lỗi');
+      clock.bootError = StateError('bootId giả lỗi');
 
       expect(await g.recordAttempt(), isTrue);
 
       expect(
         diskState(),
-        const GuardState(
-          failCount: 7,
-          waitBootId: 'fake-boot-1',
-          waitStartMono: 1800000,
+        GuardState(
+          failCount: 10,
+          waitBootId: saved.waitBootId,
+          waitStartMono: saved.waitStartMono,
         ),
       );
     });
@@ -243,6 +267,355 @@ void main() {
         expect(diskState().failCount, 3);
       });
     }
+  });
+
+  group('wait', () {
+    test(
+      'fr04_ad08_fifth_attempt_writes_count_and_mark_in_one_write',
+      () async {
+        writeDisk(const GuardState(failCount: 4));
+        final g = guard();
+        await g.normalize(hasAccount: true);
+        writes = 0;
+
+        expect(await g.recordAttempt(), isTrue);
+
+        expect(writes, 1);
+        expect(diskState(), markedNow(5));
+        expect(g.state, markedNow(5));
+        expect(await g.waitRemaining(), waitDuration);
+      },
+    );
+
+    test('fr04_ad08_each_attempt_five_to_nine_sets_new_mark', () async {
+      writeDisk(const GuardState(failCount: 4));
+      final g = guard();
+      await g.normalize(hasAccount: true);
+      expect(await g.recordAttempt(), isTrue);
+      for (var n = 6; n <= 9; n++) {
+        clock.advance(waitDuration);
+        expect(await g.waitRemaining(), Duration.zero);
+
+        expect(await g.recordAttempt(), isTrue);
+
+        expect(diskState(), markedNow(n));
+        expect(await g.waitRemaining(), waitDuration);
+      }
+    });
+
+    for (final which in ['mono', 'boot']) {
+      test(
+        'fr04_ad08_clock_failure_on_fifth_attempt_writes_nothing_$which',
+        () async {
+          writeDisk(const GuardState(failCount: 4));
+          final g = guard();
+          await g.normalize(hasAccount: true);
+          final before = diskBytes();
+          writes = 0;
+          if (which == 'mono') {
+            clock.error = StateError('đồng hồ giả lỗi');
+          } else {
+            clock.bootError = StateError('bootId giả lỗi');
+          }
+
+          expect(await g.recordAttempt(), isFalse);
+
+          expect(writes, 0);
+          expect(diskBytes(), before);
+          expect(g.state, const GuardState(failCount: 4));
+        },
+      );
+    }
+
+    test('fr04_attempts_one_to_four_never_read_clock', () async {
+      final g = guard();
+      await g.normalize(hasAccount: true);
+      clock.error = StateError('đồng hồ giả lỗi');
+      clock.bootError = StateError('bootId giả lỗi');
+
+      for (var n = 1; n <= 4; n++) {
+        expect(await g.recordAttempt(), isTrue);
+        expect(diskState(), GuardState(failCount: n));
+        expect(await g.waitRemaining(), Duration.zero);
+      }
+      expect(clock.reads, 0);
+      expect(clock.bootReads, 0);
+    });
+
+    test('fr04_ad09_wait_counts_down_and_expires', () async {
+      writeDisk(const GuardState(failCount: 4));
+      final g = guard();
+      await g.normalize(hasAccount: true);
+      expect(await g.recordAttempt(), isTrue);
+
+      clock.advance(minute * 10);
+      expect(await g.waitRemaining(), minute * 20);
+      clock.advance(minute * 20 - const Duration(milliseconds: 1));
+      expect(await g.waitRemaining(), const Duration(milliseconds: 1));
+      clock.advance(const Duration(milliseconds: 1));
+      expect(await g.waitRemaining(), Duration.zero);
+      // Mốc hết hạn không bị xóa; lần thử kế tiếp ghi đè.
+      expect(diskState(), g.state);
+      expect(g.state.waitStartMono, isNotNull);
+    });
+
+    test('fr06_ad08_restart_same_boot_keeps_remaining_without_write', () async {
+      writeDisk(const GuardState(failCount: 4));
+      final g = guard();
+      await g.normalize(hasAccount: true);
+      expect(await g.recordAttempt(), isTrue);
+      final saved = diskBytes();
+
+      clock.advance(minute * 12);
+      writes = 0;
+      final restarted = guard();
+      await restarted.normalize(hasAccount: true);
+
+      expect(writes, 0);
+      expect(diskBytes(), saved);
+      expect(await restarted.waitRemaining(), minute * 18);
+      expect(writes, 0);
+    });
+
+    test('tc03_ad09_only_monotonic_time_counts', () async {
+      // Chỉnh đồng hồ máy +1 giờ không đi vào đâu: guard chỉ đọc đồng hồ đơn
+      // điệu, và nó chỉ chạy thêm 1 phút.
+      writeDisk(const GuardState(failCount: 4));
+      final g = guard();
+      await g.normalize(hasAccount: true);
+      expect(await g.recordAttempt(), isTrue);
+
+      clock.advance(minute);
+
+      expect(await g.waitRemaining(), minute * 29);
+    });
+
+    test('tc03_ad08_reboot_reanchors_on_normalize', () async {
+      writeDisk(const GuardState(failCount: 4));
+      final g = guard();
+      await g.normalize(hasAccount: true);
+      expect(await g.recordAttempt(), isTrue);
+
+      // Khởi động lại: `bootId` khác; đồng hồ đơn điệu đã chạy quá mốc cũ
+      // nên chỉ `bootId` cho biết máy đã khởi động lại.
+      clock
+        ..boot = 'fake-boot-2'
+        ..ms += waitDuration.inMilliseconds;
+      writes = 0;
+      final restarted = guard();
+      await restarted.normalize(hasAccount: true);
+
+      expect(writes, 1);
+      expect(diskState(), markedNow(5));
+      expect(restarted.state, markedNow(5));
+      expect(await restarted.waitRemaining(), waitDuration);
+    });
+
+    test('tc03_ad08_mono_backwards_reanchors_on_normalize', () async {
+      writeDisk(const GuardState(failCount: 4));
+      final g = guard();
+      await g.normalize(hasAccount: true);
+      expect(await g.recordAttempt(), isTrue);
+
+      clock.ms -= 1;
+      final restarted = guard();
+      await restarted.normalize(hasAccount: true);
+
+      expect(diskState(), markedNow(5));
+      expect(await restarted.waitRemaining(), waitDuration);
+    });
+
+    final partial = <String, GuardState>{
+      'both_null': const GuardState(failCount: 7),
+      'mono_null': const GuardState(failCount: 7, waitBootId: 'fake-boot'),
+      'boot_null': const GuardState(failCount: 7, waitStartMono: 5),
+    };
+    for (final MapEntry(key: name, value: saved) in partial.entries) {
+      test('ad08_missing_mark_anchored_on_normalize_$name', () async {
+        writeDisk(saved);
+        final g = guard();
+
+        await g.normalize(hasAccount: true);
+
+        expect(diskState(), markedNow(7));
+        expect(g.state, markedNow(7));
+        expect(await g.waitRemaining(), waitDuration);
+      });
+    }
+
+    for (final step in AtomicWriteStep.values) {
+      test('tc03_ad08_reanchor_crash_at_${step.name}_never_shortens', () async {
+        // Mốc cũ của lần khởi động trước, còn 1 phút nếu không neo lại.
+        writeDisk(
+          GuardState(
+            failCount: 6,
+            waitBootId: 'fake-boot-old',
+            waitStartMono: clock.ms - minute.inMilliseconds * 29,
+          ),
+        );
+        final g = guard(failAt: () => step);
+
+        await g.normalize(hasAccount: true);
+
+        // RAM mang mốc mới dù ghi lỗi.
+        expect(g.state, markedNow(6));
+        expect(await g.waitRemaining(), waitDuration);
+        expect(pakNames().where((n) => n.endsWith('.tmp')), isEmpty);
+
+        // Mở lại app sau 1 phút: sau rename đĩa có mốc mới (còn 29:00);
+        // trước rename đĩa còn mốc cũ, neo lại lần nữa (30:00).
+        clock.advance(minute);
+        final restarted = guard();
+        await restarted.normalize(hasAccount: true);
+        expect(
+          await restarted.waitRemaining(),
+          step == AtomicWriteStep.fsyncDirectory ? minute * 29 : waitDuration,
+        );
+      });
+    }
+
+    test('ad08_normalize_clock_failure_keeps_mark_without_write', () async {
+      const saved = GuardState(failCount: 6);
+      writeDisk(saved);
+      clock.error = StateError('đồng hồ giả lỗi');
+      writes = 0;
+      final g = guard();
+
+      await g.normalize(hasAccount: true);
+
+      expect(writes, 0);
+      expect(g.state, saved);
+      expect(await g.waitRemaining(), waitDuration);
+
+      // Đồng hồ đọc lại được: lần hỏi kế tiếp neo mốc, ghi xuống đĩa, rồi
+      // đếm ngược thật (không đứng mãi ở 30:00).
+      clock.error = null;
+      expect(await g.waitRemaining(), waitDuration);
+      expect(writes, 1);
+      expect(diskState(), saved.withWaitMark(clock.boot, clock.ms));
+      clock.advance(minute);
+      expect(await g.waitRemaining(), waitDuration - minute);
+    });
+
+    test('ad08_normalize_without_account_never_reanchors', () async {
+      const saved = GuardState(failCount: 7);
+      writeDisk(saved);
+      writes = 0;
+      final g = guard();
+
+      await g.normalize(hasAccount: false);
+
+      expect(writes, 0);
+      expect(clock.reads, 0);
+      expect(clock.bootReads, 0);
+      expect(g.state, saved);
+    });
+
+    for (final which in ['mono', 'boot']) {
+      test('ad08_ad09_wait_query_clock_failure_is_full_wait_$which', () async {
+        writeDisk(const GuardState(failCount: 4));
+        final g = guard();
+        await g.normalize(hasAccount: true);
+        expect(await g.recordAttempt(), isTrue);
+        clock.advance(minute * 25);
+        if (which == 'mono') {
+          clock.error = StateError('đồng hồ giả lỗi');
+        } else {
+          clock.bootError = StateError('bootId giả lỗi');
+        }
+        writes = 0;
+
+        expect(await g.waitRemaining(), waitDuration);
+        expect(writes, 0);
+        expect(g.state, diskState());
+      });
+    }
+
+    test('ad08_wait_query_outside_range_never_reads_clock', () async {
+      writeDisk(const GuardState(failCount: 3));
+      final g = guard();
+      await g.normalize(hasAccount: true);
+      clock.error = StateError('đồng hồ giả lỗi');
+
+      expect(await g.waitRemaining(), Duration.zero);
+      expect(clock.reads, 0);
+      expect(clock.bootReads, 0);
+    });
+
+    test(
+      'tc03_ad08_boot_id_change_at_runtime_reanchors_on_wait_query',
+      () async {
+        writeDisk(const GuardState(failCount: 4));
+        final g = guard();
+        await g.normalize(hasAccount: true);
+        expect(await g.recordAttempt(), isTrue);
+        clock.advance(minute * 20);
+
+        // `bootId` đọc ra khác giữa hai lần đọc trong cùng process (đọc chập
+        // chờn): neo lại, chỉ kéo dài thời gian chờ.
+        clock.boot = 'fake-boot-2';
+        expect(await g.waitRemaining(), waitDuration);
+        expect(diskState(), markedNow(5));
+
+        // Ghi lỗi khi neo lại: RAM vẫn mang mốc mới.
+        AtomicWriteStep? failAt;
+        final flaky = guard(failAt: () => failAt);
+        await flaky.normalize(hasAccount: true);
+        clock
+          ..advance(minute)
+          ..boot = 'fake-boot-3';
+        failAt = AtomicWriteStep.writeTmp;
+        expect(await flaky.waitRemaining(), waitDuration);
+        expect(flaky.state, markedNow(5));
+      },
+    );
+
+    test('fr04_ad08_tenth_attempt_ends_wait', () async {
+      writeDisk(const GuardState(failCount: 8));
+      final g = guard();
+      await g.normalize(hasAccount: true);
+      expect(await g.recordAttempt(), isTrue);
+      clock.advance(waitDuration);
+
+      expect(await g.recordAttempt(), isTrue);
+
+      expect(g.state.failCount, 10);
+      expect(await g.waitRemaining(), Duration.zero);
+    });
+
+    test('fr05_ad08_success_after_wait_clears_mark', () async {
+      writeDisk(const GuardState(failCount: 4));
+      final g = guard();
+      await g.normalize(hasAccount: true);
+      expect(await g.recordAttempt(), isTrue);
+      clock.advance(waitDuration);
+
+      await g.recordSuccess();
+
+      expect(diskState(), GuardState.initial);
+      expect(await g.waitRemaining(), Duration.zero);
+    });
+
+    test('ad08_wait_query_waits_for_pending_attempt', () async {
+      writeDisk(const GuardState(failCount: 4));
+      final g = guard();
+      await g.normalize(hasAccount: true);
+      final gate = Completer<void>();
+      clock.hold = gate;
+
+      // Lần ghi trước KDF đang đọc đồng hồ thì UI hỏi thời gian chờ: hai
+      // lời gọi chạy tuần tự, không lời nào đọc trạng thái cũ.
+      final attempt = g.recordAttempt();
+      final remaining = g.waitRemaining();
+      await Future<void>.delayed(Duration.zero);
+      expect(clock.reads, 1);
+      gate.complete();
+
+      expect(await attempt, isTrue);
+      expect(await remaining, waitDuration);
+      expect(diskState(), markedNow(5));
+      expect(g.state, markedNow(5));
+    });
   });
 
   group('recordSuccess', () {

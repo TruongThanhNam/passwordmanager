@@ -43,6 +43,11 @@ class AppLocalizationsVi extends AppLocalizations {
   }
 
   @override
+  String loginLockout(String time) {
+    return 'Thử lại sau $time';
+  }
+
+  @override
   String get createWarning =>
       'Không có cách khôi phục mật khẩu chính. Nếu quên, bạn sẽ mất toàn bộ dữ liệu.';
 

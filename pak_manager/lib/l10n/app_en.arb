@@ -45,6 +45,15 @@
       }
     }
   },
+  "loginLockout": "Try again in {time}",
+  "@loginLockout": {
+    "description": "login.lockout (FR-4): inline-message on S3 while waiting after wrong attempts 5–9, above login.attempts; time is the countdown as mm:ss, updated every second.",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
   "createWarning": "There is no way to recover your main password. If you forget it, you lose all your data.",
   "@createWarning": {
     "description": "create.warning (FR-1): paragraph above the two fields on S2."

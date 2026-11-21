@@ -232,11 +232,11 @@ void main() {
     );
     expect(find.bySemanticsLabel('Ẩn mật khẩu'), findsOneWidget);
 
-    // Ô khóa: nút mắt không còn action (state giữ nguyên: đang hiện).
+    // Ô khóa: nút mắt không còn action, và ô đã tự che lại.
     await _pump(tester, controller, enabled: false);
     expect(
       tester
-          .getSemantics(find.bySemanticsLabel('Ẩn mật khẩu'))
+          .getSemantics(find.bySemanticsLabel('Hiện mật khẩu'))
           .getSemanticsData()
           .hasAction(SemanticsAction.tap),
       isFalse,
@@ -267,6 +267,31 @@ void main() {
       tester.widget<EditableText>(find.byType(EditableText)).obscureText,
       isTrue,
     );
+
+    await _finish(tester, controller);
+  });
+
+  testWidgets('ux_dr19_ux_dr42_disabling_field_reobscures_revealed_text', (
+    tester,
+  ) async {
+    await _pump(tester, controller);
+    await tester.enterText(find.byType(EditableText), 'fake secret value');
+    EditableText editable() =>
+        tester.widget<EditableText>(find.byType(EditableText));
+
+    await tester.tap(find.byIcon(CupertinoIcons.eye));
+    await tester.pump();
+    expect(editable().obscureText, isFalse);
+
+    // Khóa ô (bận hoặc đang chờ): che lại, giữ nội dung.
+    await _pump(tester, controller, enabled: false);
+    expect(editable().obscureText, isTrue);
+    expect(find.byIcon(CupertinoIcons.eye), findsOneWidget);
+    expect(controller.text, 'fake secret value');
+
+    // Mở lại: vẫn che, người dùng tự bấm hiện nếu muốn.
+    await _pump(tester, controller);
+    expect(editable().obscureText, isTrue);
 
     await _finish(tester, controller);
   });
