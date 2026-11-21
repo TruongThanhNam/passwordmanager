@@ -87,6 +87,31 @@ context:
 - Given test mới, when đọc tên, then mỗi tên bắt đầu bằng id thật đệm 2 chữ số (`fr04_`, `fr05_`, `fr08_`, `ad08_`, `ad20_`, `ad22_`, `ux_dr42_`), ví dụ `fr05_same_wrong_string_not_counted`.
 - Given S3 ở idle, when hiển thị, then ngay dưới ô có "Còn 10 lần thử trước khi dữ liệu bị xóa."; sau một lần sai thì "Sai mật khẩu." nằm trên và N = 9, ô vẫn giữ nội dung và nhập lại được ngay.
 
+### Review Findings
+
+Code review vòng 2 (2026-11-21). Lớp review: blind-hunter, edge-case-hunter, verification-gap, acceptance-auditor; không lớp nào lỗi. Chạy lại `flutter test` ở `83c6250`: 917 pass, 18 skip, 1 fail (errno 145 lúc `tearDown`, tức `DW-2.1-1`).
+
+- [x] [Review][Patch] Test hết lượt không phát hiện được một lần ghi `guard` cùng byte: dời kiểm `exhausted` xuống sau `recordAttempt()` thì vẫn ghi `{"failCount":10,…}` y hệt nên `guardBytes() == before` vẫn qua; cần đếm `AtomicWriteStep.rename` qua `onStep` và đòi bằng 0 [pak_manager/test/services/account_service_test.dart:720]
+- [x] [Review][Patch] Chưa có test mức `unlock` chứng minh chỉ `kcv` lệch mới nhớ digest: sau `UnlockUnavailable` và sau KDF lỗi (`null`/ném), thử lại đúng mật khẩu trên cùng service phải chạy KDF và ra `UnlockSuccess`; dời `rememberWrong` lên trên thì người dùng nhập đúng bị báo "Sai mật khẩu." mà không test nào fail (story 2.5 sửa đúng vùng này) [pak_manager/test/services/account_service_test.dart:807]
+- [x] [Review][Patch] Chưa có test mức `unlock` cho Always "`recordSuccess()` ghi lỗi thì vẫn mở khóa tiếp": cho lần ghi thứ hai (sau khi `kcv` khớp) lỗi, đòi `UnlockSuccess`, phiên dùng được và `attemptsLeft == 10`; hiện chỉ `lockout_guard_test` kiểm trực tiếp guard [pak_manager/test/services/account_service_test.dart:646]
+- [x] [Review][Defer] Tài liệu kế hoạch chưa phản ánh `UnlockUnavailable`/`UnlockBusy`: trạng thái S3 trong UX-DR42 (EXPERIENCE.md, epics.md) không có trạng thái "không ghi được lần thử", S3 dùng lại `create.unavailable` mà UX chưa chốt [pak_manager/lib/features/auth/login_screen.dart:123] — deferred: sửa chạm tài liệu kế hoạch (`docs(ux|planning)`), ghi `DW-2.1-4`
+
+**Rejected:**
+
+- `false`: AC3 chỉ chứng minh bằng `FakeAccountService` (acceptance-auditor). Phía service đã có `fr04_ad08_first_wrong_is_on_disk_before_kdf` (`attemptsLeft == 9`). S3 đọc `attemptsLeft` mỗi lần `build` và mọi kết quả `unlock` đều `setState`, nên không có chỗ nào để số bị cũ.
+- `false`: dòng `login.attempts` ẩn khi provider `null` (acceptance-auditor). `main.dart` chỉ đặt service `null` cùng với `BootstrapUnavailable`, nên S3 không bao giờ hiện khi provider `null`.
+- `false`: chuỗi EN khác Code Map (acceptance-auditor). Đây là patch có chủ ý #6 (ICU plural); Code Map nằm ngoài khối frozen, VI khớp spec.
+- `low`: frontmatter `status: done`, `review_loop_iteration: 0` và Spec Change Log trống, lệch với sprint-status `review` (acceptance-auditor + blind-hunter). Sửa là sửa spec đang review; bước đồng bộ trạng thái của review này sẽ chỉnh `status`.
+- `false`: `recordSuccess()` ghi cả khi `failCount` đã là 0 (acceptance-auditor). Hành vi này do Always/AD-4 quy định, không có hại.
+- `low`: `pak/guard` là thư mục thì mọi `recordAttempt` lỗi vĩnh viễn, ra `UnlockUnavailable` (edge-case-hunter). Chỉ xảy ra khi có người sửa file từ ngoài (root/jailbreak), và sửa phải thêm nhánh xóa thư mục.
+- `low`: `unlock` chạy trước `normalize` sẽ ghi đè `failCount` trên đĩa từ `GuardState.initial` (edge-case-hunter + blind-hunter). Ở production, `main.dart` chỉ đưa service ra sau khi `bootstrap()` thành công, nên đường này chưa với tới; sửa phải thêm cờ trạng thái. Story 2.3 phải chạy `normalize` sau mỗi lần xóa.
+- `low`: bằng chứng verify ghi trước các patch review và còn 1 fail (blind-hunter). Đã chạy lại: chỉ còn đúng lỗi teardown `DW-2.1-1`; sửa là sửa spec.
+- `false`: hết lượt (N = 0) bị kẹt mà không ai theo dõi (blind-hunter). Design Notes ghi rõ trạng thái tạm "fail closed", và 2.3/2.4 đã nằm trong backlog.
+- `false`: `LockoutGuard` không hủy `_digestKey`/không wipe digest, thiếu `reset()` (blind-hunter). Khóa sống theo process. AD-22 cho service giữ digest, và digest không phải bản rõ. `reset()` là API của 2.3 theo AD-21.
+- `low`: `lockout_guard_test` lặp teardown dễ fail và tự định nghĩa `_SimulatedCrash` (blind-hunter). Teardown đã nằm trong `DW-2.1-1`. `_SimulatedCrash` là kiểu lỗi cục bộ, không phải fake port, và hai file test cũ cũng làm vậy.
+- `low`: `ad22_unlock_wipes_password_bytes` không phủ 3 đường trả sớm trước KDF (blind-hunter). `finally` đã wipe; muốn quan sát byte mà không qua `derive` thì phải thêm seam vào code.
+- `false`: `ad08_guard_recreate_failure_keeps_zero_in_ram` yếu, có thể dẫn tới bypass (blind-hunter). Sau khi ghi lỗi, RAM là 0; lần `unlock` kế tiếp vẫn ghi trước KDF, hoặc ra `UnlockUnavailable` nếu writer vẫn lỗi. Không có bypass.
+
 ## Implementation Notes
 
 - Subagent triển khai theo spec; không đổi gì ngoài Code Map. Tự chọn thêm: codec bỏ qua key lạ (giống `settings`), bắt `waitStartMono ≥ 0`, chưa kiểm chéo cặp `waitBootId`/`waitStartMono` (để 2.2); `normalize(hasAccount: false)` vẫn nạp `guard` đọc được vào RAM nhưng không ghi.

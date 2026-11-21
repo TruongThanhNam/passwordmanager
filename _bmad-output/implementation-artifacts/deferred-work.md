@@ -231,3 +231,7 @@
   source_spec: `_bmad-output/implementation-artifacts/spec-2-1-dem-lan-nhap-sai-ben-vung.md`
   summary: Mật khẩu đúng nhưng lần ghi `recordSuccess()` lỗi thì đĩa vẫn giữ `failCount` đã tăng; tắt app trước lần thử kế tiếp thì lần mở sau thấy số cũ, ở lần thứ 10 sẽ bị chặn (và bị xóa khi 2.3 nối `normalize` → `WipeCoordinator`) dù người dùng đã đăng nhập đúng.
   evidence: Medium, hiếm (lần ghi ngay sau một lần ghi thành công phải lỗi). Spec 2.1 chủ ý cho đăng nhập tiếp khi ghi lỗi. Story 2.3 cần chốt cách xử lý trước khi nối xóa ở `failCount ≥ 10`, ví dụ thử ghi lại khi khóa phiên, hoặc từ chối mở khóa khi không ghi được lần đặt lại.
+- id: DW-2.1-4
+  source_spec: `_bmad-output/implementation-artifacts/spec-2-1-dem-lan-nhap-sai-ben-vung.md`
+  summary: Tài liệu kế hoạch chưa có hai kết quả mới của `unlock`. UX-DR42 (EXPERIENCE.md, epics.md) không có trạng thái S3 cho `UnlockUnavailable` (không ghi được lần thử xuống `guard`), S3 dùng lại `create.unavailable` mà UX chưa chốt. Danh sách `UnlockResult` ở ARCHITECTURE-SPINE.md:414 và epics.md chỉ ghi `success`/`wrongPassword`/`lockedOut`/`corrupt` (spine ghi "vd", không bắt buộc đủ).
+  evidence: Low. Code review vòng 2 story 2.1 (blind-hunter). Spec 2.1 (Always) chủ ý dùng `createUnavailable`, nên code đúng spec; chỉ tài liệu UX/kiến trúc lệch. Sửa bằng `docs(ux)`/`docs(planning)`, nên làm trước story 2.5, vì 2.5 thêm một kết quả "thử lại" vào cùng chỗ.

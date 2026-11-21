@@ -720,7 +720,22 @@ void main() {
     test('fr04_ad08_exhausted_is_locked_out_without_write_or_kdf', () async {
       installVault();
       writeGuard(10);
-      final s = realService();
+      // Đếm lần ghi qua writer: ghi lại `failCount: 10` cho ra đúng byte cũ,
+      // nên chỉ so nội dung file thì không bắt được một lần ghi thừa.
+      var guardWrites = 0;
+      final guard = LockoutGuard(
+        sodium: sodium,
+        writer: AtomicFileWriter(
+          RecordingFileSync(),
+          onStep: (step) {
+            if (step == AtomicWriteStep.createTmp) {
+              guardWrites++;
+            }
+          },
+        ),
+        path: paths.guardFile,
+      );
+      final s = realService(guard: guard);
       await s.bootstrap();
       final before = guardBytes();
       expect(s.attemptsLeft, 0);
@@ -728,8 +743,97 @@ void main() {
       expect(await s.unlock(fixturePw), isA<UnlockLockedOut>());
 
       expect(derives, 0);
+      expect(guardWrites, 0);
       expect(guardBytes(), before);
       expect(s.attemptsLeft, 0);
+    });
+
+    test('fr05_ad08_only_kcv_mismatch_remembers_wrong_string', () async {
+      installVault();
+      // Lần ghi trước KDF lỗi: không nhớ digest, thử lại đúng chuỗi đó vẫn
+      // chạy KDF.
+      var failWrites = true;
+      final guard = LockoutGuard(
+        sodium: sodium,
+        writer: AtomicFileWriter(
+          RecordingFileSync(),
+          onStep: (step) {
+            if (failWrites && step == AtomicWriteStep.createTmp) {
+              throw _SimulatedCrash();
+            }
+          },
+        ),
+        path: paths.guardFile,
+      );
+      final s = realService(guard: guard);
+      await s.bootstrap();
+      expect(await s.unlock(fixturePw), isA<UnlockUnavailable>());
+      expect(derives, 0);
+
+      failWrites = false;
+      final afterUnavailable = await s.unlock(fixturePw);
+      expect(afterUnavailable, isA<UnlockSuccess>());
+      expect(derives, 1);
+      (afterUnavailable as UnlockSuccess).session.lock();
+
+      // KDF lỗi (`null` rồi ném): không nhớ digest, lần sau KDF chạy lại.
+      final real = kekDeriver(sodium);
+      final failures = <Future<SecureKey?> Function()>[
+        () async => null,
+        () async => throw StateError('KDF giả lỗi'),
+      ];
+      var kdfRuns = 0;
+      final sync = RecordingFileSync();
+      final flaky = service(
+        writer: AtomicFileWriter(sync),
+        fileSync: sync,
+        derive: (pw, salt, params) {
+          final run = kdfRuns++;
+          return run < failures.length
+              ? failures[run]()
+              : real(pw, salt, params);
+        },
+      );
+      await flaky.bootstrap();
+      expect(await flaky.unlock(fixturePw), isA<UnlockCorrupt>());
+      expect(await flaky.unlock(fixturePw), isA<UnlockCorrupt>());
+      final afterKdfFailure = await flaky.unlock(fixturePw);
+      expect(afterKdfFailure, isA<UnlockSuccess>());
+      expect(kdfRuns, 3);
+      (afterKdfFailure as UnlockSuccess).session.lock();
+    });
+
+    test('fr05_ad08_reset_write_failure_still_unlocks', () async {
+      installVault();
+      writeGuard(3);
+      // Lần ghi thứ nhất (trước KDF) thành công, lần thứ hai (`recordSuccess`)
+      // lỗi.
+      var guardWrites = 0;
+      final guard = LockoutGuard(
+        sodium: sodium,
+        writer: AtomicFileWriter(
+          RecordingFileSync(),
+          onStep: (step) {
+            if (step == AtomicWriteStep.createTmp && ++guardWrites == 2) {
+              throw _SimulatedCrash();
+            }
+          },
+        ),
+        path: paths.guardFile,
+      );
+      final s = realService(guard: guard);
+      await s.bootstrap();
+
+      final result = await s.unlock(fixturePw);
+
+      expect(result, isA<UnlockSuccess>());
+      expect(guardWrites, 2);
+      final session = (result as UnlockSuccess).session;
+      expect((session.readCards() as SessionOk).value, fixtureCards);
+      expect(s.attemptsLeft, 10);
+      // Đĩa còn số đã tăng trước KDF (DW-2.1-3).
+      expect(diskFailCount(), 4);
+      session.lock();
     });
 
     test('fr04_ad08_tenth_wrong_exhausts_attempts', () async {
