@@ -304,7 +304,8 @@ class AccountService {
   /// đọc `header` → `HeaderCodec.decode` (hỏng → [UnlockCorrupt], không chạm
   /// `guard`, không chạy KDF) → `ascii.encode` → trùng chuỗi sai ngay trước
   /// → [UnlockWrongPassword] (không đếm, không KDF) → hết lượt hoặc đang chờ
-  /// ([lockoutRemaining] > 0) → [UnlockLockedOut] (không ghi, không KDF) →
+  /// ([lockoutRemaining] > 0) → [UnlockLockedOut] (không ghi lần thử, không
+  /// KDF; có thể ghi mốc chờ vừa neo lại) →
   /// ghi `failCount + 1` (cùng mốc chờ khi giá trị mới là 5–9) xuống `guard`
   /// (ghi hoặc đọc đồng hồ lỗi → [UnlockUnavailable], không KDF) → KDF → so
   /// `kcv` (lệch → nhớ digest, [UnlockWrongPassword]) → khớp:

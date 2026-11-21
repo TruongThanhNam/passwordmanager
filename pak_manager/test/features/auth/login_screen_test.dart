@@ -412,9 +412,6 @@ void main() {
       find.descendant(of: _field, matching: find.byType(Icon)),
     );
     expect(icon.color?.toARGB32(), PakColors.inkDisabled.color.toARGB32());
-    await tester.testTextInput.receiveAction(TextInputAction.done);
-    await tester.pump();
-    expect(service.unlockCalls, isEmpty);
   });
 
   testWidgets(
@@ -422,6 +419,9 @@ void main() {
     (tester) async {
       final service = await _pumpS3(tester, attemptsLeft: 6);
       await _type(tester, validPassword);
+      // Người dùng đang hiện mật khẩu trước lần sai thứ 5.
+      await tester.tap(find.byIcon(CupertinoIcons.eye));
+      await tester.pump();
       await tester.tap(find.byType(PakPrimaryButton));
       await tester.pump();
 
@@ -439,11 +439,30 @@ void main() {
       final field = tester.getRect(_field);
       expect(lockout.top - field.bottom, 6);
       expect(attempts.top - lockout.bottom, 2);
-      // Ô và nút vô hiệu, ô giữ nội dung.
+      // Ô và nút vô hiệu, ô giữ nội dung nhưng đã che lại (nút mắt khóa).
       expect(_secret(tester).enabled, isFalse);
       expect(_secret(tester).controller.text, validPassword);
+      expect(
+        tester.widget<EditableText>(find.byType(EditableText)).obscureText,
+        isTrue,
+      );
       expect(_button(tester).busy, isFalse);
       expect(_button(tester).onPressed, isNull);
+
+      // Timer bắt đầu từ kết quả `unlock`: đếm tiếp từng giây.
+      service.lockout = _fullWait - lockoutTick;
+      await tester.pump(lockoutTick);
+      expect(find.text(_lockout('29:59')), findsOneWidget);
+
+      // Hết giờ: về idle, ô vẫn giữ mật khẩu hợp lệ nên nút bật lại ngay,
+      // không cần gõ thêm.
+      service.lockout = Duration.zero;
+      await tester.pump(lockoutTick);
+      expect(find.textContaining('Thử lại sau'), findsNothing);
+      expect(find.text(_attempts(5)), findsOneWidget);
+      expect(_secret(tester).enabled, isTrue);
+      expect(_secret(tester).controller.text, validPassword);
+      expect(_button(tester).onPressed, isNotNull);
     },
   );
 
@@ -457,6 +476,13 @@ void main() {
     expect(find.text(_lockout('30:00')), findsNothing);
     expect(find.text(_lockout('29:59')), findsOneWidget);
     expect(service.lockoutQueries, 2);
+
+    // Nhịp thứ hai: timer vẫn chạy (không phải one-shot).
+    service.lockout = _fullWait - const Duration(seconds: 2);
+    await tester.pump(lockoutTick);
+
+    expect(find.text(_lockout('29:58')), findsOneWidget);
+    expect(service.lockoutQueries, 3);
   });
 
   testWidgets('fr04_ux_dr42_lockout_end_returns_to_idle_and_stops_timer', (

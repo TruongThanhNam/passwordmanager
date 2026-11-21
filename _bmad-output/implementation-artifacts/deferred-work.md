@@ -235,3 +235,10 @@
   source_spec: `_bmad-output/implementation-artifacts/spec-2-1-dem-lan-nhap-sai-ben-vung.md`
   summary: Tài liệu kế hoạch chưa có hai kết quả mới của `unlock`. UX-DR42 (EXPERIENCE.md, epics.md) không có trạng thái S3 cho `UnlockUnavailable` (không ghi được lần thử xuống `guard`), S3 dùng lại `create.unavailable` mà UX chưa chốt. Danh sách `UnlockResult` ở ARCHITECTURE-SPINE.md:414 và epics.md chỉ ghi `success`/`wrongPassword`/`lockedOut`/`corrupt` (spine ghi "vd", không bắt buộc đủ).
   evidence: Low. Code review vòng 2 story 2.1 (blind-hunter). Spec 2.1 (Always) chủ ý dùng `createUnavailable`, nên code đúng spec; chỉ tài liệu UX/kiến trúc lệch. Sửa bằng `docs(ux)`/`docs(planning)`, nên làm trước story 2.5, vì 2.5 thêm một kết quả "thử lại" vào cùng chỗ.
+
+## Deferred from: code review of spec-2-2-thoi-gian-cho-30-phut-khong-phu-thuoc-dong-ho-may.md (2026-11-21)
+
+- id: DW-2.2-1
+  source_spec: `_bmad-output/implementation-artifacts/spec-2-2-thoi-gian-cho-30-phut-khong-phu-thuoc-dong-ho-may.md`
+  summary: Mở rộng DW-2.1-2. `guard` cũ còn `failCount` 5–9 khi mất `header` thì sau `create()` tài khoản mới vào S3 ở trạng thái chờ 30:00, `unlock` trả `UnlockLockedOut`, và `waitRemaining` neo lại rồi ghi mốc vào `guard` cũ.
+  evidence: Code review story 2.2 (edge-case-hunter). Có từ trước: `normalize(hasAccount: false)` nạp `failCount` từ file sót, `create()` không đặt lại (spec 2.1 cấm). Story 2.2 đổi hậu quả từ "ít lượt hơn" sang "bị chờ 30 phút". Sửa cùng DW-2.1-2 (story 2.3/2.4: `LockoutGuard.reset()` khi tạo hoặc xóa, hoặc `normalize` không nạp khi không có `header`).

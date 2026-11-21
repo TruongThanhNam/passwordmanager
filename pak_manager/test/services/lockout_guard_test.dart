@@ -339,6 +339,7 @@ void main() {
         expect(await g.waitRemaining(), Duration.zero);
       }
       expect(clock.reads, 0);
+      expect(clock.bootReads, 0);
     });
 
     test('fr04_ad09_wait_counts_down_and_expires', () async {
@@ -485,6 +486,15 @@ void main() {
       expect(writes, 0);
       expect(g.state, saved);
       expect(await g.waitRemaining(), waitDuration);
+
+      // Đồng hồ đọc lại được: lần hỏi kế tiếp neo mốc, ghi xuống đĩa, rồi
+      // đếm ngược thật (không đứng mãi ở 30:00).
+      clock.error = null;
+      expect(await g.waitRemaining(), waitDuration);
+      expect(writes, 1);
+      expect(diskState(), saved.withWaitMark(clock.boot, clock.ms));
+      clock.advance(minute);
+      expect(await g.waitRemaining(), waitDuration - minute);
     });
 
     test('ad08_normalize_without_account_never_reanchors', () async {
@@ -497,6 +507,7 @@ void main() {
 
       expect(writes, 0);
       expect(clock.reads, 0);
+      expect(clock.bootReads, 0);
       expect(g.state, saved);
     });
 
@@ -528,6 +539,7 @@ void main() {
 
       expect(await g.waitRemaining(), Duration.zero);
       expect(clock.reads, 0);
+      expect(clock.bootReads, 0);
     });
 
     test(

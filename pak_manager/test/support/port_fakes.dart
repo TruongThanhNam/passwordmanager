@@ -61,6 +61,9 @@ final class FakeClock implements ClockPort {
   /// Số lần đọc [monotonicMs].
   int reads = 0;
 
+  /// Số lần đọc [bootId] (tính cả lần ném [bootError]).
+  int bootReads = 0;
+
   void advance(Duration d) => ms += d.inMilliseconds;
 
   @override
@@ -79,6 +82,7 @@ final class FakeClock implements ClockPort {
 
   @override
   Future<String> bootId() async {
+    bootReads++;
     final e = bootError;
     if (e != null) {
       Error.throwWithStackTrace(e, StackTrace.current);

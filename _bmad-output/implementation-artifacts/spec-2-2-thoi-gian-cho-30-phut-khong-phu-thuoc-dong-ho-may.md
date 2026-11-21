@@ -4,7 +4,7 @@ type: 'feature'
 created: '2026-11-21'
 status: 'done'
 route: 'dispatch'
-review_loop_iteration: 0
+review_loop_iteration: 1
 baseline_commit: '16632cb34188d318aaa713b803b216799bf9a66d'
 context:
   - '{project-root}/_bmad-output/implementation-artifacts/epic-2-context.md'
@@ -83,6 +83,36 @@ context:
 - Given `lib/`, when grep `DateTime.now\|Stopwatch` trong `core/guard` và `lockout_guard.dart`, then không có kết quả; features không import `ClockPort`/`core/guard`; `check_imports` OK.
 - Given test mới, when đọc tên, then mỗi tên bắt đầu bằng id thật đệm 2 chữ số (`fr04_`, `fr06_`, `tc03_`, `ad08_`, `ad09_`, `ux_dr21_`, `ux_dr42_`).
 - Given S3 ngay sau lần sai thứ 5 (VI), when hiển thị, then thấy "Thử lại sau 30:00" ở trên "Còn 5 lần thử trước khi dữ liệu bị xóa.", ô và nút vô hiệu; hết giờ thì chỉ còn dòng số lần thử và nút bật lại khi ô đủ điều kiện.
+
+### Review Findings
+
+Code review 2026-11-21 (`bmad-code-review`, diff `16632cb..2da130e`): blind-hunter, edge-case-hunter, verification-gap, acceptance-auditor; không lớp nào lỗi. 24 phát hiện: 1 decision (chọn hướng a, thành patch), 7 patch (gom thành 6 mục), 1 defer, 15 bác. Sau patch: `flutter analyze --fatal-infos --fatal-warnings` sạch, `check_imports` OK, `flutter test` 979 pass, 18 skip, 0 fail (một lần chạy khác fail 1 test teardown errno 145, `DW-2.1-1`).
+
+- [x] [Review][Patch] Mật khẩu đang hiện bị kẹt trên màn suốt 30 phút chờ — `SecretField` tắt nút mắt khi `enabled: false` và không đặt lại `_obscured`; chuỗi vừa nhập (thường gần đúng mật khẩu thật) nằm rõ trên màn tới khi hết giờ. Quyết định 2026-11-21 (namtruong): hướng (a), `SecretField` tự che lại khi `enabled` chuyển `false`, giữ nội dung đúng spec; không xóa ô theo mock [pak_manager/lib/features/shared/secret_field.dart:134]
+- [x] [Review][Patch] Doc `unlock` vẫn ghi "[UnlockLockedOut] (không ghi, không KDF)", lệch doc lớp `UnlockLockedOut` (có thể ghi mốc neo lại) [pak_manager/lib/services/account_service.dart:307]
+- [x] [Review][Patch] Không test nào kiểm nhịp thứ hai trở đi của timer: đổi `Timer.periodic` thành `Timer` một lần (đông cứng ở 29:59) mà mọi test vẫn qua. Thêm bước 29:58 và `lockoutQueries == 3` vào `fr04_ux_dr42_lockout_counts_down_every_second` [pak_manager/test/features/auth/login_screen_test.dart:450]
+- [x] [Review][Patch] Vào chờ qua `_submit` (lần sai thứ 5) không có test nào cho thời gian chạy tiếp: bỏ `_applyLockout` trong `_submit` thì đông cứng ở 30:00 mà test vẫn qua; nửa sau AC3 (hết giờ → nút bật lại khi ô vẫn giữ mật khẩu hợp lệ, không gõ thêm) chưa được kiểm trên đường này (verification-gap + acceptance-auditor) [pak_manager/test/features/auth/login_screen_test.dart:420]
+- [x] [Review][Patch] `FakeClock.reads` chỉ đếm `monotonicMs()`, nên các assert "không đọc đồng hồ" bỏ lọt `bootId()` (`ad08_normalize_without_account_never_reanchors`, `ad08_wait_query_outside_range_never_reads_clock`, lần 9→10). Thêm bộ đếm `bootReads` và assert nó [pak_manager/test/support/port_fakes.dart:47]
+- [x] [Review][Patch] Chưa test phục hồi sau khi đồng hồ lỗi lúc `normalize`: Implementation Notes hứa neo lại ở lần đọc thành công kế tiếp, nhưng `ad08_normalize_clock_failure_keeps_mark_without_write` dừng ở 30:00. Nối thêm: hết lỗi → `waitRemaining` ghi mốc, tiến 1 phút → 29:00 [pak_manager/test/services/lockout_guard_test.dart:476]
+- [x] [Review][Patch] Assert bàn phím trong `fr04_ux_dr42_lockout_on_open_disables_field_and_button` không chứng minh gì: ô chưa focus nên `receiveAction` gửi client `-1` và bị bỏ qua. Xóa hai dòng đó (nút và ô vô hiệu đã được assert) [pak_manager/test/features/auth/login_screen_test.dart:402]
+- [x] [Review][Defer] Guard cũ sót lại khi mất `header` làm tài khoản mới tạo bị chờ 30:00 ngay ở S3 [pak_manager/lib/services/lockout_guard.dart:75] — deferred: có từ trước (DW-2.1-2); story 2.2 mở rộng hậu quả từ "ít lượt hơn" sang "bị chờ 30 phút", ghi thành DW-2.2-1
+
+**Bác (rejected):**
+
+- blind: ô giữ nội dung lệch mock (ô trống) — sửa là sửa dòng Always frozen; đưa vào làm hướng (b) của mục Decision.
+- blind + edge-case: `bootId` chập chờn lúc chạy (`""` ↔ id thật) làm mỗi nhịp 1 giây neo lại và ghi đĩa, chờ vô hạn — có thật về logic (Design Notes "không bao giờ treo vô hạn" chỉ đúng khi `bootId` ổn định), nhưng `Settings.Global.BOOT_COUNT` đọc qua cache, gần như không lỗi chập chờn; sửa cần cache `bootId` theo process, tức thêm trạng thái và nhánh. Low, hiếm.
+- blind: `GuardState.waitRemaining(nowMono)` không so `bootId`, gọi thiếu `reanchored` thì rút ngắn — caller duy nhất (`LockoutGuard.waitRemaining`) luôn neo lại trước trong cùng tác vụ `_serial`; sửa là thêm tham số.
+- blind: các mục bác ở vòng 1 không có trong `deferred-work.md` — mục bị bác là hành vi chủ ý, không phải việc hoãn.
+- blind: frontmatter spec lệch (`status`, `review_loop_iteration`, Spec Change Log trống) — sửa là sửa spec; bước 6 của review này đặt lại `status`.
+- blind: không có bằng chứng chạy lại test sau patch vòng 1 — quy trình, không hại code; CI của PR cung cấp bằng chứng.
+- blind: timer 1 giây không theo vòng đời app — chỉ là một lời gọi Pigeon đồng bộ mỗi giây khi ở nền; thêm `WidgetsBindingObserver` là thêm nhánh.
+- blind: trình đọc màn hình không được báo đếm ngược — EXPERIENCE.md:328 ghi spine không yêu cầu bổ sung ngữ nghĩa; `login.wrong` có sẵn cũng vậy.
+- blind: `lockoutClock`/`lockoutTick` public trong file màn hình — cùng kiểu với `loginTitleTop` có sẵn; không có hại cụ thể.
+- edge-case: `UnlockCorrupt` sau lần thử đã đếm (KDF lỗi) ở 5–9 bị đếm ngược che mất — chỉ xảy ra khi KDF lỗi sau khi đọc `header` thành công (story 2.5 tách riêng); sửa cần quyết định UX và thêm nhánh.
+- edge-case: `bootId` `""` ở cả hai lần khởi động thì chờ sau reboot ngắn hơn 30:00 tính lại — đã bác ở vòng 1 (#6): tổng thời gian thật vẫn ≥ 30 phút.
+- acceptance: nhập lại đúng chuỗi sai trước khi đang chờ trả `UnlockWrongPassword` — UI không với tới (ô vô hiệu); FR-5 yêu cầu báo sai ngay khi trùng chuỗi trước.
+- acceptance: nhánh từ chối khi chờ có thể ghi đĩa, trái "không ghi" — spec tự mâu thuẫn với dòng `waitRemaining` (bắt ghi khi neo lại); sửa là sửa spec. Phần doc code nằm ở mục Patch đầu tiên.
+- acceptance: đồng hồ lỗi lúc khởi động thì không ghi mốc trước S3 — Implementation Notes chấp nhận (fail closed 30:00, neo lại sau); sửa là sửa intent.
 
 ## Implementation Notes
 

@@ -859,12 +859,14 @@ void main() {
       expect(await s.lockoutRemaining(), waitDuration);
       clock.advance(waitDuration);
       final readsBefore = clock.reads;
+      final bootReadsBefore = clock.bootReads;
 
       expect(await s.unlock(wrongPw), isA<UnlockWrongPassword>());
       expect(diskFailCount(), 10);
       expect(s.attemptsLeft, 0);
       // Chỉ lần kiểm chờ đọc đồng hồ; lần ghi `failCount: 10` thì không.
       expect(clock.reads, readsBefore + 1);
+      expect(clock.bootReads, bootReadsBefore + 1);
       expect(await s.lockoutRemaining(), Duration.zero);
 
       // Mật khẩu đúng cũng không được thử nữa (chưa xóa: story 2.3).

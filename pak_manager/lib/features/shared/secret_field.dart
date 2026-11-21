@@ -21,7 +21,9 @@ const Set<ContextMenuButtonType> secretFieldMenuTypes = {
 ///   tắt Copy/Cut không làm gì.
 /// - Giữ nguyên ký tự không ASCII (bộ gõ Telex/VNI): không lọc phím.
 /// - Nút mắt hiện/ẩn; icon là hành động kế tiếp (đang ẩn → mắt, đang hiện →
-///   mắt gạch chéo).
+///   mắt gạch chéo). Ô chuyển sang khóa ([enabled] `false`) thì tự che lại,
+///   vì nút mắt khóa theo: bản rõ không kẹt trên màn (vd suốt thời gian chờ
+///   30 phút ở S3).
 /// - `controller.clear()` trong `dispose()`: rời màn là xóa nội dung.
 ///
 /// Dáng `text-field-login` (S1/S2/S3): cao [PakSpacing.buttonHeight], nền
@@ -49,7 +51,8 @@ class SecretField extends StatefulWidget {
   final ValueChanged<String>? onChanged;
   final ValueChanged<String>? onSubmitted;
 
-  /// `false` khi đang bận (KDF/ghi): khóa ô và nút mắt.
+  /// `false` khi đang bận (KDF/ghi) hoặc đang chờ: khóa ô và nút mắt, và che
+  /// lại nội dung đang hiện.
   final bool enabled;
 
   /// Nhãn trợ năng của nút mắt (chuỗi ARB của nơi dùng); `null` = không
@@ -63,6 +66,15 @@ class SecretField extends StatefulWidget {
 
 class _SecretFieldState extends State<SecretField> {
   bool _obscured = true;
+
+  @override
+  void didUpdateWidget(SecretField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Nút mắt khóa theo ô: không che lại thì người dùng không ẩn được bản rõ.
+    if (oldWidget.enabled && !widget.enabled) {
+      _obscured = true;
+    }
+  }
 
   @override
   void dispose() {
