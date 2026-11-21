@@ -26,7 +26,7 @@ const double loginTitleToField = 48;
 const double loginFieldToSubmit = 24;
 
 /// Thông báo inline dưới ô S3 sau một lần [AccountService.unlock].
-enum _UnlockMessage { wrong, corrupt }
+enum _UnlockMessage { wrong, corrupt, unavailable }
 
 /// Màn Login (UX-DR31): nền `surface-base`, không nav-bar, "PAK Manager"
 /// large-title căn giữa.
@@ -35,10 +35,13 @@ enum _UnlockMessage { wrong, corrupt }
 ///   của S3. Không có "Quên mật khẩu", gợi ý hay câu hỏi bảo mật (FR-10).
 ///   [unavailable]: nút vô hiệu và `create.unavailable` bên dưới (fail
 ///   closed).
-/// - S3 ([hasAccount] `true`, UX-DR42 phần Epic 1): ô `SecretField` không
-///   placeholder → inline-message → nút "Đăng nhập". Nút vô hiệu khi < 15 ký
-///   tự hoặc có ký tự không ASCII (hiện `pw.nonAscii`); chuỗi đó không bao
-///   giờ tới `unlock`. Khi đang kiểm tra: spinner, khóa ô và nút.
+/// - S3 ([hasAccount] `true`, UX-DR42): ô `SecretField` không placeholder →
+///   inline-message → nút "Đăng nhập". Khối thông báo: `login.wrong`/
+///   `login.corrupt`/`pw.nonAscii`/`create.unavailable` ở trên,
+///   `login.attempts` luôn nằm cuối (UX-DR21, FR-4). Nút vô hiệu khi < 15 ký
+///   tự, có ký tự không ASCII (hiện `pw.nonAscii`) hoặc hết lượt thử; chuỗi
+///   đó không bao giờ tới `unlock`. Khi đang kiểm tra: spinner, khóa ô và
+///   nút.
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({
     super.key,
@@ -73,9 +76,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     super.dispose();
   }
 
-  bool _canSubmit() =>
-      ref.read(accountServiceProvider) != null &&
-      PasswordPolicy.meetsLoginGate(_password.text);
+  bool _canSubmit() {
+    final service = ref.read(accountServiceProvider);
+    return service != null &&
+        service.attemptsLeft > 0 &&
+        PasswordPolicy.meetsLoginGate(_password.text);
+  }
 
   void _onChanged(String _) => setState(() => _message = null);
 
@@ -114,6 +120,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           _busy = false;
           _message = _UnlockMessage.corrupt;
         });
+      case UnlockUnavailable():
+        setState(() {
+          _busy = false;
+          _message = _UnlockMessage.unavailable;
+        });
+      // Hết lượt: dòng `login.attempts` (N = 0) và nút vô hiệu là đủ.
+      case UnlockLockedOut():
+      // Lần kiểm tra khác đang chạy: bỏ qua, không thông báo.
+      case UnlockBusy():
+        setState(() => _busy = false);
     }
   }
 
@@ -161,8 +177,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final String? message = switch (_message) {
       _UnlockMessage.wrong => l10n.loginWrong,
       _UnlockMessage.corrupt => l10n.loginCorrupt,
+      _UnlockMessage.unavailable => l10n.createUnavailable,
       null => nonAscii ? l10n.pwNonAscii : null,
     };
+    final attemptsLeft = ref.read(accountServiceProvider)?.attemptsLeft;
     return [
       _row(
         const ValueKey('row.password'),
@@ -177,6 +195,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         ),
       ),
       if (message != null) InlineMessage(message),
+      if (attemptsLeft != null)
+        InlineMessage(
+          l10n.loginAttempts(attemptsLeft),
+          key: const ValueKey('login.attempts'),
+          top: message == null ? inlineMessageGap : inlineMessageLineGap,
+        ),
       const SizedBox(height: loginFieldToSubmit),
       _row(
         const ValueKey('row.submit'),

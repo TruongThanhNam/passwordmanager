@@ -152,6 +152,12 @@ abstract class AppLocalizations {
   /// **'Data is damaged — The password is correct but the data can\'t be read. You can use \"Erase & Create New Account\", then import your export file.'**
   String get loginCorrupt;
 
+  /// login.attempts (FR-4): always the last inline-message line on S3; N is the number of attempts left.
+  ///
+  /// In en, this message translates to:
+  /// **'{N, plural, =1{1 attempt left before your data is erased.} other{{N} attempts left before your data is erased.}}'**
+  String loginAttempts(int N);
+
   /// create.warning (FR-1): paragraph above the two fields on S2.
   ///
   /// In en, this message translates to:

@@ -38,6 +38,17 @@ class AppLocalizationsEn extends AppLocalizations {
       'Data is damaged — The password is correct but the data can\'t be read. You can use \"Erase & Create New Account\", then import your export file.';
 
   @override
+  String loginAttempts(int N) {
+    String _temp0 = intl.Intl.pluralLogic(
+      N,
+      locale: localeName,
+      other: '$N attempts left before your data is erased.',
+      one: '1 attempt left before your data is erased.',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get createWarning =>
       'There is no way to recover your main password. If you forget it, you lose all your data.';
 

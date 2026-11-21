@@ -38,6 +38,11 @@ class AppLocalizationsVi extends AppLocalizations {
       'Dữ liệu bị hỏng — Mật khẩu đúng nhưng không đọc được dữ liệu. Bạn có thể dùng \"Xóa & Tạo tài khoản mới\" rồi import lại từ file export.';
 
   @override
+  String loginAttempts(int N) {
+    return 'Còn $N lần thử trước khi dữ liệu bị xóa.';
+  }
+
+  @override
   String get createWarning =>
       'Không có cách khôi phục mật khẩu chính. Nếu quên, bạn sẽ mất toàn bộ dữ liệu.';
 

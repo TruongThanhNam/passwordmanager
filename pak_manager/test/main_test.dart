@@ -303,6 +303,17 @@ void main() {
       expect(find.byType(SecretField), findsOneWidget);
       expect(find.byType(PakPrimaryButton), findsOneWidget);
       expect(find.text('Log In'), findsOneWidget);
+      // AD-8: main() nối `LockoutGuard`; có `header` mà thiếu `guard` thì
+      // bootstrap tạo lại với failCount 0, S3 hiện đủ 10 lần thử.
+      expect(
+        find.text('10 attempts left before your data is erased.'),
+        findsOneWidget,
+      );
+      expect(
+        File('${sandbox.path}${sep}pak${sep}guard').readAsStringSync(),
+        '{"v":1,"failCount":0,"waitBootId":null,"waitStartMono":null,'
+        '"wiping":false}',
+      );
     } else {
       // Thiếu libsodium: fail closed như 1.6 (S1, nút vô hiệu).
       expect(login.hasAccount, isFalse);

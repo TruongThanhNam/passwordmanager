@@ -36,6 +36,15 @@
   "@loginCorrupt": {
     "description": "login.corrupt (FR-7): inline-message on S3 when the header is damaged or the data can't be decrypted."
   },
+  "loginAttempts": "{N, plural, =1{1 attempt left before your data is erased.} other{{N} attempts left before your data is erased.}}",
+  "@loginAttempts": {
+    "description": "login.attempts (FR-4): always the last inline-message line on S3; N is the number of attempts left.",
+    "placeholders": {
+      "N": {
+        "type": "int"
+      }
+    }
+  },
   "createWarning": "There is no way to recover your main password. If you forget it, you lose all your data.",
   "@createWarning": {
     "description": "create.warning (FR-1): paragraph above the two fields on S2."
