@@ -885,7 +885,7 @@ void main() {
 
   group('ghim action và runner', () {
     const checkout =
-        'actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0';
+        'actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0';
 
     test('ad12_uses_by_tag_rejected', () {
       final yaml = _ci.replaceFirst(checkout, 'actions/checkout@v4');
@@ -899,7 +899,7 @@ void main() {
     test('ad12_uses_sha_without_tag_comment_rejected', () {
       final yaml = _ci.replaceFirst(
         checkout,
-        'actions/checkout@11d5960a326750d5838078e36cf38b85af677262',
+        'actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09',
       );
       expect(checkCiStructure(yaml), _violation(['actions/checkout@', 'tag']));
     });
@@ -907,9 +907,9 @@ void main() {
     test('ad12_uses_short_sha_rejected', () {
       final yaml = _ci.replaceFirst(
         checkout,
-        'actions/checkout@11d5960 # v4.4.0',
+        'actions/checkout@fbc6f39 # v5.1.0',
       );
-      expect(checkCiStructure(yaml), _violation(['actions/checkout@11d5960']));
+      expect(checkCiStructure(yaml), _violation(['actions/checkout@fbc6f39']));
     });
 
     test('ad12_job_level_uses_pinned_accepted_unpinned_rejected', () {
