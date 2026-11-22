@@ -711,6 +711,37 @@ void main() {
       session.lock();
     });
 
+    // Retro Epic 1, mục 8: máy không cấp nổi 64 MiB lúc hiệu chỉnh nên tạo
+    // tài khoản ở sàn; mở khóa sau đó dùng đúng tham số trong header, bằng
+    // Argon2id thật. (Lần 2/3 lỗi rồi lùi về sàn: `kdf_calibration_test`.)
+    test('ad05_fr03_account_created_at_floor_unlocks_with_real_kdf', () async {
+      final sync = RecordingFileSync();
+      final real = kekDeriver(sodium);
+      final creator = service(
+        writer: AtomicFileWriter(sync),
+        fileSync: sync,
+        derive: (pw, salt, params) async =>
+            params == KdfParams.start ? null : real(pw, salt, params),
+      );
+
+      final created = await creator.create(_password);
+      expect(created, isA<CreateSuccess>());
+      (created as CreateSuccess).session.lock();
+
+      final decoded = HeaderCodec(sodium)
+          .decode(File(paths.headerFile).readAsBytesSync());
+      expect((decoded as HeaderOk).header.kdf, KdfParams.floor);
+
+      final s = realService();
+      await s.bootstrap();
+      final result = await s.unlock(_password);
+
+      expect(result, isA<UnlockSuccess>());
+      (result as UnlockSuccess).session.lock();
+      expect(derives, 1);
+      expectKeksDisposed();
+    });
+
     test('fr03_ad05_wrong_password_is_wrong_not_corrupt', () async {
       installVault();
       final before = snapshot();

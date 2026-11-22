@@ -760,10 +760,16 @@ So that tôi không bị chặn ngay từ bước đầu tiên chỉ vì máy í
 **And** chỉ trả `null` khi cả lần thử ở sàn cũng lỗi
 **And** không bao giờ trả tham số dưới sàn; mọi KEK không được trả về đều bị `dispose`
 
+**Given** lần thử đầu thành công nhưng lần chạy thứ 2 hoặc 3 lỗi (`derive` trả `null` hoặc ném)
+**When** lần lỗi chưa ở sàn
+**Then** hàm thử lại đúng một lần ở sàn m=19 MiB, t=2 và trả `(params, kek)` của lần đó nếu thành công, kể cả khi chậm (tối đa 4 lần chạy)
+**And** trả `null` khi lần ở sàn cũng lỗi, hoặc khi chính lần lỗi đã ở sàn; mọi KEK không được trả về đều bị `dispose`
+**And** tài khoản tạo ở sàn mở khóa được bằng tham số ghi trong `header` (test e2e với Argon2id thật)
+
 **Given** lần thử đầu thành công
 **When** hiệu chỉnh tiếp tục
 **Then** thuật toán giữ nguyên như story 1.4: probe ở m=64 MiB, t=3, nhận nếu 500–1500 ms; nhanh hơn thì tăng t (tối đa 10, giữ m), chậm hơn thì giảm t rồi m (không dưới sàn); tối đa 3 lần chạy; trần 2 giây là trần mềm, lần chạy thứ 3 được nhận dù chậm
-**And** unit test với `derive` giả cho các ca: probe lỗi rồi sàn thành công, cả hai lỗi, probe ném
+**And** unit test với `derive` giả cho các ca: probe lỗi rồi sàn thành công, cả hai lỗi, probe ném, lần 2/3 lỗi hoặc ném rồi sàn thành công, lần 2/3 lỗi và sàn cũng lỗi, lần lỗi đã ở sàn không thử lại
 
 ### Story 1.11: Ghim chuỗi cung ứng và Stack trong CI
 

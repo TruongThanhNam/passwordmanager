@@ -207,37 +207,58 @@ void main() {
     }
   });
 
-  test(
-    'ad05_kdf_failure_after_probe_success_returns_null_and_disposes',
-    () async {
-      for (final durations in [
-        <int?>[300, null],
-        <int?>[2000, 2500, null],
-      ]) {
-        final h = _Harness(durations);
-
-        final result = await h.run();
-
-        expect(result, isNull);
-        expect(h.keys.every((k) => k.disposed), isTrue);
-        // Lỗi sau probe thành công không lùi về sàn.
-        expect(h.calls, hasLength(durations.length), reason: '$durations');
-      }
-    },
-  );
-
-  test('ad05_derive_throwing_after_probe_success_returns_null', () async {
-    for (final durations in [
-      <int?>[300, _Harness._throw],
-      <int?>[2000, 2500, _Harness._throw],
+  test('ad05_failure_after_probe_success_falls_back_to_floor', () async {
+    // Retro Epic 1, mục 8: lần 2 hoặc 3 lỗi (null hoặc ném) sau probe thành
+    // công cũng thử đúng một lần ở sàn; lần ở sàn chậm vẫn được nhận.
+    for (final (durations, expectedRuns) in [
+      (<int?>[300, null, 9000], 3),
+      (<int?>[300, _Harness._throw, 9000], 3),
+      (<int?>[300, 2200, null, 9000], 4),
+      (<int?>[300, 2200, _Harness._throw, 9000], 4),
     ]) {
       final h = _Harness(durations);
 
       final result = await h.run();
 
-      expect(result, isNull, reason: '$durations');
-      expect(h.calls, hasLength(durations.length));
-      expect(h.keys.every((k) => k.disposed), isTrue, reason: '$durations');
+      expect(h.calls, hasLength(expectedRuns), reason: '$durations');
+      expect(h.calls.last, KdfParams.floor, reason: '$durations');
+      expect(result!.params, KdfParams.floor, reason: '$durations');
+      expect(identical(result.kek, h.keys.last), isTrue, reason: '$durations');
+      h.expectOnlyReturnedAlive(result);
+    }
+  });
+
+  test(
+    'ad05_failure_after_probe_and_floor_both_failing_returns_null',
+    () async {
+      for (final durations in [
+        <int?>[300, null, null],
+        <int?>[300, _Harness._throw, _Harness._throw],
+        <int?>[300, 2200, null, null],
+        <int?>[300, 2200, _Harness._throw, null],
+      ]) {
+        final h = _Harness(durations);
+
+        final result = await h.run();
+
+        expect(result, isNull, reason: '$durations');
+        expect(h.calls, hasLength(durations.length), reason: '$durations');
+        expect(h.keys.every((k) => k.disposed), isTrue, reason: '$durations');
+      }
+    },
+  );
+
+  test('ad05_failure_already_at_floor_is_not_retried', () async {
+    // Probe 20 s → giảm thẳng xuống sàn ở lần 2; lần 2 lỗi thì không còn gì
+    // thấp hơn để thử lại.
+    for (final failure in <int?>[null, _Harness._throw]) {
+      final h = _Harness([20000, failure]);
+
+      final result = await h.run();
+
+      expect(result, isNull, reason: '$failure');
+      expect(h.calls, [KdfParams.start, KdfParams.floor], reason: '$failure');
+      expect(h.keys.every((k) => k.disposed), isTrue);
     }
   });
 
