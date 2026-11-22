@@ -16,7 +16,9 @@ import 'package:pak_manager/core/io/pak_paths.dart';
 import 'package:pak_manager/core/ports/file_sync_port.dart';
 import 'package:pak_manager/services/account_service.dart';
 import 'package:pak_manager/services/lockout_guard.dart';
+import 'package:pak_manager/services/settings_store.dart';
 import 'package:pak_manager/services/vault_session.dart';
+import 'package:pak_manager/services/wipe_coordinator.dart';
 import 'package:sodium/sodium_sumo.dart';
 
 import '../core/vault_fixture.dart';
@@ -27,20 +29,6 @@ const _password = 'fake purple lantern 42 drift';
 
 /// KEK giả cố định mà `derive` giả trả về (không chạy Argon2id thật).
 Uint8List _kekBytes() => seq(0xA0, kekBytes);
-
-/// [RandomSource] tất định: mỗi lần gọi trả một dãy byte mới.
-final class _CountingRandom implements RandomSource {
-  int _next = 1;
-  final List<int> requested = [];
-
-  @override
-  Uint8List bytes(int length) {
-    requested.add(length);
-    return seq((_next++) * 7, length);
-  }
-}
-
-final class _SimulatedCrash implements Exception {}
 
 /// KEK thật (bọc `SecureKey` của libsodium) ghi nhận `dispose`, để kiểm
 /// service luôn hủy KEK do `derive` trả về.
@@ -132,7 +120,7 @@ void main() {
       if (failFile != null &&
           step == AtomicWriteStep.writeTmp &&
           tmps.contains(failFile)) {
-        throw _SimulatedCrash();
+        throw SimulatedCrash();
       }
       if (step == AtomicWriteStep.rename) {
         commits.addAll(tmps);
@@ -161,22 +149,29 @@ void main() {
     RandomSource? random,
     Future<SecureKey?> Function(Uint8List, Uint8List, KdfParams)? derive,
     LockoutGuard? guard,
+    SettingsStore? settings,
   }) {
-    var kdfClock = 0;
+    final lockout =
+        guard ??
+        LockoutGuard(
+          sodium: sodium,
+          writer: writer,
+          path: paths.guardFile,
+          clock: clock,
+        );
     return AccountService(
       sodium: sodium,
-      random: random ?? _CountingRandom(),
+      random: random ?? CountingRandom(),
       writer: writer,
       fileSync: fileSync,
       paths: paths,
-      guard:
-          guard ??
-          LockoutGuard(
-            sodium: sodium,
-            writer: writer,
-            path: paths.guardFile,
-            clock: clock,
-          ),
+      guard: lockout,
+      wipe: WipeCoordinator(
+        paths: paths,
+        guard: lockout,
+        settings: settings ?? SettingsStore.inMemory(),
+        fileSync: fileSync,
+      ),
       deriveKek:
           derive ??
           (_, _, _) async {
@@ -185,11 +180,7 @@ void main() {
             return kek;
           },
       // Mỗi lần KDF "mất" 1000 ms: hiệu chỉnh nhận ngay lần đầu.
-      nowMs: () {
-        final now = kdfClock;
-        kdfClock += 1000;
-        return now;
-      },
+      nowMs: kdfClock(),
     );
   }
 
@@ -200,15 +191,10 @@ void main() {
 
       expect(await s.bootstrap(), isA<BootstrapNoAccount>());
 
-      // Tắt giữa chừng: còn `cards`/`recent` nhưng chưa có `header`.
-      Directory(paths.vaultDir).createSync();
-      File(paths.cardsFile).writeAsBytesSync([1, 2, 3]);
-      File(paths.recentFile).writeAsBytesSync([4, 5, 6]);
-      expect(await s.bootstrap(), isA<BootstrapNoAccount>());
-      // Bootstrap không dọn gì; không có `header` thì không ghi `guard`.
-      expect(vaultNames(), ['cards', 'recent']);
+      // Cài mới: không xóa gì, không ghi gì.
       expect(sync.calls, isEmpty);
       expect(guardBytes(), isNull);
+      expect(Directory(paths.vaultDir).existsSync(), isFalse);
     });
 
     test('fr01_ad07_header_means_has_account', () async {
@@ -269,13 +255,94 @@ void main() {
       expect(guardBytes(), before);
       expect(sync.calls, isEmpty);
     });
+
+    test('ad26_fr12_wiping_flag_returns_wiping_without_deleting', () async {
+      final sync = RecordingFileSync();
+      final s = service(writer: AtomicFileWriter(sync), fileSync: sync);
+      // Tắt giữa xóa: `header` đã mất, còn một phần file.
+      Directory(paths.vaultDir).createSync();
+      File(paths.cardsFile).writeAsBytesSync([1, 2, 3]);
+      File(paths.draftFile).writeAsBytesSync([4]);
+      File(paths.guardFile).writeAsBytesSync(
+        GuardCodec.encode(const GuardState(failCount: 4, wiping: true)),
+      );
+      final before = guardBytes();
+
+      expect(await s.bootstrap(), isA<BootstrapWiping>());
+
+      // Chưa xóa gì, chưa ghi gì: S5 mới chạy `wipe()`.
+      expect(vaultNames(), ['cards', 'draft']);
+      expect(guardBytes(), before);
+      expect(sync.calls, isEmpty);
+    });
+
+    test('ad26_fr04_exhausted_count_returns_bootstrap_wiping', () async {
+      final sync = RecordingFileSync();
+      final s = service(writer: AtomicFileWriter(sync), fileSync: sync);
+      // Tắt app lúc kiểm lần 10: còn đủ file, có `header`.
+      Directory(paths.vaultDir).createSync();
+      File(paths.headerFile).writeAsBytesSync([9]);
+      File(paths.cardsFile).writeAsBytesSync([1]);
+      writeGuard(10);
+      final before = guardBytes();
+
+      expect(await s.bootstrap(), isA<BootstrapWiping>());
+
+      expect(vaultNames(), ['cards', 'header']);
+      expect(guardBytes(), before);
+      expect(sync.calls, isEmpty);
+
+      // Xóa nốt rồi mở lại: về S1.
+      expect(await s.wipe(), isA<WipeDone>());
+      expect(vaultNames(), isEmpty);
+      expect(await s.bootstrap(), isA<BootstrapNoAccount>());
+    });
+
+    test('ad26_fr12_no_header_with_leftover_files_cleans_silently', () async {
+      final sync = RecordingFileSync();
+      final s = service(writer: AtomicFileWriter(sync), fileSync: sync);
+      // Mất `header`, còn `cards`/`recent`/`draft`.
+      Directory(paths.vaultDir).createSync();
+      File(paths.cardsFile).writeAsBytesSync([1, 2, 3]);
+      File(paths.recentFile).writeAsBytesSync([4, 5, 6]);
+      File(paths.draftFile).writeAsBytesSync([7]);
+
+      expect(await s.bootstrap(), isA<BootstrapNoAccount>());
+
+      expect(Directory(paths.vaultDir).existsSync(), isFalse);
+      expect(diskState(), GuardState.initial);
+      expect(s.attemptsLeft, 10);
+    });
+
+    test('ad08_ad26_no_header_with_stale_guard_resets_guard', () async {
+      final sync = RecordingFileSync();
+      final s = service(writer: AtomicFileWriter(sync), fileSync: sync);
+      writeGuard(6);
+
+      expect(await s.bootstrap(), isA<BootstrapNoAccount>());
+
+      expect(diskState(), GuardState.initial);
+      expect(s.attemptsLeft, 10);
+      expect(await s.lockoutRemaining(), Duration.zero);
+    });
+
+    test('ad26_cleanup_failure_is_bootstrap_unavailable', () async {
+      final sync = RecordingFileSync(failAlways: true);
+      final s = service(writer: AtomicFileWriter(sync), fileSync: sync);
+      Directory(paths.vaultDir).createSync();
+      File(paths.cardsFile).writeAsBytesSync([1]);
+
+      // `markWiping` không ghi được `guard` nên chưa xóa gì.
+      expect(await s.bootstrap(), isA<BootstrapUnavailable>());
+      expect(vaultNames(), ['cards']);
+    });
   });
 
   group('create', () {
     test('ad07_create_commits_cards_then_recent_then_header_last', () async {
       final sync = RecordingFileSync();
       final commits = <String>[];
-      final random = _CountingRandom();
+      final random = CountingRandom();
       final s = service(
         writer: recordingWriter(sync, commits),
         fileSync: sync,
@@ -706,7 +773,7 @@ void main() {
             sync,
             onStep: (at) {
               if (at == failAt) {
-                throw _SimulatedCrash();
+                throw SimulatedCrash();
               }
             },
           ),
@@ -760,6 +827,134 @@ void main() {
       expect(s.attemptsLeft, 0);
     });
 
+    test('fr04_ad21_tenth_wrong_on_disk_before_kdf_deletes_nothing', () async {
+      installVault();
+      writeGuard(9);
+      int? seenAtKdf;
+      final s = realService(onDerive: () => seenAtKdf = diskFailCount());
+      await s.bootstrap();
+      clock.advance(waitDuration);
+      final before = snapshot();
+
+      expect(await s.unlock(wrongPw), isA<UnlockWipeRequired>());
+
+      expect(seenAtKdf, 10);
+      expect(diskFailCount(), 10);
+      expect(derives, 1);
+      expectKeksDisposed();
+      // `unlock` không xóa gì; chạy xóa là việc của S5 qua `wipe()`.
+      expect(snapshot(), before);
+      expect(diskState().wiping, isFalse);
+    });
+
+    test('fr04_ad08_tenth_correct_password_logs_in_normally', () async {
+      installVault();
+      writeGuard(9);
+      final s = realService();
+      await s.bootstrap();
+      clock.advance(waitDuration);
+
+      final result = await s.unlock(fixturePw);
+
+      expect(result, isA<UnlockSuccess>());
+      expect(diskFailCount(), 0);
+      expect(s.attemptsLeft, 10);
+      (result as UnlockSuccess).session.lock();
+    });
+
+    test('fr04_ad08_tenth_correct_with_failed_reset_is_unavailable', () async {
+      installVault();
+      writeGuard(9);
+      // Lần ghi thứ nhất (trước KDF, `failCount` 10) xong, lần thứ hai
+      // (`recordSuccess`) lỗi.
+      var guardWrites = 0;
+      final guard = LockoutGuard(
+        sodium: sodium,
+        writer: AtomicFileWriter(
+          RecordingFileSync(),
+          onStep: (step) {
+            if (step == AtomicWriteStep.createTmp) {
+              guardWrites++;
+              if (guardWrites == 2) {
+                throw SimulatedCrash();
+              }
+            }
+          },
+        ),
+        path: paths.guardFile,
+        clock: clock,
+      );
+      final s = realService(guard: guard);
+      await s.bootstrap();
+      clock.advance(waitDuration);
+      guardWrites = 0;
+      final before = snapshot();
+
+      // Không mở phiên: người vừa nhập đúng không bị xóa dữ liệu ngay.
+      expect(await s.unlock(fixturePw), isA<UnlockUnavailable>());
+
+      expect(guardWrites, 2);
+      expectKeksDisposed();
+      expect(snapshot(), before);
+      // Đĩa còn 10: lần mở sau xóa nốt; RAM đã về 0 như cũ.
+      expect(diskFailCount(), 10);
+      expect(s.attemptsLeft, 10);
+      expect(await realService().bootstrap(), isA<BootstrapWiping>());
+    });
+
+    test('fr07_fr04_tenth_attempt_with_kdf_failure_stays_corrupt', () async {
+      installVault();
+      writeGuard(9);
+      final sync = RecordingFileSync();
+      final s = service(
+        writer: AtomicFileWriter(sync),
+        fileSync: sync,
+        derive: (_, _, _) async => null,
+      );
+      await s.bootstrap();
+      clock.advance(waitDuration);
+      final before = snapshot();
+
+      // Ranh giới `corrupt`/KDF lỗi do story 2.5 tách; ở đây chỉ giữ nguyên.
+      expect(await s.unlock(fixturePw), isA<UnlockCorrupt>());
+
+      expect(diskFailCount(), 10);
+      expect(snapshot(), before);
+      final restarted = service(writer: AtomicFileWriter(sync), fileSync: sync);
+      expect(await restarted.bootstrap(), isA<BootstrapWiping>());
+    });
+
+    test('fr12_ad21_wipe_after_tenth_wrong_leaves_clean_slate', () async {
+      installVault();
+      writeGuard(9);
+      final s = realService();
+      await s.bootstrap();
+      clock.advance(waitDuration);
+      expect(await s.unlock(wrongPw), isA<UnlockWipeRequired>());
+
+      expect(await s.wipe(), isA<WipeDone>());
+
+      expect(Directory(paths.vaultDir).existsSync(), isFalse);
+      expect(diskState(), GuardState.initial);
+      expect(s.attemptsLeft, 10);
+      expect(await s.bootstrap(), isA<BootstrapNoAccount>());
+    });
+
+    test('fr05_ad22_wrong_string_forgotten_after_wipe', () async {
+      installVault();
+      writeGuard(9);
+      final s = realService();
+      await s.bootstrap();
+      clock.advance(waitDuration);
+      expect(await s.unlock(wrongPw), isA<UnlockWipeRequired>());
+      expect(await s.wipe(), isA<WipeDone>());
+
+      // Tài khoản mới: cùng chuỗi sai cũ không bị coi là lặp, KDF chạy lại.
+      installVault();
+      expect(await s.unlock(wrongPw), isA<UnlockWrongPassword>());
+      expect(derives, 2);
+    });
+
     test('fr05_ad08_only_kcv_mismatch_remembers_wrong_string', () async {
       installVault();
       // Lần ghi trước KDF lỗi: không nhớ digest, thử lại đúng chuỗi đó vẫn
@@ -771,7 +966,7 @@ void main() {
           RecordingFileSync(),
           onStep: (step) {
             if (failWrites && step == AtomicWriteStep.createTmp) {
-              throw _SimulatedCrash();
+              throw SimulatedCrash();
             }
           },
         ),
@@ -828,7 +1023,7 @@ void main() {
           RecordingFileSync(),
           onStep: (step) {
             if (step == AtomicWriteStep.createTmp && ++guardWrites == 2) {
-              throw _SimulatedCrash();
+              throw SimulatedCrash();
             }
           },
         ),
@@ -861,7 +1056,7 @@ void main() {
       final readsBefore = clock.reads;
       final bootReadsBefore = clock.bootReads;
 
-      expect(await s.unlock(wrongPw), isA<UnlockWrongPassword>());
+      expect(await s.unlock(wrongPw), isA<UnlockWipeRequired>());
       expect(diskFailCount(), 10);
       expect(s.attemptsLeft, 0);
       // Chỉ lần kiểm chờ đọc đồng hồ; lần ghi `failCount: 10` thì không.
@@ -869,7 +1064,8 @@ void main() {
       expect(clock.bootReads, bootReadsBefore + 1);
       expect(await s.lockoutRemaining(), Duration.zero);
 
-      // Mật khẩu đúng cũng không được thử nữa (chưa xóa: story 2.3).
+      // Mật khẩu đúng cũng không được thử nữa; `unlock` chưa xóa gì (S5 gọi
+      // `wipe()`).
       expect(await s.unlock(fixturePw), isA<UnlockLockedOut>());
       expect(derives, 1);
     });
@@ -1078,7 +1274,8 @@ void main() {
         expect(derives, 0);
         expect(snapshot(), before);
         expect(guardBytes(), guardBefore);
-        expect(s.attemptsLeft, 8);
+        // Thiếu `header` thì bootstrap đã dọn `guard` sót (AD-26).
+        expect(s.attemptsLeft, name == 'missing' ? 10 : 8);
       });
     }
 

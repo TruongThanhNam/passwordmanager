@@ -8,13 +8,16 @@ import '../../services/session_controller.dart';
 import '../../services/vault_session.dart';
 import '../auth/create_account_screen.dart';
 import '../auth/login_screen.dart';
+import '../auth/wiping_screen.dart';
 import 'home_shell.dart';
 import 'providers.dart';
 
 /// Cổng phiên (AD-23), đặt trong `CupertinoApp.builder`.
 ///
-/// - Chưa mở khóa: một `Navigator` riêng cho S1/S3 theo kết quả
+/// - Chưa mở khóa: một `Navigator` riêng cho S1/S3/S5 theo kết quả
 ///   [bootstrapResultProvider]; S2 được push lên bằng `CupertinoPageRoute`.
+///   S5 ([WipingScreen]) hiện khi xóa dở lúc khởi động
+///   ([BootstrapWiping]) hoặc ngay sau lần sai thứ 10 của S3; xóa xong về S1.
 /// - Có phiên: thay **cả** cây trên bằng [HomeShell] bọc
 ///   `KeyedSubtree(ValueKey(epoch))`. Mọi màn chưa đăng nhập (và mọi
 ///   `SecretField`) bị gỡ. Khóa ([SessionController.lock]) cũng là thay cây,
@@ -74,6 +77,33 @@ class SessionGateState extends ConsumerState<SessionGate>
     if (!_resumedSinceBackground) {
       _controller.enteredBackground();
     }
+  }
+
+  /// Lần sai thứ 10 (S3 → S5): đổi sang S5 với navigator mới, S3 bị gỡ cùng
+  /// ô mật khẩu. Không dialog.
+  void _startWipe() {
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _bootstrap = const BootstrapWiping();
+      _navigator = GlobalKey<NavigatorState>();
+    });
+  }
+
+  /// S5 xong: xóa được → S1; lỗi → S1 vô hiệu (fail closed), lần mở sau xóa
+  /// nốt vì `wiping` còn trên đĩa.
+  void _wipeFinished(WipeResult result) {
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _bootstrap = switch (result) {
+        WipeDone() => const BootstrapNoAccount(),
+        WipeFailed() => const BootstrapUnavailable(),
+      };
+      _navigator = GlobalKey<NavigatorState>();
+    });
   }
 
   void _onControllerChanged() {
@@ -179,6 +209,7 @@ class SessionGateState extends ConsumerState<SessionGate>
         BootstrapHasAccount() => LoginScreen(
           hasAccount: true,
           onUnlocked: _enterSession,
+          onWipe: _startWipe,
         ),
         BootstrapNoAccount() => LoginScreen(
           hasAccount: false,
@@ -188,6 +219,7 @@ class SessionGateState extends ConsumerState<SessionGate>
           hasAccount: false,
           unavailable: true,
         ),
+        BootstrapWiping() => WipingScreen(onFinished: _wipeFinished),
       };
 
   /// Push S2 lên navigator chưa đăng nhập (chuyển cảnh mặc định iOS).

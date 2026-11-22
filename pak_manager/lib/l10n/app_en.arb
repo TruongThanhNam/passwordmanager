@@ -135,5 +135,9 @@
   "settingsLockVault": "Lock Vault",
   "@settingsLockVault": {
     "description": "settings.lockVault: S18 last block, text button that locks the vault immediately without confirmation."
+  },
+  "wiping": "Erasing data…",
+  "@wiping": {
+    "description": "wiping: S5, the only line on the full-screen wipe progress screen, centred under the activity indicator."
   }
 }

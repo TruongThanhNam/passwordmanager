@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:sodium/sodium_sumo.dart';
 
+import '../core/crypto/wipe.dart';
 import '../core/format/guard_codec.dart';
 import '../core/guard/guard_state.dart';
 import '../core/io/atomic_file_writer.dart';
@@ -71,7 +72,9 @@ final class LockoutGuard {
   ///   gian chờ). Đọc đồng hồ lỗi thì giữ nguyên mốc; [waitRemaining] neo
   ///   lại sau.
   ///
-  /// Story 2.3 thêm nhánh xóa dở dang.
+  /// Không xử lý xóa dở dang: `AccountService.bootstrap` hỏi
+  /// `WipeCoordinator.resumeIfNeeded` trước và không gọi [normalize] khi
+  /// `wiping` hoặc `failCount` ≥ 10.
   Future<void> normalize({required bool hasAccount}) => _serial(() async {
     final bytes = await _readCapped(_path);
     final decoded = bytes == null
@@ -90,6 +93,45 @@ final class LockoutGuard {
         }
     }
   });
+
+  /// Chỉ đọc `guard` vào RAM: file thiếu hoặc không đọc được → RAM là
+  /// [GuardState.initial]. Không ghi, không đọc đồng hồ. Dùng cho
+  /// `WipeCoordinator.resumeIfNeeded` trước khi quyết định xóa.
+  Future<void> load() => _serial(() async {
+    final bytes = await _readCapped(_path);
+    final decoded = bytes == null
+        ? const GuardUnreadable()
+        : GuardCodec.decode(bytes);
+    _state = switch (decoded) {
+      GuardOk(:final state) => state,
+      GuardUnreadable() => GuardState.initial,
+    };
+  });
+
+  /// Đánh dấu đang xóa (AD-21): ghi `wiping = true`, giữ `failCount` và mốc
+  /// chờ. `true` khi đã ghi xuống đĩa và RAM đã đổi; `false` khi ghi lỗi, lúc
+  /// đó RAM giữ nguyên và người gọi chưa được xóa gì.
+  Future<bool> markWiping() => _serial(() async {
+    final next = _state.withWiping();
+    if (!await _write(next)) {
+      return false;
+    }
+    _state = next;
+    return true;
+  });
+
+  /// Bước cuối của quy trình xóa: ghi [GuardState.initial] (`failCount` 0,
+  /// không mốc, `wiping` `false`) và bỏ digest chuỗi sai. RAM luôn về
+  /// [GuardState.initial], kể cả khi ghi lỗi (lúc đó `wiping` còn trên đĩa
+  /// nên lần mở sau xóa lại). `true` khi đã ghi xuống đĩa.
+  Future<bool> reset() {
+    _forgetLastWrong();
+    return _serial(() async {
+      _forgetLastWrong();
+      _state = GuardState.initial;
+      return _write(GuardState.initial);
+    });
+  }
 
   /// Thời gian chờ còn lại (FR-4, FR-6), luôn trong `[0, waitDuration]`.
   ///
@@ -128,6 +170,14 @@ final class LockoutGuard {
   /// Nhớ digest của [password] vừa sai (`kcv` lệch).
   void rememberWrong(Uint8List password) => _lastWrong = _digest(password);
 
+  void _forgetLastWrong() {
+    final last = _lastWrong;
+    if (last != null) {
+      wipe(last);
+    }
+    _lastWrong = null;
+  }
+
   /// Ghi trước KDF: `failCount + 1` (chặn ở [maxAttempts]); nếu giá trị mới
   /// nằm trong 5–9 thì **cùng lần ghi đó** đặt mốc chờ = `(bootId,
   /// monotonicMs)` hiện tại (AD-8). `failCount` mới 1–4 hoặc 10 thì không đọc
@@ -152,13 +202,15 @@ final class LockoutGuard {
   });
 
   /// Mật khẩu đúng: bỏ digest ngay; `failCount = 0` và xóa mốc chờ trong RAM
-  /// khi tới lượt trong hàng đợi, rồi ghi xuống đĩa. Ghi lỗi thì bỏ qua (RAM
-  /// vẫn đổi), lần ghi trước KDF kế tiếp ghi lại trạng thái đúng.
-  Future<void> recordSuccess() {
-    _lastWrong = null;
+  /// khi tới lượt trong hàng đợi, rồi ghi xuống đĩa. `true` khi đã ghi xuống
+  /// đĩa; ghi lỗi thì RAM vẫn đổi và trả `false` (người gọi quyết định có
+  /// coi là lỗi hay không, xem `AccountService.unlock`); lần ghi trước KDF
+  /// kế tiếp ghi lại trạng thái đúng.
+  Future<bool> recordSuccess() {
+    _forgetLastWrong();
     return _serial(() async {
       _state = _state.afterSuccess();
-      await _write(_state);
+      return _write(_state);
     });
   }
 

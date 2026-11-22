@@ -432,4 +432,53 @@ void main() {
       expect(reloaded.current, store.current);
     });
   });
+
+  group('clearLastExport', () {
+    test('fr12_clear_last_export_writes_to_file_immediately', () async {
+      final store = await SettingsStore.load(
+        path,
+        AtomicFileWriter(fileSync),
+        createTimer: timers.create,
+      );
+      addTearDown(store.dispose);
+      store.update(
+        (s) => s.copyWith(lastExportAt: 1762300800000, autolockMin: 1),
+      );
+      await store.flush();
+
+      expect(await store.clearLastExport(), isTrue);
+
+      expect(store.current.lastExportAt, isNull);
+      expect(store.current.autolockMin, 1);
+      expect(store.dirty, isFalse);
+      final reloaded = await load(path);
+      addTearDown(reloaded.dispose);
+      expect(reloaded.current.lastExportAt, isNull);
+      expect(reloaded.current.autolockMin, 1);
+      // Không để timer gom ghi còn chạy sau khi đã ghi xong.
+      expect(timers.active, isEmpty);
+    });
+
+    test('fr12_clear_last_export_write_failure_returns_false', () async {
+      final store = await load(path);
+      addTearDown(store.dispose);
+      store.update((s) => s.copyWith(lastExportAt: 1762300800000));
+      await store.flush();
+      write.fail = true;
+
+      expect(await store.clearLastExport(), isFalse);
+
+      expect(store.current.lastExportAt, isNull);
+      expect(store.dirty, isTrue);
+    });
+
+    test('fr12_clear_last_export_in_memory_store_is_true', () async {
+      final store = inMemory();
+      addTearDown(store.dispose);
+      store.update((s) => s.copyWith(lastExportAt: 1762300800000));
+
+      expect(await store.clearLastExport(), isTrue);
+      expect(store.current.lastExportAt, isNull);
+    });
+  });
 }

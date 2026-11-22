@@ -201,4 +201,29 @@ void main() {
       }
     });
   });
+
+  test('ad21_with_wiping_sets_flag_and_keeps_count_and_mark', () {
+    final next = _waiting.withWiping();
+    expect(next.wiping, isTrue);
+    expect(next.failCount, 6);
+    expect(next.waitBootId, 'fake-boot-1');
+    expect(next.waitStartMono, 1800000);
+    expect(const GuardState(failCount: 10).withWiping().failCount, 10);
+  });
+
+  test('ad21_is_initial_only_for_the_clean_state', () {
+    expect(GuardState.initial.isInitial, isTrue);
+    expect(const GuardState(failCount: 0).isInitial, isTrue);
+    expect(const GuardState(failCount: 1).isInitial, isFalse);
+    expect(const GuardState(failCount: 0, wiping: true).isInitial, isFalse);
+    expect(_waiting.isInitial, isFalse);
+    expect(
+      const GuardState(
+        failCount: 0,
+        waitBootId: 'fake-boot-1',
+        waitStartMono: 1,
+      ).isInitial,
+      isFalse,
+    );
+  });
 }
