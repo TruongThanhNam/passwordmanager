@@ -152,6 +152,12 @@ abstract class AppLocalizations {
   /// **'Data is damaged — The password is correct but the data can\'t be read. You can use \"Erase & Create New Account\", then import your export file.'**
   String get loginCorrupt;
 
+  /// login.retry (FR-7, TC-6): inline-message on S3 when the key derivation failed (an app error, not a wrong password or damaged data); the attempt is normally given back so N does not drop.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t check the password. Please try again.'**
+  String get loginRetry;
+
   /// login.attempts (FR-4): always the last inline-message line on S3; N is the number of attempts left.
   ///
   /// In en, this message translates to:

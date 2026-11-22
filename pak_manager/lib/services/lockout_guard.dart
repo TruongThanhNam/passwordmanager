@@ -52,6 +52,11 @@ final class LockoutGuard {
   GuardState _state = GuardState.initial;
   Uint8List? _lastWrong;
 
+  /// Trạng thái ngay trước lần [recordAttempt] gần nhất đã ghi được và chưa
+  /// được [revertAttempt] hay [recordSuccess] xử lý; `null` = không có lần
+  /// thử nào để hoàn.
+  GuardState? _beforeAttempt;
+
   /// Đuôi hàng đợi của các method bất đồng bộ (xem [_serial]).
   Future<void> _tail = Future<void>.value();
 
@@ -128,6 +133,7 @@ final class LockoutGuard {
     _forgetLastWrong();
     return _serial(() async {
       _forgetLastWrong();
+      _beforeAttempt = null;
       _state = GuardState.initial;
       return _write(GuardState.initial);
     });
@@ -197,7 +203,32 @@ final class LockoutGuard {
     if (!await _write(next)) {
       return false;
     }
+    _beforeAttempt = _state;
     _state = next;
+    return true;
+  });
+
+  /// Hoàn lần thử vừa ghi bằng [recordAttempt] khi lỗi không thuộc về mật
+  /// khẩu (KDF lỗi, thiếu bộ nhớ; FR-7, TC-6): ghi lại đúng trạng thái trước
+  /// lần thử (cả `failCount` lẫn mốc chờ). Không đụng digest chuỗi sai.
+  ///
+  /// `true` khi đã ghi xuống đĩa và RAM đã về trạng thái cũ. `false` khi
+  /// không có lần thử nào để hoàn hoặc ghi lỗi; lúc đó RAM luôn giữ lần thử
+  /// đã tính (fail closed). Đĩa giữ lần thử đã tính nếu lỗi xảy ra trước
+  /// rename, nhưng có thể đã chứa trạng thái hoàn nếu lỗi xảy ra sau rename
+  /// (fsync thư mục): khi đó sau khi khởi động lại lần thử được hoàn. Tắt app
+  /// trước khi hoàn xong thì lần thử vẫn tính (FR-5). Chỉ gọi trước
+  /// `recordSuccess`, mỗi lần thử một lần.
+  Future<bool> revertAttempt() => _serial(() async {
+    final before = _beforeAttempt;
+    if (before == null) {
+      return false;
+    }
+    if (!await _write(before)) {
+      return false;
+    }
+    _beforeAttempt = null;
+    _state = before;
     return true;
   });
 
@@ -209,6 +240,7 @@ final class LockoutGuard {
   Future<bool> recordSuccess() {
     _forgetLastWrong();
     return _serial(() async {
+      _beforeAttempt = null;
       _state = _state.afterSuccess();
       return _write(_state);
     });

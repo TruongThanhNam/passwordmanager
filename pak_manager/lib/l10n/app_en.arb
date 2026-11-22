@@ -36,6 +36,10 @@
   "@loginCorrupt": {
     "description": "login.corrupt (FR-7): inline-message on S3 when the header is damaged or the data can't be decrypted."
   },
+  "loginRetry": "Couldn't check the password. Please try again.",
+  "@loginRetry": {
+    "description": "login.retry (FR-7, TC-6): inline-message on S3 when the key derivation failed (an app error, not a wrong password or damaged data); the attempt is normally given back so N does not drop."
+  },
   "loginAttempts": "{N, plural, =1{1 attempt left before your data is erased.} other{{N} attempts left before your data is erased.}}",
   "@loginAttempts": {
     "description": "login.attempts (FR-4): always the last inline-message line on S3; N is the number of attempts left.",

@@ -24,6 +24,7 @@ const _nonAscii =
 
 const _erase = 'Xóa & Tạo tài khoản mới';
 
+const _retry = 'Chưa kiểm tra được mật khẩu. Hãy thử lại.';
 const _unavailable = 'Không mở được dữ liệu của app. Hãy khởi động lại app.';
 
 String _attempts(int n) => 'Còn $n lần thử trước khi dữ liệu bị xóa.';
@@ -285,6 +286,46 @@ void main() {
     final corrupt = tester.getRect(find.text(_corrupt));
     final attempts = tester.getRect(find.text(_attempts(7)));
     expect(corrupt.bottom, lessThanOrEqualTo(attempts.top));
+  });
+
+  testWidgets('fr07_ux_dr21_ux_dr42_retry_is_above_attempts_and_n_kept', (
+    tester,
+  ) async {
+    final service = await _pumpS3(tester, attemptsLeft: 7);
+    await _type(tester, validPassword);
+    await tester.tap(find.byType(PakPrimaryButton));
+    await tester.pump();
+
+    service.completeUnlock(const UnlockRetry());
+    await tester.pump();
+
+    // `login.retry` nằm trên `login.attempts`, N không giảm, không hiện
+    // `login.corrupt`/`login.wrong`.
+    expect(find.text(_retry), findsOneWidget);
+    expect(find.text(_corrupt), findsNothing);
+    expect(find.text(_wrong), findsNothing);
+    expect(find.text(_attempts(7)), findsOneWidget);
+    final retry = tester.getRect(find.text(_retry));
+    final attempts = tester.getRect(find.text(_attempts(7)));
+    expect(retry.bottom, lessThanOrEqualTo(attempts.top));
+    // Chữ ink-secondary, không màu đỏ (UX-DR21).
+    expect(
+      tester.widget<Text>(find.text(_retry)).style?.color?.toARGB32(),
+      PakColors.inkSecondary.color.toARGB32(),
+    );
+    // Ô giữ nội dung, bấm "Đăng nhập" lại ngay được.
+    expect(_secret(tester).controller.text, validPassword);
+    expect(_secret(tester).enabled, isTrue);
+    await tester.tap(find.byType(PakPrimaryButton));
+    await tester.pump();
+    expect(service.unlockCalls, [validPassword, validPassword]);
+    service.completeUnlock(const UnlockRetry());
+    await tester.pump();
+
+    // Sửa ô thì `login.retry` ẩn, dòng số lần thử vẫn còn.
+    await _type(tester, '${validPassword}x');
+    expect(find.text(_retry), findsNothing);
+    expect(find.text(_attempts(7)), findsOneWidget);
   });
 
   testWidgets('fr02_ux_dr21_non_ascii_is_above_attempts', (tester) async {

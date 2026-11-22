@@ -112,13 +112,27 @@ final class UnlockWrongPassword extends UnlockResult {
   String toString() => 'UnlockWrongPassword()';
 }
 
-/// Header hỏng/không đọc được, hoặc mật khẩu đúng nhưng dữ liệu không giải
-/// mã được (`login.corrupt`). Không file nào bị xóa.
+/// Header hỏng/không đọc được/quá lớn, vault mới hơn app hỗ trợ (AD-25), hoặc
+/// mật khẩu đúng nhưng dữ liệu không giải mã được hay quá lớn
+/// (`login.corrupt`). Không file nào bị xóa, không bao giờ dẫn tới xóa.
 final class UnlockCorrupt extends UnlockResult {
   const UnlockCorrupt();
 
   @override
   String toString() => 'UnlockCorrupt()';
+}
+
+/// KDF không chạy được (thiếu bộ nhớ Argon2, isolate lỗi, ném): lỗi của app
+/// chứ không phải của mật khẩu hay dữ liệu (FR-7, TC-6). Lần thử đã ghi trước
+/// KDF được hoàn lại (`LockoutGuard.revertAttempt`), thường là số lần thử còn
+/// lại không đổi (`login.retry`); nếu ghi hoàn lượt lỗi thì lần thử vẫn tính
+/// (fail closed). Người dùng bấm "Đăng nhập" lại ngay. Không bao giờ dẫn tới
+/// xóa.
+final class UnlockRetry extends UnlockResult {
+  const UnlockRetry();
+
+  @override
+  String toString() => 'UnlockRetry()';
 }
 
 /// Không được thử lúc này (AD-8): đang trong thời gian chờ 30 phút sau lần
@@ -177,6 +191,10 @@ class AccountService {
     this._nowMs,
   }) : _sodium = sodium,
        _deriveKek = deriveKek ?? kekDeriver(sodium);
+
+  /// Trần kích thước `cards`/`recent` khi mở khóa (16 MiB); file lớn hơn là
+  /// [UnlockCorrupt], không đọc cả file vào RAM.
+  static const maxDataFileBytes = 16 * 1024 * 1024;
 
   final SodiumSumo _sodium;
   final RandomSource _random;
@@ -353,8 +371,10 @@ class AccountService {
   /// (ghi hoặc đọc đồng hồ lỗi → [UnlockUnavailable], không KDF) → KDF → so
   /// `kcv` (lệch → nhớ digest, [UnlockWrongPassword]) → khớp:
   /// `recordSuccess()` → mở bọc DEK → giải mã `cards`/`recent`. Mọi lỗi khác
-  /// → [UnlockCorrupt]; KDF lỗi sau khi đã ghi trước thì lần thử vẫn tính
-  /// (story 2.5 tách riêng).
+  /// → [UnlockCorrupt]. KDF lỗi (trả `null` hoặc ném) → hoàn lần thử đã ghi
+  /// trước (`revertAttempt`) rồi [UnlockRetry], không bao giờ [UnlockCorrupt].
+  /// `header` đọc tối đa `HeaderCodec.length + 1` byte, `cards`/`recent` tối
+  /// đa [maxDataFileBytes]; vượt trần là [UnlockCorrupt].
   ///
   /// Lần sai thứ 10 (`kcv` lệch khi `failCount` đã là 10) → [UnlockWipeRequired];
   /// `unlock` không xóa gì. Mật khẩu đúng ở lần thứ 10 mà `recordSuccess`
@@ -384,7 +404,15 @@ class AccountService {
     SecureKey? kek;
     SecureKey? dek;
     try {
-      final headerBytes = await File(_paths.headerFile).readAsBytes();
+      // Đọc tối đa `HeaderCodec.length + 1` byte: header dài hơn là hỏng,
+      // không đọc cả file vào RAM.
+      final headerBytes = await _readCapped(
+        _paths.headerFile,
+        HeaderCodec.length,
+      );
+      if (headerBytes == null) {
+        return const UnlockCorrupt();
+      }
       final codec = HeaderCodec(_sodium);
       final header = switch (codec.decode(headerBytes)) {
         HeaderOk(:final header) => header,
@@ -408,9 +436,17 @@ class AccountService {
       if (!await _guard.recordAttempt()) {
         return const UnlockUnavailable();
       }
-      kek = await _deriveKek(pw, header.salt, header.kdf);
+      try {
+        kek = await _deriveKek(pw, header.salt, header.kdf);
+      } on Object {
+        kek = null;
+      }
       if (kek == null) {
-        return const UnlockCorrupt();
+        // Lỗi của app, không phải của mật khẩu hay dữ liệu: hoàn lần thử đã
+        // ghi trước KDF. Hoàn lỗi thì RAM vẫn giữ lần thử đã tính (fail
+        // closed); đĩa có thể đã hoàn nếu lỗi sau rename.
+        await _guard.revertAttempt();
+        return const UnlockRetry();
       }
       if (!codec.kcvMatches(header, kek)) {
         _guard.rememberWrong(pw);
@@ -432,14 +468,16 @@ class AccountService {
         return const UnlockCorrupt();
       }
       final files = VaultFileCodec(_sodium, _random);
-      final cards = files.decodeCards(
-        await File(_paths.cardsFile).readAsBytes(),
-        dek,
+      final cardsBytes = await _readCapped(_paths.cardsFile, maxDataFileBytes);
+      final recentBytes = await _readCapped(
+        _paths.recentFile,
+        maxDataFileBytes,
       );
-      final recent = files.decodeRecent(
-        await File(_paths.recentFile).readAsBytes(),
-        dek,
-      );
+      if (cardsBytes == null || recentBytes == null) {
+        return const UnlockCorrupt();
+      }
+      final cards = files.decodeCards(cardsBytes, dek);
+      final recent = files.decodeRecent(recentBytes, dek);
       if (cards is! VaultFileOk<List<VaultCard>> ||
           recent is! VaultFileOk<List<RecentEntry>>) {
         return const UnlockCorrupt();
@@ -512,6 +550,26 @@ Future<void> _deleteQuietly(String path) async {
     }
   } on Object {
     // Lần tạo sau dọn cả `vault/`.
+  }
+}
+
+/// Bytes của file, hoặc `null` khi không có file, không phải file thường,
+/// lớn hơn [maxBytes] hay đọc lỗi. Chỉ đọc tối đa `maxBytes + 1` byte.
+Future<Uint8List?> _readCapped(String path, int maxBytes) async {
+  try {
+    if (await FileSystemEntity.type(path) != FileSystemEntityType.file) {
+      return null;
+    }
+    final raf = await File(path).open();
+    try {
+      // Đọc dư một byte để phát hiện file vượt trần.
+      final bytes = await raf.read(maxBytes + 1);
+      return bytes.length > maxBytes ? null : bytes;
+    } finally {
+      await raf.close();
+    }
+  } on Object {
+    return null;
   }
 }
 
