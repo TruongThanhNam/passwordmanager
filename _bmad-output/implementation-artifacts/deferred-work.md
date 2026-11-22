@@ -279,3 +279,20 @@
   source_spec: `_bmad-output/implementation-artifacts/spec-2-4-xoa-tao-tai-khoan-moi-khi-quen-mat-khau-chinh.md`
   summary: màn có từ trước dùng thẳng `PakColors.inkPrimary/inkSecondary` (`CupertinoDynamicColor`) làm màu `TextStyle` mà không `CupertinoDynamicColor.resolve`, nên ở chế độ tối chữ vẫn là màu sáng: `login_screen.dart:269`, `wiping_screen.dart:71`, `create_account_screen.dart:211`, `inline_message.dart:37`, `secret_field.dart:135`.
   evidence: Medium, có thật. Test thử: `Text` với `TextStyle(color: PakColors.inkPrimary)` dưới `CupertinoApp` có `brightness: Brightness.dark` nhận `0xff000000`. Hướng sửa: resolve màu tại chỗ dùng (hoặc một helper trong `features/shared/theme/`) và thêm test độ sáng tối cho từng màn. Bản mới trong `erase_dialog.dart` được sửa ngay ở story 2.4.
+
+## Deferred from: code review of spec-2-5-du-lieu-bi-hong-khong-bao-gio-dan-toi-xoa.md (2026-11-22)
+
+- id: DW-2.5-1
+  source_spec: `_bmad-output/implementation-artifacts/spec-2-5-du-lieu-bi-hong-khong-bao-gio-dan-toi-xoa.md`
+  summary: KDF hỏng vĩnh viễn (máy không cấp phát đủ bộ nhớ Argon2 cho tham số trong header) thì `unlock` luôn trả `UnlockRetry` (hoàn lượt, không đếm), nên người dùng lặp `login.retry` mãi, không có lối thoát hay thông báo khác.
+  evidence: Medium, hiếm (header ghi ở 64 MiB trên máy khác hoặc lúc rảnh, rồi máy chỉ còn ít bộ nhớ lâu dài). Có thật: `account_service.dart` nhánh `kek == null` không đếm số lần `UnlockRetry` liên tiếp. Trước story 2.5 người dùng cũng kẹt, ở `login.corrupt`. Cần quyết định UX: đếm lần liên tiếp rồi hiện thông báo khác (gợi ý khởi động lại máy hoặc dùng "Xóa & Tạo tài khoản mới"), hay giữ nguyên. Gộp với kiểm KDF trên máy yếu của story 7.1.
+
+- id: DW-2.5-2
+  source_spec: `_bmad-output/implementation-artifacts/spec-2-5-du-lieu-bi-hong-khong-bao-gio-dan-toi-xoa.md`
+  summary: `AccountService.maxDataFileBytes` (16 MiB) chỉ là trần đọc; chưa có trần ghi cho `cards`/`recent`, nên vault vượt 16 MiB ghi được rồi bị `UnlockCorrupt` vĩnh viễn khi mở.
+  evidence: Medium chưa xảy ra: chưa có đường ghi `cards` (Epic 3) hay import (Epic 6: ≤ 10 000 card, mỗi chuỗi ≤ 64 KiB, nên về lý thuyết vượt 16 MiB). Con số 16 MiB do story 2.5 tự chọn, không có căn cứ AD/NFR. Khi dựng Epic 3 (ghi `cards`) và Epic 6 (import) phải chặn ghi vượt `maxDataFileBytes` hoặc nâng trần có căn cứ, kèm test "ghi được thì mở được".
+
+- id: DW-2.5-3
+  source_spec: `_bmad-output/implementation-artifacts/spec-2-5-du-lieu-bi-hong-khong-bao-gio-dan-toi-xoa.md`
+  summary: Lỗi I/O tạm thời khi đọc `header`/`cards`/`recent` (EIO, khóa file, iOS data protection khi máy khóa) hiện thành `UnlockCorrupt` (`login.corrupt` gợi ý "Xóa & Tạo tài khoản mới"), không tách khỏi file thật sự hỏng.
+  evidence: Medium, có từ trước story 2.5 (`readAsBytes` ném cũng ra `UnlockCorrupt`); `_readCapped` giữ nguyên hành vi. Không tự xóa gì (người dùng tự chọn), nhưng nên có kết quả "đọc không được lúc này" kiểu `UnlockRetry`/`UnlockUnavailable` cho lỗi I/O khác `notFound`. Liên quan `DW-2.3-1` (cùng nghi vấn `stat`/đọc trả lỗi khi file còn sống). Cần thử trên máy thật iOS khóa máy lúc app khởi động nền.

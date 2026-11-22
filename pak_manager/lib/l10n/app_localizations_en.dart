@@ -38,6 +38,9 @@ class AppLocalizationsEn extends AppLocalizations {
       'Data is damaged — The password is correct but the data can\'t be read. You can use \"Erase & Create New Account\", then import your export file.';
 
   @override
+  String get loginRetry => 'Couldn\'t check the password. Please try again.';
+
+  @override
   String loginAttempts(int N) {
     String _temp0 = intl.Intl.pluralLogic(
       N,

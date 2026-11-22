@@ -38,6 +38,9 @@ class AppLocalizationsVi extends AppLocalizations {
       'Dữ liệu bị hỏng — Mật khẩu đúng nhưng không đọc được dữ liệu. Bạn có thể dùng \"Xóa & Tạo tài khoản mới\" rồi import lại từ file export.';
 
   @override
+  String get loginRetry => 'Chưa kiểm tra được mật khẩu. Hãy thử lại.';
+
+  @override
   String loginAttempts(int N) {
     return 'Còn $N lần thử trước khi dữ liệu bị xóa.';
   }
