@@ -126,13 +126,11 @@ Future<void> pumpGateApp(
   PasswordPolicy? policy,
   bool withPolicy = true,
   AppLanguage language = AppLanguage.vi,
+  Appearance appearance = Appearance.light,
   SessionController Function()? controllerFactory,
 }) async {
   final store = SettingsStore.inMemory(
-    Settings.defaults.copyWith(
-      language: language,
-      appearance: Appearance.light,
-    ),
+    Settings.defaults.copyWith(language: language, appearance: appearance),
   );
   addTearDown(store.dispose);
   await tester.pumpWidget(

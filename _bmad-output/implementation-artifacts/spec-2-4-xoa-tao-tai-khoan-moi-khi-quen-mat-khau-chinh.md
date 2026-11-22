@@ -124,3 +124,32 @@ Nút xóa vô hiệu lúc `_busy` là ngoại lệ có chủ ý của "luôn b�
 - `cd pak_manager && flutter analyze --fatal-infos --fatal-warnings` -- expected: sạch
 - `cd pak_manager && dart run tool/check_imports.dart` -- expected: không vi phạm
 - `cd pak_manager && flutter test` -- expected: tất cả pass (trừ teardown `DW-2.1-1` đã biết), số test tăng, không thêm skip
+
+### Review Findings
+
+Review vòng 2 (2026-11-22, `bmad-code-review`): blind-hunter, edge-case-hunter, verification-gap, acceptance-auditor; không lớp nào lỗi.
+
+- [x] [Review][Patch] Khóa hành vi "42 tính từ safe-area" bằng test có padding đáy (quyết định: giữ nguyên, 42 đo từ safe-area như phần đầu màn đo từ status bar) — thêm biến thể của `ux_dr31_fr09_erase_button_pinned_bottom_44_inset_42` với `view.padding`/`viewPadding` đáy 34, khẳng định `safeBottom - erase.bottom == 42` [pak_manager/test/features/auth/login_screen_test.dart]
+- [x] [Review][Dismiss] Hoạt ảnh mờ dần 150 ms của S4 trái UX-DR51 — quyết định: giữ hiệu ứng như spec 2.4 đã duyệt; không đổi code. Ghi nhận spec ghi đè UX-DR51, cần chỉnh planning (UX-DR51/EXPERIENCE.md) sau.
+- [x] [Review][Patch] Hold-confirm-button chạy 5% thời gian khi bật Reduce Motion/Remove animations — `AnimationController` mặc định `AnimationBehavior.normal` nên khi `disableAnimations` là true, 3 giây rút còn ~150 ms: một chạm xóa vĩnh viễn vault, mất chốt an toàn của FR-9/UX-DR14. Sửa: `animationBehavior: AnimationBehavior.preserve` + test đặt `disableAnimations` [pak_manager/lib/features/shared/hold_confirm_button.dart:66]
+- [x] [Review][Patch] Chữ trong `EraseDialog` không qua `CupertinoDynamicColor.resolve` — tiêu đề, thân, nhãn và `DefaultTextStyle` dùng thẳng `PakColors.inkPrimary/inkSecondary`; nền thì đã resolve. Đã chạy thử: `Text` dưới `CupertinoApp` tối vẫn nhận `0xff000000`, nên ở chế độ tối là chữ đen trên nền `surface-raised` tối, đọc không được lời cảnh báo xóa vĩnh viễn. Sửa: resolve cả bốn màu chữ + test độ sáng tối [pak_manager/lib/features/auth/erase_dialog.dart:91]
+- [x] [Review][Defer] Ứng dụng vào nền giữa lúc giữ mà không có `PointerCancel` có thể báo `completed` khi quay lại [pak_manager/lib/features/shared/hold_confirm_button.dart:85] — deferred: chưa chứng minh (maybe-false, nếu thật là medium); cần thử trên máy thật: giữ nút rồi để cuộc gọi/thông báo chen vào quá 3 giây, xem `onConfirmed` có chạy khi quay lại không → `DW-2.4-2`
+- [x] [Review][Defer] Màu chữ `PakColors.ink*` dùng thẳng không resolve ở màn khác (`login_screen.dart:269`, `wiping_screen.dart:71`, `create_account_screen.dart:211`, `inline_message.dart:37`) [pak_manager/lib/features/auth/login_screen.dart:269] — deferred: có từ trước story 2.4, cùng nguyên nhân với patch trên → `DW-2.4-3`
+
+Vòng 2 đã áp dụng cả 3 patch: `AnimationBehavior.preserve` cho nút giữ (test `ux_dr14_fr09_reduce_motion_keeps_full_3_second_hold`), resolve màu chữ `EraseDialog` (test `ux_dr13_ux_dr2_dialog_text_colors_resolve_in_dark_mode`), test padding đáy (`ux_dr31_fr09_erase_bottom_42_measured_from_safe_area`; `pumpGateApp` thêm tham số `appearance`). Hai test đầu đã kiểm fail khi bỏ phần sửa. `flutter analyze --fatal-infos --fatal-warnings` sạch, `check_imports` OK, `flutter test` 1087 pass, 20 skip, 0 fail.
+
+#### Rejected
+
+- sprint-status `last_updated` lùi từ 17:30 xuống 17:26 (blind, edge-case): low; bước 6 của workflow này ghi đè `last_updated`.
+- Metadata spec lệch (`status: done` so với `review`, `review_loop_iteration: 0`, Spec Change Log trống) (blind, acceptance): sửa là sửa chính spec đang review; bước 6 đặt lại `status`.
+- Kéo ngón ra khỏi nút vẫn xác nhận được (blind): low, trùng #5 vòng 1; người dùng đã chủ động giữ, sửa cần thêm nhánh `onPointerMove`.
+- Dialog tràn/cắt "Hủy" ở chữ rất lớn, nút xóa 44 cố định cắt chữ Anh (blind): low; planning không đặt sàn trợ năng, epics ghi `textScaler` kẹp ≤ 1,3 ở gốc app (epics.md:154), dialog cao ~250 pt ở cỡ thường.
+- Người đọc màn hình không xóa được; dialog thiếu `scopesRoute/namesRoute`, `barrierLabel`; nhãn đọc hai lần (blind, acceptance, verification-gap): trùng `DW-2.4-1` đã ghi.
+- AC3 chưa kiểm đầu-cuối với `AccountService` thật, chưa chạy trên máy (blind, acceptance): low; `wipe()` thật đã có test ở story 2.3, thêm test tích hợp là việc ngoài story; nên chạy tay một lần với `--flavor dev` trước khi merge.
+- `onWipe == null` hoặc `!mounted` thì bỏ im lặng (blind, edge-case): false; nút xóa chỉ vẽ khi `hasAccount`, và `SessionGate` luôn truyền `onWipe` cho `BootstrapHasAccount` (`session_gate.dart:209-213`); `unavailable`/no-account không có nút.
+- Tổ hợp `hasAccount` + `unavailable` chưa test (edge-case): false; `BootstrapUnavailable` luôn dựng `hasAccount: false`.
+- Nhấn nút xóa hai lần liền chồng hai dialog (edge-case, verification-gap): low; cần hai chạm trong cùng một khung hình, sửa thêm cờ chặn.
+- `barrierColor` giữ màu cũ khi đổi sáng/tối lúc S4 đang mở (edge-case): low; hiếm và chỉ là màu scrim.
+- S1 đổi từ `SingleChildScrollView` sang `CustomScrollView` chưa có test hồi quy riêng (edge-case): low; test bố cục S1 hiện có vẫn pass (1084 pass), không có tình huống lỗi cụ thể.
+- Không test nào kiểm mờ dần 150 ms (verification-gap): low; chuyển theo quyết định về UX-DR51 ở trên.
+- Test dễ vỡ (finder theo thứ tự, so sánh số thực chính xác, helper trùng), hằng `holdIconSize`/600 ms tự đặt, icon cứng trong widget `shared` (blind): low; không có nơi nào gây hỏng cụ thể, test đang xanh.

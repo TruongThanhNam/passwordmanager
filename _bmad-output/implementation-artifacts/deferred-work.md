@@ -267,3 +267,15 @@
   source_spec: `_bmad-output/implementation-artifacts/spec-2-4-xoa-tao-tai-khoan-moi-khi-quen-mat-khau-chinh.md`
   summary: hold-confirm-button chưa có hành động thay thế cho VoiceOver/TalkBack: `Semantics(button, label, excludeSemantics)` không có `onTap`/`onLongPress`/custom action, nên người dùng đọc màn hình không xóa được qua S4 (lối còn lại là sai 10 lần).
   evidence: Medium. Có thật: `hold_confirm_button.dart` chỉ nghe `Listener` pointer down/up/cancel và `ux_dr14_semantics_label_marks_button` chỉ kiểm nhãn. Spec 2.4 (Design Notes) chủ ý chưa làm và dặn ghi mục này; planning không có NFR trợ năng cho riêng nút. Hướng sửa: thêm `onLongPress` hoặc custom semantics action chạy cùng 3 giây (hoặc bước xác nhận thứ hai), cần quyết định UX; dialog cũng nên có `Semantics(scopesRoute, namesRoute)` và `barrierLabel`.
+
+## Deferred from: code review of spec-2-4-xoa-tao-tai-khoan-moi-khi-quen-mat-khau-chinh.md, vòng 2 (2026-11-22)
+
+- id: DW-2.4-2
+  source_spec: `_bmad-output/implementation-artifacts/spec-2-4-xoa-tao-tai-khoan-moi-khi-quen-mat-khau-chinh.md`
+  summary: hold-confirm-button chỉ dừng nhờ `PointerUp`/`PointerCancel`; nếu ứng dụng vào nền giữa lúc giữ mà không có `PointerCancel`, khi quay lại `AnimationController` có thể báo `completed` và `onConfirmed` xóa vault.
+  evidence: Medium chưa kiểm chứng (maybe-false). Cần thử trên máy thật iOS và Android với `--flavor dev`: giữ nút, để cuộc gọi hoặc thông báo hệ thống chen vào quá 3 giây, rồi xem `onConfirmed` có chạy khi quay lại không. Nếu có, thêm `WidgetsBindingObserver` hủy lần giữ khi `inactive`/`paused` kèm test.
+
+- id: DW-2.4-3
+  source_spec: `_bmad-output/implementation-artifacts/spec-2-4-xoa-tao-tai-khoan-moi-khi-quen-mat-khau-chinh.md`
+  summary: màn có từ trước dùng thẳng `PakColors.inkPrimary/inkSecondary` (`CupertinoDynamicColor`) làm màu `TextStyle` mà không `CupertinoDynamicColor.resolve`, nên ở chế độ tối chữ vẫn là màu sáng: `login_screen.dart:269`, `wiping_screen.dart:71`, `create_account_screen.dart:211`, `inline_message.dart:37`, `secret_field.dart:135`.
+  evidence: Medium, có thật. Test thử: `Text` với `TextStyle(color: PakColors.inkPrimary)` dưới `CupertinoApp` có `brightness: Brightness.dark` nhận `0xff000000`. Hướng sửa: resolve màu tại chỗ dùng (hoặc một helper trong `features/shared/theme/`) và thêm test độ sáng tối cho từng màn. Bản mới trong `erase_dialog.dart` được sửa ngay ở story 2.4.

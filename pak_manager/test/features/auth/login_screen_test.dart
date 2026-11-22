@@ -696,6 +696,24 @@ void main() {
       expect(find.byType(PakTextButton), findsOneWidget);
     });
 
+    testWidgets('ux_dr31_fr09_erase_bottom_42_measured_from_safe_area', (
+      tester,
+    ) async {
+      // Home indicator: 42 đo từ mép safe-area, như phần đầu màn đo từ
+      // status bar (quyết định review story 2.4).
+      tester.view
+        ..devicePixelRatio = 1
+        ..physicalSize = const Size(390, 844)
+        ..padding = const FakeViewPadding(bottom: 34)
+        ..viewPadding = const FakeViewPadding(bottom: 34);
+      addTearDown(tester.view.reset);
+      await _pumpS3(tester);
+
+      final erase = tester.getRect(eraseRow());
+      expect(844 - 34 - erase.bottom, 42);
+      expect(erase.height, 44);
+    });
+
     testWidgets('ux_dr31_short_screen_scrolls_and_never_overlaps_submit', (
       tester,
     ) async {

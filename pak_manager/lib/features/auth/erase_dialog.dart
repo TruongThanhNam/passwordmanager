@@ -78,6 +78,16 @@ class _EraseDialogState extends State<EraseDialog> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final hairline = 1 / MediaQuery.devicePixelRatioOf(context);
+    // Chữ nằm trên nền `surface-raised` đã resolve nên cũng phải resolve, nếu
+    // không chế độ tối ra chữ đen trên nền tối.
+    final inkPrimary = CupertinoDynamicColor.resolve(
+      PakColors.inkPrimary,
+      context,
+    );
+    final inkSecondary = CupertinoDynamicColor.resolve(
+      PakColors.inkSecondary,
+      context,
+    );
     return PopScope(
       canPop: false,
       // Back (kể cả lúc đang giữ) = Hủy: đóng dialog, không xóa gì.
@@ -88,7 +98,7 @@ class _EraseDialogState extends State<EraseDialog> {
       },
       child: Center(
         child: DefaultTextStyle(
-          style: PakTextStyles.body.copyWith(color: PakColors.inkPrimary),
+          style: PakTextStyles.body.copyWith(color: inkPrimary),
           child: Container(
             width: eraseDialogWidth,
             clipBehavior: Clip.antiAlias,
@@ -118,7 +128,7 @@ class _EraseDialogState extends State<EraseDialog> {
                         l10n.eraseTitle,
                         textAlign: TextAlign.center,
                         style: PakTextStyles.bodyEmphasis.copyWith(
-                          color: PakColors.inkPrimary,
+                          color: inkPrimary,
                         ),
                       ),
                       const SizedBox(height: eraseTitleToBody),
@@ -126,7 +136,7 @@ class _EraseDialogState extends State<EraseDialog> {
                         l10n.eraseBody,
                         textAlign: TextAlign.center,
                         style: PakTextStyles.footnote.copyWith(
-                          color: PakColors.inkPrimary,
+                          color: inkPrimary,
                         ),
                       ),
                       const SizedBox(height: eraseBodyToHold),
@@ -141,7 +151,7 @@ class _EraseDialogState extends State<EraseDialog> {
                         l10n.eraseHold,
                         textAlign: TextAlign.center,
                         style: PakTextStyles.footnote.copyWith(
-                          color: PakColors.inkSecondary,
+                          color: inkSecondary,
                         ),
                       ),
                       const SizedBox(height: eraseLabelToButtons),

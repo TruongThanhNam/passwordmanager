@@ -68,6 +68,9 @@ class _HoldConfirmButtonState extends State<HoldConfirmButton>
           vsync: this,
           duration: holdConfirmDuration,
           reverseDuration: holdConfirmRewind,
+          // Reduce Motion/Remove animations không được rút ngắn 3 giây: đây là
+          // chốt an toàn của một thao tác xóa không hoàn tác (UX-DR14).
+          animationBehavior: AnimationBehavior.preserve,
         )..addStatusListener((status) {
           if (status == AnimationStatus.completed && !_confirmed) {
             _confirmed = true;

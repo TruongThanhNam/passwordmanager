@@ -37,6 +37,28 @@ HoldRingPainter _painter(WidgetTester tester) =>
 double _progress(WidgetTester tester) => _painter(tester).progress;
 
 void main() {
+  testWidgets('ux_dr14_fr09_reduce_motion_keeps_full_3_second_hold', (
+    tester,
+  ) async {
+    // Reduce Motion/Remove animations: AnimationController mặc định rút còn
+    // 5% thời gian, một chạm sẽ xóa vault.
+    tester.platformDispatcher.accessibilityFeaturesTestValue =
+        const FakeAccessibilityFeatures(disableAnimations: true);
+    addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
+    final counter = await _pump(tester);
+
+    final gesture = await tester.startGesture(tester.getCenter(_button));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 1500));
+    expect(_progress(tester), closeTo(0.5, 0.01));
+    expect(counter.confirmed, 0);
+
+    await tester.pump(const Duration(milliseconds: 1501));
+    expect(counter.confirmed, 1);
+    await gesture.up();
+    await tester.pump();
+  });
+
   testWidgets('ux_dr14_shape_72_trash_icon_ring_colors_and_no_background', (
     tester,
   ) async {

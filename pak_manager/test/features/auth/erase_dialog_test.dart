@@ -28,6 +28,7 @@ const _fullHold = Duration(milliseconds: 3001);
 Future<FakeAccountService> _pumpS3(
   WidgetTester tester, {
   AppLanguage language = AppLanguage.vi,
+  Appearance appearance = Appearance.light,
 }) async {
   final service = FakeAccountService(
     bootstrapResult: const BootstrapHasAccount(),
@@ -37,6 +38,7 @@ Future<FakeAccountService> _pumpS3(
     bootstrap: const BootstrapHasAccount(),
     service: service,
     language: language,
+    appearance: appearance,
   );
   await tester.pump();
   return service;
@@ -85,6 +87,29 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Xóa'), findsNothing);
+  });
+
+  testWidgets('ux_dr13_ux_dr2_dialog_text_colors_resolve_in_dark_mode', (
+    tester,
+  ) async {
+    await _pumpS3(tester, appearance: Appearance.dark);
+    await _openDialog(tester);
+
+    int? colorOf(String text) =>
+        tester.widget<Text>(find.text(text)).style?.color?.toARGB32();
+    // Chữ phải lấy biến thể tối, nếu không là chữ đen trên nền dialog tối.
+    expect(colorOf(_title), PakColors.inkPrimary.darkColor.toARGB32());
+    expect(colorOf(_body), PakColors.inkPrimary.darkColor.toARGB32());
+    expect(colorOf(_hold), PakColors.inkSecondary.darkColor.toARGB32());
+    final surface = find
+        .descendant(of: _dialog, matching: find.byType(Container))
+        .first;
+    final decoration =
+        tester.widget<Container>(surface).decoration! as BoxDecoration;
+    expect(
+      decoration.color?.toARGB32(),
+      PakColors.surfaceRaised.darkColor.toARGB32(),
+    );
   });
 
   testWidgets('ux_dr13_dialog_width_270_radius_14_surface_raised_on_scrim', (
