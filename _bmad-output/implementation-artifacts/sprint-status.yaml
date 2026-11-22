@@ -181,5 +181,5 @@ action_items:
     action: "Nâng actions/checkout và actions/setup-java lên bản Node 24 (v5), ghim
       SHA kèm tag"
     owner: "dev (Amelia)"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-1-retro-2026-11-18.md"
