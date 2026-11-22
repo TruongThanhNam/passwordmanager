@@ -139,7 +139,7 @@ action_items:
     action: "Story 2.5 tách KDF lỗi/thiếu bộ nhớ khỏi UnlockCorrupt và giới hạn kích
       thước khi đọc header/cards/recent"
     owner: "PM (John)"
-    status: open
+    status: done
     ref: "_bmad-output/implementation-artifacts/epic-1-retro-2026-11-18.md"
   - id: "epic-1-retro-item-7-story-3-3-sửa-cửa-sổ-lock-enter-làm-mất"
     epic: 1
