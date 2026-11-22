@@ -292,6 +292,87 @@ void main() {
       expect(log, ['clearClipboard']);
     });
 
+    // Retro Epic 1 item 7 / B3: `enter` chen vào lúc lock cũ còn chờ hook.
+    test('fr15_ad09_enter_during_slow_clipboard_keeps_session_limit', () async {
+      final slow = Completer<void>();
+      final c = SessionController(
+        clearClipboardIfOurs: () => slow.future,
+        clock: clock,
+        limits: () => settings,
+        timerFactory: timers.create,
+      )..enter(fakeSession());
+      await pumpEventQueue();
+      var notified = 0;
+      c.addListener(() => notified++);
+
+      final locking = c.lock();
+      await pumpEventQueue();
+      expect(c.session, isNull, reason: 'phiên cũ đã khóa, hook còn treo');
+      final next = fakeSession();
+      c.enter(next);
+      final epochAfterEnter = c.epoch;
+      expect(notified, 1);
+      slow.complete();
+      await locking;
+      await pumpEventQueue();
+
+      expect(c.session, same(next));
+      expect(c.epoch, epochAfterEnter, reason: 'lock cũ không tăng epoch nữa');
+      expect(notified, 1, reason: 'lock cũ không báo lần hai');
+      // Hạn phiên của phiên mới phải được đặt: hết 10 phút thì khóa.
+      expect(timers.active.single.duration, min * 10);
+      clock.advance(min * 10);
+      timers.fireAll();
+      await pumpEventQueue();
+      expect(c.session, isNull);
+    });
+
+    test('ad09_lock_of_new_session_not_merged_into_old_lock', () async {
+      final slow = Completer<void>();
+      final newDek = FakeSecureKey();
+      final c = SessionController(clearClipboardIfOurs: () => slow.future)
+        ..enter(fakeSession());
+      final oldLocking = c.lock();
+      await pumpEventQueue();
+      c.enter(fakeSession(newDek));
+
+      final newLocking = c.lock();
+      expect(identical(oldLocking, newLocking), isFalse);
+      slow.complete();
+      await Future.wait([oldLocking, newLocking]);
+
+      expect(newDek.disposed, isTrue);
+      expect(c.session, isNull);
+    });
+
+    test(
+      'ad09_enter_during_flush_draft_is_not_disturbed_by_old_lock',
+      () async {
+        final slow = Completer<void>();
+        final oldDek = FakeSecureKey();
+        final newDek = FakeSecureKey();
+        final c = SessionController(flushDraft: () => slow.future)
+          ..enter(fakeSession(oldDek));
+        var notified = 0;
+        c.addListener(() => notified++);
+        final locking = c.lock();
+        await pumpEventQueue();
+
+        final next = fakeSession(newDek);
+        c.enter(next);
+        final epochAfterEnter = c.epoch;
+        slow.complete();
+        await locking;
+
+        expect(oldDek.disposed, isTrue);
+        expect(newDek.disposed, isFalse);
+        expect(c.session, same(next));
+        expect(c.epoch, epochAfterEnter);
+        expect(notified, 1);
+        c.dispose();
+      },
+    );
+
     test('ad08_early_timer_reschedules_by_clock', () async {
       final c = await entered();
       clock.advance(min * 4);

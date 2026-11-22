@@ -85,7 +85,7 @@ flowchart TD
 - **Binds:** NFR-2, NFR-3, FR-54, FR-63
 - **Prevents:** file export không mở được trên máy khác; file độc hại làm treo app; UI đứng hình khi chạy KDF.
 - **Rule:** Khởi tạo libsodium bằng `SodiumSumoInit.init()` (`package:sodium/sodium_sumo.dart`). KDF dùng `pwhash.callRaw` với Argon2id13, **p=1 cố định** (libsodium không hỗ trợ p khác).
-  - Vault: hiệu chỉnh trên máy lúc tạo tài khoản và lúc đổi mật khẩu chính. Khởi điểm m=64 MiB, t=3; mục tiêu ~1 giây; trần 2 giây là **trần mềm** (lần chạy thứ 3 được nhận dù chậm; mở khóa có thể vượt 2 giây trên máy chậm — rủi ro chấp nhận, retro Epic 1); sàn m=19 MiB, t=2.
+  - Vault: hiệu chỉnh trên máy lúc tạo tài khoản và lúc đổi mật khẩu chính. Khởi điểm m=64 MiB, t=3; mục tiêu ~1 giây; trần 2 giây là **trần mềm** (lần chạy thứ 3 được nhận dù chậm; mở khóa có thể vượt 2 giây trên máy chậm — rủi ro chấp nhận, retro Epic 1); sàn m=19 MiB, t=2. Một lần chạy hiệu chỉnh bất kỳ lỗi (kể cả lần 2/3 sau probe thành công, thường do thiếu RAM tạm thời) thì thử đúng một lần ở sàn và nhận kết quả đó; chỉ khi lần ở sàn cũng lỗi thì tạo tài khoản thất bại (retro Epic 1, mục 8).
   - Export: **cố định** m=64 MiB, t=3.
   - Khi đọc header (vault hay export), tham số ngoài khoảng [m 19–128 MiB, t 2–10] bị từ chối **trước khi** chạy KDF.
   - KDF và lần chạy hiệu chỉnh luôn chạy ngoài UI isolate (`Sodium.runIsolated`). Kết quả trả về là `SecureKey`.

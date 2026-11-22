@@ -79,7 +79,7 @@
 - source_spec: `_bmad-output/implementation-artifacts/spec-1-4-ma-hoa-vault-bang-khoa-hai-tang-va-argon2id.md`
   summary: (Chưa xác minh, nếu đúng thì high) Hiệu chỉnh KDF trả `null` khi lần probe (3, 64 MiB) lỗi, không lùi về sàn (2, 19 MiB), nên máy không cấp được 64 MiB sẽ không tạo được tài khoản (story 1.6).
   evidence: Đúng Design Notes bước 4 của story 1.4. Cần chạy `calibrateVaultKdf` trên máy mốc yếu nhất (Android 7, RAM 2 GB; iPhone 6s/SE đời 1) để biết Argon2id 64 MiB có cấp được bộ nhớ không. Nếu không, thêm lần thử ở sàn sau khi probe lỗi.
-  status: partly done (story 1.10, `spec-1-10-hieu-chinh-kdf-lui-ve-san-khi-lan-thu-dau-loi.md`) — probe lỗi thì `calibrateVaultKdf` (`lib/core/crypto/kdf_calibration.dart`) thử lại đúng một lần ở `KdfParams.floor` (2, 19 MiB). Còn mở: đo trên máy mốc yếu nhất (story 7.1).
+  status: partly done (story 1.10, `spec-1-10-hieu-chinh-kdf-lui-ve-san-khi-lan-thu-dau-loi.md`) — probe lỗi thì `calibrateVaultKdf` (`lib/core/crypto/kdf_calibration.dart`) thử lại đúng một lần ở `KdfParams.floor` (2, 19 MiB). Từ action item `epic-1-retro-item-8` (SHA 48b3546, CI run 45027723303), lần chạy 2/3 lỗi sau probe thành công cũng thử đúng một lần ở sàn (tối đa 4 lần chạy), kèm test e2e tạo ở sàn rồi unlock (`ad05_fr03_account_created_at_floor_unlocks_with_real_kdf`). Còn mở: đo trên máy mốc yếu nhất (story 7.1).
 
 ## Deferred from: code review of spec-1-4-ma-hoa-vault-bang-khoa-hai-tang-va-argon2id (2026-11-09)
 
@@ -136,6 +136,7 @@
 ## Deferred from: code review of spec-1-8-khoa-vault-va-xoa-du-lieu-giai-ma-khoi-bo-nho.md (2026-11-10)
 
 - Cửa sổ giữa `session.lock()` và `_notify()` trong `SessionController._runLock` (trong lúc await `clearClipboardIfOurs`): HomeShell vẫn hiện với phiên đã khóa, nhánh reset navigator key `_lastInSession` trong `SessionGate` chưa có test. Khi có hook clipboard thật (Epic 3/5/6): cho phép inject hook vào gate, viết test lock với hook chậm + pump một frame.
+  note: phần mất giới hạn phiên và lock của phiên mới bị gộp vào lock cũ đã sửa theo action item `epic-1-retro-item-7` (SHA fe4bcb9, CI run 45027723303; `session_controller.dart`: `_runLock` không tăng epoch khi `enter` đã chen vào; `lock()` không trả `Future` của phiên cũ cho phiên mới; test `fr15_ad09_enter_during_slow_clipboard_keeps_session_limit`, `ad09_lock_of_new_session_not_merged_into_old_lock`, `ad09_enter_during_flush_draft_is_not_disturbed_by_old_lock`). Còn mở: phần UI ở trên (HomeShell còn hiện trong lúc hook chạy, nhánh `_lastInSession` chưa có test), làm khi story 3.3 nối hook clipboard thật.
 
 ## Deferred from: code review of spec-1-9-tu-khoa-khi-chay-nen-va-gioi-han-phien.md (2026-11-10)
 
@@ -211,7 +212,7 @@
 - id: DW-retro1.9-2
   source_spec: `_bmad-output/implementation-artifacts/spec-epic-1-retro-item-9-gom-fake-test-support.md`
   summary: Chưa có kiểm tự động cho bất biến "`port_fakes.dart` không import Flutter" và "fake implements port/`Timer`/`SecureKey` chỉ nằm trong `test/support/`, trừ fake cục bộ có lý do".
-  evidence: `tool/check_imports.dart:26` chỉ quét `lib/`; bất biến hiện chỉ kiểm bằng grep tay trong spec. Theo retro D1, mục CI mới vào backlog CI riêng, không thành story chen trước Epic 2.
+  evidence: `tool/check_imports.dart:26` chỉ quét `lib/`; bất biến hiện chỉ kiểm bằng grep tay trong spec. Theo retro D1, mục CI mới vào backlog CI riêng (`ci-backlog.md`), không thành story chen trước Epic 2.
 - id: DW-retro1.9-3
   source_spec: `_bmad-output/implementation-artifacts/spec-epic-1-retro-item-9-gom-fake-test-support.md`
   summary: `FakeSecureKey` dùng chung không ném khi dùng sau `dispose` và không theo dõi bản `copy()`, nên test có thể không bắt lỗi dùng-sau-hủy hay rò key.
