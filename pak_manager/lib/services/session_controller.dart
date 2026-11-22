@@ -56,6 +56,10 @@ final class SessionController {
   VaultSession? _session;
   int _epoch = 0;
   Future<void>? _locking;
+
+  /// Phiên mà [_locking] đang khóa; để `lock()` của phiên mới (vào qua
+  /// [enter] lúc lock cũ còn chờ hook) không bị gộp vào lock của phiên cũ.
+  VaultSession? _lockingSession;
   final List<void Function()> _listeners = [];
 
   /// Mốc vào phiên và hạn phiên (ms đơn điệu).
@@ -250,17 +254,23 @@ final class SessionController {
 
   /// Chạy trình tự khóa. Gọi chồng trả cùng `Future`; không có phiên thì
   /// không làm gì. Lỗi trong hook bị nuốt: khóa luôn hoàn tất.
+  ///
+  /// Nếu [enter] đã đưa phiên mới vào trong lúc lock của phiên cũ còn chạy,
+  /// lần gọi này khóa phiên mới bằng một trình tự riêng, không nhận `Future`
+  /// của phiên cũ (nếu không phiên mới sẽ không bao giờ bị khóa).
   Future<void> lock({bool foreground = true}) {
     final pending = _locking;
-    if (pending != null) {
+    final session = _session;
+    if (pending != null &&
+        (session == null || identical(session, _lockingSession))) {
       return pending;
     }
-    final session = _session;
     if (session == null) {
       return Future<void>.value();
     }
     final locking = _runLock(session, foreground: foreground);
     _locking = locking;
+    _lockingSession = session;
     return locking;
   }
 
@@ -268,6 +278,11 @@ final class SessionController {
     VaultSession session, {
     required bool foreground,
   }) async {
+    // Epoch lúc bắt đầu khóa. Nếu tới cuối epoch đã khác thì `enter` đã chen
+    // vào, đã tăng epoch và báo listener cho phiên mới; tăng thêm lần nữa
+    // sẽ làm `_startSession` của phiên mới bỏ kết quả (mất hạn phiên) và
+    // dựng lại cây UI của phiên mới.
+    final epochAtStart = _epoch;
     _timer?.cancel();
     _timer = null;
     try {
@@ -288,9 +303,14 @@ final class SessionController {
       if (foreground) {
         await _guard(clearClipboardIfOurs);
       }
-      _epoch++;
-      _locking = null;
-      _notify();
+      if (identical(_lockingSession, session)) {
+        _locking = null;
+        _lockingSession = null;
+      }
+      if (_epoch == epochAtStart) {
+        _epoch++;
+        _notify();
+      }
     }
   }
 
