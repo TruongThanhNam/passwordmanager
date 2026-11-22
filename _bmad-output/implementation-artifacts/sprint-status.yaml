@@ -146,14 +146,14 @@ action_items:
     action: "Story 3.3 sửa cửa sổ lock→enter làm mất giới hạn phiên, kèm test; gộp
       với mục deferred-work về _runLock"
     owner: "dev (Amelia)"
-    status: open
+    status: in-progress
     ref: "_bmad-output/implementation-artifacts/epic-1-retro-2026-11-18.md"
   - id: "epic-1-retro-item-8-quyết-định-hành-vi-khi-lần-2-3-hiệu-chỉn"
     epic: 1
     action: "Quyết định hành vi khi lần 2/3 hiệu chỉnh KDF lỗi (thử sàn hay null)
       và thêm test e2e tạo ở sàn rồi unlock"
     owner: "architect (Winston)"
-    status: open
+    status: in-progress
     ref: "_bmad-output/implementation-artifacts/epic-1-retro-2026-11-18.md"
   - id: "epic-1-retro-item-9-gom-fake-port-timer-securekey-vào-test-s"
     epic: 1
@@ -174,7 +174,7 @@ action_items:
     action: "Đặt điểm dừng cho làm cứng CI: sau action 1-2, mục CI mới vào backlog
       CI riêng, không tự thành story chen trước Epic 2"
     owner: "PM (John)"
-    status: open
+    status: in-progress
     ref: "_bmad-output/implementation-artifacts/epic-1-retro-2026-11-18.md"
   - id: "epic-1-retro-item-12-nâng-actions-checkout-và-actions-setup-j"
     epic: 1
