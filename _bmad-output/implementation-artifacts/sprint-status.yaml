@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 11-02-2026 16:41
-last_updated: 11-22-2026 19:00
+last_updated: 11-22-2026 20:10
 project: passwordmanager
 project_key: NOKEY
 tracking_system: file-system
@@ -60,7 +60,7 @@ development_status:
   2-3-tự-xóa-dữ-liệu-ở-lần-sai-thứ-10: done
   2-4-xóa-tạo-tài-khoản-mới-khi-quên-mật-khẩu-chính: done
   2-5-dữ-liệu-bị-hỏng-không-bao-giờ-dẫn-tới-xóa: done
-  epic-2-retrospective: optional
+  epic-2-retrospective: done
 
   epic-3: backlog
   3-1-tạo-card-mới-và-xem-danh-sách-card: backlog
@@ -183,3 +183,75 @@ action_items:
     owner: "dev (Amelia)"
     status: done
     ref: "_bmad-output/implementation-artifacts/epic-1-retro-2026-11-18.md"
+  - id: "epic-2-retro-item-13-đối-chiếu-tài-liệu-8-biến-thể-unlockresu"
+    epic: 2
+    action: "Đối chiếu tài liệu: 8 biến thể UnlockResult (epics.md:158, spine AD-4/AD-8),
+      S3 cho UnlockUnavailable/UnlockRetry và key login.retry (EXPERIENCE.md, UX-DR42),
+      câu KDF lỗi hoàn lượt trong AD-8; đóng DW-2.1-4"
+    owner: "PM (John) / namtruong"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-11-22.md"
+  - id: "epic-2-retro-item-14-đóng-dw-2-1-2-và-dw-2-2-1-với-sha-17d24a"
+    epic: 2
+    action: "Đóng DW-2.1-2 và DW-2.2-1 với SHA 17d24a3 và CI run 45011608661; ghi
+      vào DW-2.1-3 rằng phần còn lại thuộc DW-2.3-2"
+    owner: "namtruong"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-11-22.md"
+  - id: "epic-2-retro-item-15-quyết-định-hướng-sửa-dw-2-3-1-kiểm-lần-h"
+    epic: 2
+    action: "Quyết định hướng sửa DW-2.3-1 (kiểm lần hai trước khi dọn im lặng hoặc
+      chỉ dọn khi wiping) và DW-2.3-2 trước khi Epic 3 ghi cards thật"
+    owner: "architect (Winston)"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-11-22.md"
+  - id: "epic-2-retro-item-16-sửa-lỗi-dark-mode-resolve-màu-pakcolors"
+    epic: 2
+    action: "Sửa lỗi dark mode: resolve màu PakColors.ink* tại 5 chỗ của DW-2.4-3,
+      kèm test Brightness.dark cho từng màn và đưa vào Definition of Done của story
+      có UI"
+    owner: "dev (Amelia)"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-11-22.md"
+  - id: "epic-2-retro-item-17-helper-dọn-sandbox-dùng-chung-trong-test"
+    epic: 2
+    action: "Helper dọn sandbox dùng chung trong test/support có thử lại (đóng DW-2.1-1),
+      thay deleteSync ở 6 nơi"
+    owner: "dev (Amelia)"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-11-22.md"
+  - id: "epic-2-retro-item-18-tách-lớp-kết-quả-khỏi-account_service-da"
+    epic: 2
+    action: "Tách lớp kết quả khỏi account_service.dart và tách account_service_test.dart
+      theo nhóm trước Epic 5; gom _readCapped/_deleteQuietly vào core/io"
+    owner: "dev (Amelia)"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-11-22.md"
+  - id: "epic-2-retro-item-19-kéo-vòng-kiểm-máy-thật-nhỏ-lên-trước-khi"
+    epic: 2
+    action: "Kéo vòng kiểm máy thật nhỏ lên trước khi Epic 3 ghi cards thật: DW-2.3-1,
+      DW-2.4-1, DW-2.4-2, DW-2.5-1, DW-2.5-3, DW-2.5-4, KDF máy yếu, bootId iOS"
+    owner: "PM (John) / namtruong"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-11-22.md"
+  - id: "epic-2-retro-item-20-thêm-vào-checklist-pr-của-story-đóng-mục"
+    epic: 2
+    action: "Thêm vào checklist PR của story: đóng mục DW đã giải quyết (ghi SHA,
+      bổ sung CI run khi merge) và task docs khi thêm biến thể sealed hay key microcopy"
+    owner: "namtruong"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-11-22.md"
+  - id: "epic-2-retro-item-21-epic-3-nối-hook-clearclipboard-của-wipec"
+    epic: 2
+    action: "Epic 3 nối hook clearClipboard của WipeCoordinator khi dựng ClipboardService;
+      nối invalidateSession khi có lối xóa từ trong phiên"
+    owner: "dev (Amelia)"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-11-22.md"
+  - id: "epic-2-retro-item-22-chờ-ci-run-45024503357-xanh-cho-pr-26-ch"
+    epic: 2
+    action: "Chờ CI run 45024503357 xanh cho PR #26, chạy lại nếu fail do phân giải
+      Gradle, ghi id run"
+    owner: "namtruong"
+    status: open
+    ref: "_bmad-output/implementation-artifacts/epic-2-retro-2026-11-22.md"
