@@ -112,4 +112,20 @@ class AppLocalizationsVi extends AppLocalizations {
 
   @override
   String get wiping => 'Đang xóa dữ liệu…';
+
+  @override
+  String get loginErase => 'Xóa & Tạo tài khoản mới';
+
+  @override
+  String get eraseTitle => 'Xóa toàn bộ dữ liệu?';
+
+  @override
+  String get eraseBody =>
+      'Mọi card, Recent và bản nháp sẽ bị xóa vĩnh viễn. Không thể khôi phục.';
+
+  @override
+  String get eraseHold => 'Giữ 3 giây để xóa';
+
+  @override
+  String get commonCancel => 'Hủy';
 }

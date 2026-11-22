@@ -116,4 +116,20 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get wiping => 'Erasing data…';
+
+  @override
+  String get loginErase => 'Erase & Create New Account';
+
+  @override
+  String get eraseTitle => 'Erase all data?';
+
+  @override
+  String get eraseBody =>
+      'All cards, recent passwords and drafts will be permanently erased. This can\'t be undone.';
+
+  @override
+  String get eraseHold => 'Hold for 3 seconds to erase';
+
+  @override
+  String get commonCancel => 'Cancel';
 }

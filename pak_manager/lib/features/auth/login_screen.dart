@@ -15,6 +15,7 @@ import '../shared/secret_field.dart';
 import '../shared/theme/pak_colors.dart';
 import '../shared/theme/pak_spacing.dart';
 import '../shared/theme/pak_text_styles.dart';
+import 'erase_dialog.dart';
 
 /// Khoảng từ đáy status bar tới đỉnh tên app (UX-DR31).
 const double loginTitleTop = 120;
@@ -24,6 +25,13 @@ const double loginTitleToField = 48;
 
 /// Khoảng từ ô mật khẩu (hoặc dòng thông báo) tới nút "Đăng nhập" (S3).
 const double loginFieldToSubmit = 24;
+
+/// Khoảng từ đáy nút "Xóa & Tạo tài khoản mới" tới mép màn (UX-DR31).
+const double loginEraseBottom = 42;
+
+/// Khoảng tối thiểu giữa nút "Đăng nhập" và nút xóa khi màn thấp hoặc có
+/// bàn phím (nút xóa không đè lên nút "Đăng nhập").
+const double loginSubmitToErase = 24;
 
 /// Thông báo inline dưới ô S3 sau một lần [AccountService.unlock].
 enum _UnlockMessage { wrong, corrupt, unavailable }
@@ -53,9 +61,13 @@ String lockoutClock(Duration remaining) {
 ///   `login.attempts` luôn nằm cuối (UX-DR21, FR-4). Nút vô hiệu khi < 15 ký
 ///   tự, có ký tự không ASCII (hiện `pw.nonAscii`) hoặc hết lượt thử; chuỗi
 ///   đó không bao giờ tới `unlock`. Khi đang kiểm tra: spinner, khóa ô và
-///   nút.
+///   nút. Dưới cùng, ghim đáy (cách mép [loginEraseBottom], cuộn được khi
+///   màn thấp hoặc có bàn phím): button-text `login.erase` cao 44 mở S4
+///   ([showEraseDialog]); bấm được ở mọi trạng thái trừ lúc đang kiểm tra
+///   (`unlock` đang chạy KDF có thể ghi lại guard sau khi xóa).
 /// - Lần sai thứ 10 (UX-DR42): không dialog, [LoginScreen.onWipe] chuyển
-///   sang S5 rồi S1 (story 2.3).
+///   sang S5 rồi S1 (story 2.3). Xóa thủ công (story 2.4): S4 giữ đủ 3 giây
+///   rồi cũng gọi [LoginScreen.onWipe].
 /// - Đang chờ sau lần sai 5–9 (UX-DR42, FR-4): hỏi
 ///   [AccountService.lockoutRemaining] khi mở màn và sau mỗi kết quả
 ///   `unlock` (trừ thành công và `UnlockBusy`). Còn lại > 0 thì ô và nút vô
@@ -81,8 +93,9 @@ class LoginScreen extends ConsumerStatefulWidget {
   /// Mở khóa xong (S3): người nhận sở hữu [VaultSession] và thay cây UI.
   final ValueChanged<VaultSession>? onUnlocked;
 
-  /// Lần sai thứ 10 (S3, `UnlockWipeRequired`): người nhận gỡ màn này và
-  /// dựng S5. Không dialog giữa S3 và S5.
+  /// Lần sai thứ 10 (S3, `UnlockWipeRequired`) hoặc S4 giữ đủ 3 giây: người
+  /// nhận gỡ màn này và dựng S5. Lần sai thứ 10 không có dialog giữa S3 và
+  /// S5; S4 đã đóng trước khi gọi.
   final VoidCallback? onWipe;
 
   @override
@@ -222,39 +235,81 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     });
   }
 
+  /// Bấm "Xóa & Tạo tài khoản mới": mở S4 (không cần mật khẩu); giữ đủ 3
+  /// giây thì dialog đã đóng và [LoginScreen.onWipe] đưa gate sang S5. Hủy
+  /// hay Back không đổi gì trên S3.
+  Future<void> _openErase() async {
+    if (_busy) {
+      return;
+    }
+    final confirmed = await showEraseDialog(context);
+    if (!confirmed || !mounted) {
+      return;
+    }
+    widget.onWipe?.call();
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     return CupertinoPageScaffold(
       backgroundColor: PakColors.surfaceBase,
       child: ContentColumn(
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const SizedBox(height: loginTitleTop),
-              Text(
-                l10n.appName,
-                textAlign: TextAlign.center,
-                style: PakTextStyles.largeTitle.copyWith(
-                  color: PakColors.inkPrimary,
-                ),
+        child: CustomScrollView(
+          slivers: [
+            SliverToBoxAdapter(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const SizedBox(height: loginTitleTop),
+                  Text(
+                    l10n.appName,
+                    textAlign: TextAlign.center,
+                    style: PakTextStyles.largeTitle.copyWith(
+                      color: PakColors.inkPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: loginTitleToField),
+                  if (widget.hasAccount)
+                    ..._s3(l10n)
+                  else ...[
+                    _row(
+                      const ValueKey('row.create'),
+                      PakPrimaryButton(
+                        label: l10n.loginCreate,
+                        onPressed: widget.unavailable ? null : widget.onCreate,
+                      ),
+                    ),
+                    if (widget.unavailable)
+                      InlineMessage(l10n.createUnavailable),
+                  ],
+                ],
               ),
-              const SizedBox(height: loginTitleToField),
-              if (widget.hasAccount)
-                ..._s3(l10n)
-              else ...[
-                _row(
-                  const ValueKey('row.create'),
-                  PakPrimaryButton(
-                    label: l10n.loginCreate,
-                    onPressed: widget.unavailable ? null : widget.onCreate,
+            ),
+            // Nút xóa dồn xuống đáy; màn thấp thì cuộn, không đè lên nút
+            // "Đăng nhập".
+            if (widget.hasAccount)
+              SliverFillRemaining(
+                hasScrollBody: false,
+                child: Align(
+                  alignment: Alignment.bottomCenter,
+                  child: Padding(
+                    padding: const EdgeInsets.only(
+                      top: loginSubmitToErase,
+                      bottom: loginEraseBottom,
+                    ),
+                    child: SizedBox(
+                      key: const ValueKey('row.erase'),
+                      height: PakSpacing.rowHeight,
+                      child: PakTextButton(
+                        label: l10n.loginErase,
+                        onPressed: _busy ? null : () => unawaited(_openErase()),
+                      ),
+                    ),
                   ),
                 ),
-                if (widget.unavailable) InlineMessage(l10n.createUnavailable),
-              ],
-            ],
-          ),
+              ),
+          ],
         ),
       ),
     );

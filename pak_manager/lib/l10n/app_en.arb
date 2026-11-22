@@ -139,5 +139,25 @@
   "wiping": "Erasing data…",
   "@wiping": {
     "description": "wiping: S5, the only line on the full-screen wipe progress screen, centred under the activity indicator."
+  },
+  "loginErase": "Erase & Create New Account",
+  "@loginErase": {
+    "description": "login.erase (FR-9): S3 text button pinned to the bottom, opens the S4 confirmation dialog; enabled in every S3 state except while a password check is running."
+  },
+  "eraseTitle": "Erase all data?",
+  "@eraseTitle": {
+    "description": "erase.title: S4 alert-dialog title."
+  },
+  "eraseBody": "All cards, recent passwords and drafts will be permanently erased. This can't be undone.",
+  "@eraseBody": {
+    "description": "erase.body: S4 alert-dialog body."
+  },
+  "eraseHold": "Hold for 3 seconds to erase",
+  "@eraseHold": {
+    "description": "erase.hold: S4 label under the hold-confirm-button; also its screen-reader label."
+  },
+  "commonCancel": "Cancel",
+  "@commonCancel": {
+    "description": "common.cancel: dialog button that dismisses without acting (S4 now, card delete and others later)."
   }
 }
