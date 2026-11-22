@@ -654,6 +654,162 @@ void main() {
     });
   });
 
+  group('revertAttempt', () {
+    test('fr07_ad08_revert_restores_count_below_wait_range', () async {
+      writeDisk(const GuardState(failCount: 2));
+      final g = guard();
+      await g.normalize(hasAccount: true);
+      expect(await g.recordAttempt(), isTrue);
+      expect(diskState().failCount, 3);
+
+      expect(await g.revertAttempt(), isTrue);
+
+      expect(g.state, const GuardState(failCount: 2));
+      expect(diskState(), const GuardState(failCount: 2));
+    });
+
+    test('fr07_ad08_revert_restores_count_and_old_wait_mark', () async {
+      final saved = GuardState(
+        failCount: 6,
+        waitBootId: clock.boot,
+        waitStartMono: clock.ms - 40 * minute.inMilliseconds,
+      );
+      writeDisk(saved);
+      final g = guard();
+      await g.normalize(hasAccount: true);
+      // Lần thử mới ghi mốc chờ mới (failCount 7).
+      expect(await g.recordAttempt(), isTrue);
+      expect(diskState().waitStartMono, clock.ms);
+
+      expect(await g.revertAttempt(), isTrue);
+
+      // Mốc cũ về nguyên vẹn, không bị kéo dài hay rút ngắn.
+      expect(g.state, saved);
+      expect(diskState(), saved);
+      expect(await g.waitRemaining(), Duration.zero);
+    });
+
+    test('fr07_ad08_revert_after_fifth_attempt_clears_new_mark', () async {
+      writeDisk(const GuardState(failCount: 4));
+      final g = guard();
+      await g.normalize(hasAccount: true);
+      expect(await g.recordAttempt(), isTrue);
+      expect(g.state, markedNow(5));
+
+      expect(await g.revertAttempt(), isTrue);
+
+      expect(diskState(), const GuardState(failCount: 4));
+      expect(await g.waitRemaining(), Duration.zero);
+    });
+
+    test('fr07_ad08_revert_tenth_attempt_returns_to_nine', () async {
+      final saved = GuardState(
+        failCount: 9,
+        waitBootId: clock.boot,
+        waitStartMono: clock.ms - waitDuration.inMilliseconds,
+      );
+      writeDisk(saved);
+      final g = guard();
+      await g.normalize(hasAccount: true);
+      expect(await g.recordAttempt(), isTrue);
+      expect(g.state.failCount, 10);
+
+      expect(await g.revertAttempt(), isTrue);
+
+      expect(g.state, saved);
+      expect(diskState(), saved);
+      expect(g.state.exhausted, isFalse);
+    });
+
+    for (final step in AtomicWriteStep.values) {
+      test(
+        'fr07_ad08_revert_write_failure_at_${step.name}_keeps_attempt',
+        () async {
+          writeDisk(const GuardState(failCount: 2));
+          AtomicWriteStep? failAt;
+          final g = guard(failAt: () => failAt);
+          await g.normalize(hasAccount: true);
+          expect(await g.recordAttempt(), isTrue);
+
+          failAt = step;
+          expect(await g.revertAttempt(), isFalse);
+
+          // Fail closed: RAM và đĩa đều giữ lần thử đã tính.
+          expect(g.state.failCount, 3);
+          expect(
+            diskState().failCount,
+            step == AtomicWriteStep.fsyncDirectory ? 2 : 3,
+          );
+          expect(pakNames().where((n) => n.endsWith('.tmp')), isEmpty);
+        },
+      );
+    }
+
+    test('fr07_revert_without_attempt_is_noop', () async {
+      writeDisk(const GuardState(failCount: 2));
+      final g = guard();
+      await g.normalize(hasAccount: true);
+      writes = 0;
+
+      expect(await g.revertAttempt(), isFalse);
+
+      expect(writes, 0);
+      expect(g.state, const GuardState(failCount: 2));
+    });
+
+    test('fr07_revert_is_one_shot_per_attempt', () async {
+      writeDisk(const GuardState(failCount: 2));
+      final g = guard();
+      await g.normalize(hasAccount: true);
+      expect(await g.recordAttempt(), isTrue);
+      expect(await g.revertAttempt(), isTrue);
+
+      expect(await g.revertAttempt(), isFalse);
+      expect(g.state.failCount, 2);
+    });
+
+    test('fr07_revert_after_success_never_restores_old_count', () async {
+      writeDisk(const GuardState(failCount: 2));
+      final g = guard();
+      await g.normalize(hasAccount: true);
+      expect(await g.recordAttempt(), isTrue);
+      await g.recordSuccess();
+
+      expect(await g.revertAttempt(), isFalse);
+      expect(g.state, GuardState.initial);
+    });
+
+    test('fr05_ad22_revert_keeps_last_wrong_digest', () async {
+      writeDisk(const GuardState(failCount: 2));
+      final g = guard();
+      await g.normalize(hasAccount: true);
+      g.rememberWrong(_bytes(_wrongX));
+      expect(await g.recordAttempt(), isTrue);
+
+      expect(await g.revertAttempt(), isTrue);
+
+      expect(g.isRepeatOfLastWrong(_bytes(_wrongX)), isTrue);
+      // Không ghi digest xuống đĩa.
+      expect(
+        utf8.decode(diskBytes()!, allowMalformed: true),
+        isNot(contains('fixture')),
+      );
+    });
+
+    test('fr07_ad08_revert_is_serialized_after_pending_attempt', () async {
+      writeDisk(const GuardState(failCount: 2));
+      final g = guard();
+      await g.normalize(hasAccount: true);
+
+      final attempt = g.recordAttempt();
+      final revert = g.revertAttempt();
+
+      expect(await attempt, isTrue);
+      expect(await revert, isTrue);
+      expect(g.state, const GuardState(failCount: 2));
+    });
+  });
+
   group('last wrong digest', () {
     test('fr05_repeat_of_last_wrong_only', () {
       final g = guard();

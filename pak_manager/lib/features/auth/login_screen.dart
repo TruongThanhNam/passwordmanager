@@ -34,7 +34,7 @@ const double loginEraseBottom = 42;
 const double loginSubmitToErase = 24;
 
 /// Thông báo inline dưới ô S3 sau một lần [AccountService.unlock].
-enum _UnlockMessage { wrong, corrupt, unavailable }
+enum _UnlockMessage { wrong, corrupt, retry, unavailable }
 
 /// Chu kỳ hỏi lại [AccountService.lockoutRemaining] khi đang chờ.
 const Duration lockoutTick = Duration(seconds: 1);
@@ -57,7 +57,7 @@ String lockoutClock(Duration remaining) {
 ///   closed).
 /// - S3 ([hasAccount] `true`, UX-DR42): ô `SecretField` không placeholder →
 ///   inline-message → nút "Đăng nhập". Khối thông báo: `login.wrong`/
-///   `login.corrupt`/`pw.nonAscii`/`create.unavailable` ở trên,
+///   `login.corrupt`/`login.retry`/`pw.nonAscii`/`create.unavailable` ở trên,
 ///   `login.attempts` luôn nằm cuối (UX-DR21, FR-4). Nút vô hiệu khi < 15 ký
 ///   tự, có ký tự không ASCII (hiện `pw.nonAscii`) hoặc hết lượt thử; chuỗi
 ///   đó không bao giờ tới `unlock`. Khi đang kiểm tra: spinner, khóa ô và
@@ -215,6 +215,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         message = _UnlockMessage.wrong;
       case UnlockCorrupt():
         message = _UnlockMessage.corrupt;
+      // KDF lỗi: thường lần thử đã được hoàn nên N không giảm (hoàn lượt ghi
+      // lỗi thì lần thử vẫn tính, N giảm); bấm lại ngay được.
+      case UnlockRetry():
+        message = _UnlockMessage.retry;
       case UnlockUnavailable():
         message = _UnlockMessage.unavailable;
       // Đang chờ: dòng `login.lockout`; hết lượt: dòng `login.attempts`
@@ -324,6 +328,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         : switch (_message) {
             _UnlockMessage.wrong => l10n.loginWrong,
             _UnlockMessage.corrupt => l10n.loginCorrupt,
+            _UnlockMessage.retry => l10n.loginRetry,
             _UnlockMessage.unavailable => l10n.createUnavailable,
             null => nonAscii ? l10n.pwNonAscii : null,
           };

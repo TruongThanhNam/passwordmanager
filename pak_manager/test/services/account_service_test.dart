@@ -70,6 +70,10 @@ void main() {
   late PakPaths paths;
   late FakeClock clock;
 
+  /// Mọi bước `WipeCoordinator` đã chạy trong test hiện tại (spy qua
+  /// `onStep`): `corrupt`/`retry` không bao giờ được thêm bước nào.
+  late List<WipeStep> wipeSteps;
+
   /// Mọi KEK mà `derive` mặc định đã trả về trong test hiện tại.
   late List<_TrackedKey> keks;
 
@@ -85,6 +89,7 @@ void main() {
     sandbox = Directory.systemTemp.createTempSync('pak_account_');
     paths = PakPaths(sandbox.path);
     keks = [];
+    wipeSteps = [];
     // Đủ lớn để mọi mốc chờ giả đều không âm.
     clock = FakeClock(const Duration(hours: 10).inMilliseconds);
     // `pak/` do StorageBootstrap tạo; service không tạo thư mục cha.
@@ -171,6 +176,7 @@ void main() {
         guard: lockout,
         settings: settings ?? SettingsStore.inMemory(),
         fileSync: fileSync,
+        onStep: wipeSteps.add,
       ),
       deriveKek:
           derive ??
@@ -652,6 +658,39 @@ void main() {
       return bytes;
     }
 
+    /// File `cards`/`recent` hợp lệ về mã hóa (DEK và AD của fixture) với bản
+    /// rõ [json] tùy ý.
+    Uint8List encryptedData(String json, String kind) {
+      final nonce = seq(0x60, 24);
+      final dek = sodium.secureCopy(fixtureDek());
+      try {
+        final ct = sodium.crypto.aeadXChaCha20Poly1305IETF.encrypt(
+          message: utf8.encode(json),
+          nonce: nonce,
+          key: dek,
+          additionalData: ascii.encode('PAK-VAULT/$kind/v1'),
+        );
+        return Uint8List.fromList([...nonce, ...ct]);
+      } finally {
+        dek.dispose();
+      }
+    }
+
+    /// Số ký tự `x` cần thêm vào JSON dài [baseLength] (ASCII) để file mã hóa
+    /// (`nonce[24] + bản rõ + tag[16]`) dài đúng `maxDataFileBytes + 1`.
+    int oversizeFiller(int baseLength) =>
+        AccountService.maxDataFileBytes + 1 - 24 - 16 - baseLength;
+
+    /// JSON `cards` hợp lệ với một card có `note` dài [note] ký tự.
+    String cardsJson({required int note}) =>
+        '{"v":1,"cards":[{"id":"3f2b8c1e-5d4a-4e6f-9a7b-1c2d3e4f5a6b",'
+        '"title":"t","username":"u","password":"p",'
+        '"note":"${'x' * note}","createdAt":1}]}';
+
+    /// JSON `recent` hợp lệ với một mục có `password` dài [password] ký tự.
+    String recentJson({required int password}) =>
+        '{"v":1,"items":[{"password":"${'x' * password}","recordedAt":1}]}';
+
     test('fr03_ad05_correct_password_unlocks_with_decrypted_data', () async {
       installVault();
       final before = snapshot();
@@ -902,27 +941,41 @@ void main() {
       expect(await realService().bootstrap(), isA<BootstrapWiping>());
     });
 
-    test('fr07_fr04_tenth_attempt_with_kdf_failure_stays_corrupt', () async {
-      installVault();
-      writeGuard(9);
-      final sync = RecordingFileSync();
-      final s = service(
-        writer: AtomicFileWriter(sync),
-        fileSync: sync,
-        derive: (_, _, _) async => null,
-      );
-      await s.bootstrap();
-      clock.advance(waitDuration);
-      final before = snapshot();
+    test(
+      'fr07_tc06_tenth_attempt_with_kdf_failure_is_retry_not_wipe',
+      () async {
+        installVault();
+        writeGuard(9);
+        final sync = RecordingFileSync();
+        final s = service(
+          writer: AtomicFileWriter(sync),
+          fileSync: sync,
+          derive: (_, _, _) async => null,
+        );
+        await s.bootstrap();
+        clock.advance(waitDuration);
+        final before = snapshot();
+        final saved = diskState();
+        expect(saved.failCount, 9);
 
-      // Ranh giới `corrupt`/KDF lỗi do story 2.5 tách; ở đây chỉ giữ nguyên.
-      expect(await s.unlock(fixturePw), isA<UnlockCorrupt>());
+        expect(await s.unlock(fixturePw), isA<UnlockRetry>());
 
-      expect(diskFailCount(), 10);
-      expect(snapshot(), before);
-      final restarted = service(writer: AtomicFileWriter(sync), fileSync: sync);
-      expect(await restarted.bootstrap(), isA<BootstrapWiping>());
-    });
+        // Lần thử đã hoàn: đĩa và RAM về đúng trạng thái trước (cả mốc chờ).
+        expect(diskState(), saved);
+        expect(s.attemptsLeft, 1);
+        expect(snapshot(), before);
+        expect(wipeSteps, isEmpty);
+        // Mở app lại: không xóa, vẫn còn đúng 1 lần thử.
+        final restarted = service(
+          writer: AtomicFileWriter(sync),
+          fileSync: sync,
+        );
+        expect(await restarted.bootstrap(), isA<BootstrapHasAccount>());
+        expect(restarted.attemptsLeft, 1);
+        expect(diskState().wiping, isFalse);
+        expect(wipeSteps, isEmpty);
+      },
+    );
 
     test('fr12_ad21_wipe_after_tenth_wrong_leaves_clean_slate', () async {
       installVault();
@@ -1003,8 +1056,8 @@ void main() {
         },
       );
       await flaky.bootstrap();
-      expect(await flaky.unlock(fixturePw), isA<UnlockCorrupt>());
-      expect(await flaky.unlock(fixturePw), isA<UnlockCorrupt>());
+      expect(await flaky.unlock(fixturePw), isA<UnlockRetry>());
+      expect(await flaky.unlock(fixturePw), isA<UnlockRetry>());
       final afterKdfFailure = await flaky.unlock(fixturePw);
       expect(afterKdfFailure, isA<UnlockSuccess>());
       expect(kdfRuns, 3);
@@ -1260,23 +1313,42 @@ void main() {
       'kdf_out_of_range': () => headerWith(
         (b) => ByteData.sublistView(b).setUint32(7, 11, Endian.little),
       ),
+      'oversize_by_one': () =>
+          Uint8List.fromList([...vaultFixture('header'), 0]),
+      'oversize_huge': () => Uint8List.fromList([
+        ...vaultFixture('header'),
+        ...Uint8List(1024 * 1024),
+      ]),
+      // Version mới hơn app hỗ trợ, checksum đúng (AD-25).
+      'version_newer': () => headerWith(
+        (b) => ByteData.sublistView(b).setUint16(4, 2, Endian.little),
+      ),
     };
     for (final MapEntry(key: name, value: header) in corruptHeaders.entries) {
-      test('fr07_ad05_ad08_corrupt_header_skips_guard_and_kdf_$name', () async {
-        installVault({'header': header()});
-        writeGuard(2);
-        final s = realService();
-        await s.bootstrap();
-        final before = snapshot();
-        final guardBefore = guardBytes();
+      test(
+        'fr07_ad05_ad08_ad25_tc06_corrupt_header_skips_guard_and_kdf_$name',
+        () async {
+          installVault({'header': header()});
+          writeGuard(2);
+          final s = realService();
+          await s.bootstrap();
+          // Thiếu `header` thì bootstrap dọn `vault/` (AD-26): không tính.
+          wipeSteps.clear();
+          final before = snapshot();
+          final guardBefore = guardBytes();
 
-        expect(await s.unlock(fixturePw), isA<UnlockCorrupt>());
-        expect(derives, 0);
-        expect(snapshot(), before);
-        expect(guardBytes(), guardBefore);
-        // Thiếu `header` thì bootstrap đã dọn `guard` sót (AD-26).
-        expect(s.attemptsLeft, name == 'missing' ? 10 : 8);
-      });
+          expect(await s.unlock(fixturePw), isA<UnlockCorrupt>());
+          expect(derives, 0);
+          expect(snapshot(), before);
+          expect(guardBytes(), guardBefore);
+          // Thiếu `header` thì bootstrap đã dọn `guard` sót (AD-26).
+          expect(s.attemptsLeft, name == 'missing' ? 10 : 8);
+          expect(wipeSteps, isEmpty);
+          if (name != 'missing') {
+            expect(diskState().wiping, isFalse);
+          }
+        },
+      );
     }
 
     final corruptData = <String, Map<String, Uint8List?> Function()>{
@@ -1288,10 +1360,32 @@ void main() {
       'wrapped_dek_tampered': () => {
         'header': headerWith((b) => b[59] ^= 0x01),
       },
+      // Payload AEAD hợp lệ, file dài đúng `maxDataFileBytes + 1` byte: giải
+      // mã không lỗi, nên chỉ trần kích thước mới làm nó `corrupt` (không có
+      // trần thì `unlock` thành công).
+      'cards_oversize': () => {
+        'cards': encryptedData(
+          cardsJson(note: oversizeFiller(cardsJson(note: 0).length)),
+          'cards',
+        ),
+      },
+      'recent_oversize': () => {
+        'recent': encryptedData(
+          recentJson(password: oversizeFiller(recentJson(password: 0).length)),
+          'recent',
+        ),
+      },
+      // `v` mới hơn app hỗ trợ, mã hóa đúng bằng DEK của fixture (AD-25).
+      'cards_version_newer': () => {
+        'cards': encryptedData('{"v":2,"cards":[]}', 'cards'),
+      },
+      'recent_version_newer': () => {
+        'recent': encryptedData('{"v":2,"items":[]}', 'recent'),
+      },
     };
     for (final MapEntry(key: name, value: files) in corruptData.entries) {
       test(
-        'fr07_ad08_correct_password_bad_data_is_corrupt_and_resets_$name',
+        'fr07_ad08_ad25_tc06_correct_password_bad_data_is_corrupt_and_resets_$name',
         () async {
           installVault(files());
           writeGuard(3);
@@ -1306,12 +1400,123 @@ void main() {
           // `kcv` khớp: bộ đếm về 0 trước khi mở bọc DEK/giải mã (AD-4).
           expect(diskFailCount(), 0);
           expect(s.attemptsLeft, 10);
+          expect(wipeSteps, isEmpty);
+          expect(diskState().wiping, isFalse);
         },
       );
     }
 
-    test('fr07_kdf_failure_is_corrupt_not_a_throw_and_still_counts', () async {
+    test('fr07_tc06_valid_large_data_under_cap_unlocks', () async {
+      // Cùng dạng payload với `*_oversize` nhưng nhỏ hơn trần: mở được, nên
+      // `*_oversize` hỏng thật sự là do kích thước chứ không do giải mã.
+      installVault({
+        'cards': encryptedData(cardsJson(note: 1024 * 1024), 'cards'),
+        'recent': encryptedData(recentJson(password: 1024 * 1024), 'recent'),
+      });
+      final s = realService();
+      await s.bootstrap();
+
+      final result = await s.unlock(fixturePw);
+
+      expect(result, isA<UnlockSuccess>());
+      expect(diskFailCount(), 0);
+      expect(wipeSteps, isEmpty);
+      (result as UnlockSuccess).session.lock();
+    });
+
+    test('fr07_tc06_data_exactly_at_cap_unlocks', () async {
+      // Ghim biên: file dài đúng `maxDataFileBytes` vẫn mở được (trần là
+      // `>`, không phải `>=`); `*_oversize` dài hơn đúng một byte.
+      final cards = encryptedData(
+        cardsJson(note: oversizeFiller(cardsJson(note: 0).length) - 1),
+        'cards',
+      );
+      final recent = encryptedData(
+        recentJson(
+          password: oversizeFiller(recentJson(password: 0).length) - 1,
+        ),
+        'recent',
+      );
+      expect(cards.length, AccountService.maxDataFileBytes);
+      expect(recent.length, AccountService.maxDataFileBytes);
+      installVault({'cards': cards, 'recent': recent});
+      final s = realService();
+      await s.bootstrap();
+
+      final result = await s.unlock(fixturePw);
+
+      expect(result, isA<UnlockSuccess>());
+      expect(diskFailCount(), 0);
+      expect(wipeSteps, isEmpty);
+      (result as UnlockSuccess).session.lock();
+    });
+
+    final kdfFailures =
+        <String, Future<SecureKey?> Function(Uint8List, Uint8List, KdfParams)>{
+          'null': (_, _, _) async => null,
+          'throws': (_, _, _) async => throw StateError('KDF giả lỗi'),
+        };
+    for (final MapEntry(key: name, value: derive) in kdfFailures.entries) {
+      test('fr07_tc06_kdf_failure_${name}_is_retry_and_not_counted', () async {
+        installVault();
+        final sync = RecordingFileSync();
+        final s = service(
+          writer: AtomicFileWriter(sync),
+          fileSync: sync,
+          derive: derive,
+        );
+        await s.bootstrap();
+        final before = snapshot();
+
+        expect(await s.unlock(fixturePw), isA<UnlockRetry>());
+
+        expect(diskState(), GuardState.initial);
+        expect(s.attemptsLeft, 10);
+        expect(snapshot(), before);
+        expect(wipeSteps, isEmpty);
+
+        // Bấm lại ngay vẫn chạy KDF (không bị coi là chuỗi sai lặp lại).
+        expect(await s.unlock(fixturePw), isA<UnlockRetry>());
+        expect(diskState(), GuardState.initial);
+        expect(s.attemptsLeft, 10);
+      });
+    }
+
+    test('fr07_tc06_kdf_failure_restores_count_and_wait_mark', () async {
       installVault();
+      writeGuard(6);
+      final sync = RecordingFileSync();
+      var fail = true;
+      final real = kekDeriver(sodium);
+      final s = service(
+        writer: AtomicFileWriter(sync),
+        fileSync: sync,
+        derive: (pw, salt, params) async =>
+            fail ? null : real(pw, salt, params),
+      );
+      await s.bootstrap();
+      clock.advance(waitDuration);
+      final saved = diskState();
+      expect(saved.failCount, 6);
+      expect(saved.waitStartMono, isNotNull);
+
+      expect(await s.unlock(fixturePw), isA<UnlockRetry>());
+
+      expect(diskState(), saved);
+      expect(s.attemptsLeft, 4);
+      expect(await s.lockoutRemaining(), Duration.zero);
+
+      // KDF chạy lại được: đăng nhập đúng bình thường, bộ đếm về 0.
+      fail = false;
+      final ok = await s.unlock(fixturePw);
+      expect(ok, isA<UnlockSuccess>());
+      expect(diskFailCount(), 0);
+      (ok as UnlockSuccess).session.lock();
+    });
+
+    test('fr07_tc06_kdf_failure_at_fifth_attempt_leaves_no_wait', () async {
+      installVault();
+      writeGuard(4);
       final sync = RecordingFileSync();
       final s = service(
         writer: AtomicFileWriter(sync),
@@ -1319,19 +1524,79 @@ void main() {
         derive: (_, _, _) async => null,
       );
       await s.bootstrap();
-      expect(await s.unlock(fixturePw), isA<UnlockCorrupt>());
-      // Đã ghi trước KDF: lần thử vẫn tính (story 2.5 tách riêng).
-      expect(diskFailCount(), 1);
-      expect(s.attemptsLeft, 9);
 
-      final throwing = service(
+      // Lần thử 5 ghi mốc chờ mới rồi KDF lỗi: hoàn cả mốc, không bị chờ.
+      expect(await s.unlock(fixturePw), isA<UnlockRetry>());
+
+      expect(diskState(), const GuardState(failCount: 4));
+      expect(await s.lockoutRemaining(), Duration.zero);
+      expect(s.attemptsLeft, 6);
+    });
+
+    test('fr07_tc06_kdf_failure_with_failed_revert_keeps_attempt', () async {
+      installVault();
+      var guardWrites = 0;
+      final sync = RecordingFileSync();
+      final guard = LockoutGuard(
+        sodium: sodium,
+        writer: AtomicFileWriter(
+          sync,
+          onStep: (step) {
+            if (step == AtomicWriteStep.createTmp) {
+              guardWrites++;
+              // Lần ghi thứ hai (hoàn lượt) lỗi.
+              if (guardWrites == 2) {
+                throw SimulatedCrash();
+              }
+            }
+          },
+        ),
+        path: paths.guardFile,
+        clock: clock,
+      );
+      final s = service(
         writer: AtomicFileWriter(sync),
         fileSync: sync,
-        derive: (_, _, _) async => throw StateError('KDF giả lỗi'),
+        guard: guard,
+        derive: (_, _, _) async => null,
       );
-      await throwing.bootstrap();
-      expect(await throwing.unlock(fixturePw), isA<UnlockCorrupt>());
-      expect(diskFailCount(), 2);
+      await s.bootstrap();
+      guardWrites = 0;
+
+      // Không ném; lần thử vẫn tính (fail closed).
+      expect(await s.unlock(fixturePw), isA<UnlockRetry>());
+
+      expect(guardWrites, 2);
+      expect(diskFailCount(), 1);
+      expect(s.attemptsLeft, 9);
+      expect(wipeSteps, isEmpty);
+    });
+
+    test('fr06_tc06_app_killed_before_revert_still_counts', () async {
+      installVault();
+      final never = Completer<void>();
+      final started = Completer<void>();
+      final sync = RecordingFileSync();
+      final s = service(
+        writer: AtomicFileWriter(sync),
+        fileSync: sync,
+        derive: (_, _, _) async {
+          started.complete();
+          await never.future;
+          return null;
+        },
+      );
+      await s.bootstrap();
+
+      // KDF treo như app bị tắt trước khi kịp hoàn lượt: vẫn tính là sai.
+      final pending = s.unlock(fixturePw);
+      await started.future;
+      final restarted = service(writer: AtomicFileWriter(sync), fileSync: sync);
+      expect(await restarted.bootstrap(), isA<BootstrapHasAccount>());
+      expect(restarted.attemptsLeft, 9);
+
+      never.complete();
+      expect(await pending, isA<UnlockRetry>());
     });
 
     test('ad22_unlock_wipes_password_bytes', () async {
