@@ -277,6 +277,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Erasing data…'**
   String get wiping;
+
+  /// login.erase (FR-9): S3 text button pinned to the bottom, opens the S4 confirmation dialog; enabled in every S3 state except while a password check is running.
+  ///
+  /// In en, this message translates to:
+  /// **'Erase & Create New Account'**
+  String get loginErase;
+
+  /// erase.title: S4 alert-dialog title.
+  ///
+  /// In en, this message translates to:
+  /// **'Erase all data?'**
+  String get eraseTitle;
+
+  /// erase.body: S4 alert-dialog body.
+  ///
+  /// In en, this message translates to:
+  /// **'All cards, recent passwords and drafts will be permanently erased. This can\'t be undone.'**
+  String get eraseBody;
+
+  /// erase.hold: S4 label under the hold-confirm-button; also its screen-reader label.
+  ///
+  /// In en, this message translates to:
+  /// **'Hold for 3 seconds to erase'**
+  String get eraseHold;
+
+  /// common.cancel: dialog button that dismisses without acting (S4 now, card delete and others later).
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get commonCancel;
 }
 
 class _AppLocalizationsDelegate

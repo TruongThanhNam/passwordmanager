@@ -260,3 +260,22 @@
   source_spec: `_bmad-output/implementation-artifacts/spec-2-3-tu-xoa-du-lieu-o-lan-sai-thu-10.md`
   summary: Lần thứ 10 mà KDF lỗi (`_deriveKek` trả `null`, ví dụ thiếu bộ nhớ Argon2) → `unlock` trả `UnlockCorrupt`. `failCount` 10 đã được ghi trước KDF nên lần mở sau `bootstrap` trả `BootstrapWiping` và xóa vault dù mật khẩu chưa được kiểm; trong phiên đó S3 chỉ còn `UnlockLockedOut`, không có đường xóa hay thử lại.
   evidence: Medium, hiếm (cần chín lần sai rồi KDF lỗi đúng ở lần 10). Có thật: `account_service.dart` đoạn `kek == null` → `UnlockCorrupt`, `failCount` 10 còn trên đĩa, `resumeIfNeeded` coi `exhausted` là `pending`. Spec 2.3 chủ ý giữ (ranh giới `corrupt`/KDF thuộc story 2.5) và `fr07_fr04_tenth_attempt_with_kdf_failure_stays_corrupt` ghim hành vi này. Hướng sửa ở story 2.5: kết quả "thử lại" riêng cho KDF lỗi, và hoàn lại hoặc không tính lần thử khi KDF lỗi ở `failCount` 10 (cần quyết định có hoàn lượt không, vì FR-5 yêu cầu lần thử vẫn tính khi tắt app).
+
+## Deferred from: code review of spec-2-4-xoa-tao-tai-khoan-moi-khi-quen-mat-khau-chinh.md (2026-11-22)
+
+- id: DW-2.4-1
+  source_spec: `_bmad-output/implementation-artifacts/spec-2-4-xoa-tao-tai-khoan-moi-khi-quen-mat-khau-chinh.md`
+  summary: hold-confirm-button chưa có hành động thay thế cho VoiceOver/TalkBack: `Semantics(button, label, excludeSemantics)` không có `onTap`/`onLongPress`/custom action, nên người dùng đọc màn hình không xóa được qua S4 (lối còn lại là sai 10 lần).
+  evidence: Medium. Có thật: `hold_confirm_button.dart` chỉ nghe `Listener` pointer down/up/cancel và `ux_dr14_semantics_label_marks_button` chỉ kiểm nhãn. Spec 2.4 (Design Notes) chủ ý chưa làm và dặn ghi mục này; planning không có NFR trợ năng cho riêng nút. Hướng sửa: thêm `onLongPress` hoặc custom semantics action chạy cùng 3 giây (hoặc bước xác nhận thứ hai), cần quyết định UX; dialog cũng nên có `Semantics(scopesRoute, namesRoute)` và `barrierLabel`.
+
+## Deferred from: code review of spec-2-4-xoa-tao-tai-khoan-moi-khi-quen-mat-khau-chinh.md, vòng 2 (2026-11-22)
+
+- id: DW-2.4-2
+  source_spec: `_bmad-output/implementation-artifacts/spec-2-4-xoa-tao-tai-khoan-moi-khi-quen-mat-khau-chinh.md`
+  summary: hold-confirm-button chỉ dừng nhờ `PointerUp`/`PointerCancel`; nếu ứng dụng vào nền giữa lúc giữ mà không có `PointerCancel`, khi quay lại `AnimationController` có thể báo `completed` và `onConfirmed` xóa vault.
+  evidence: Medium chưa kiểm chứng (maybe-false). Cần thử trên máy thật iOS và Android với `--flavor dev`: giữ nút, để cuộc gọi hoặc thông báo hệ thống chen vào quá 3 giây, rồi xem `onConfirmed` có chạy khi quay lại không. Nếu có, thêm `WidgetsBindingObserver` hủy lần giữ khi `inactive`/`paused` kèm test.
+
+- id: DW-2.4-3
+  source_spec: `_bmad-output/implementation-artifacts/spec-2-4-xoa-tao-tai-khoan-moi-khi-quen-mat-khau-chinh.md`
+  summary: màn có từ trước dùng thẳng `PakColors.inkPrimary/inkSecondary` (`CupertinoDynamicColor`) làm màu `TextStyle` mà không `CupertinoDynamicColor.resolve`, nên ở chế độ tối chữ vẫn là màu sáng: `login_screen.dart:269`, `wiping_screen.dart:71`, `create_account_screen.dart:211`, `inline_message.dart:37`, `secret_field.dart:135`.
+  evidence: Medium, có thật. Test thử: `Text` với `TextStyle(color: PakColors.inkPrimary)` dưới `CupertinoApp` có `brightness: Brightness.dark` nhận `0xff000000`. Hướng sửa: resolve màu tại chỗ dùng (hoặc một helper trong `features/shared/theme/`) và thêm test độ sáng tối cho từng màn. Bản mới trong `erase_dialog.dart` được sửa ngay ở story 2.4.

@@ -29,5 +29,10 @@
   "pwReveal": "Hiện mật khẩu",
   "pwHide": "Ẩn mật khẩu",
   "settingsLockVault": "Khóa Vault",
-  "wiping": "Đang xóa dữ liệu…"
+  "wiping": "Đang xóa dữ liệu…",
+  "loginErase": "Xóa & Tạo tài khoản mới",
+  "eraseTitle": "Xóa toàn bộ dữ liệu?",
+  "eraseBody": "Mọi card, Recent và bản nháp sẽ bị xóa vĩnh viễn. Không thể khôi phục.",
+  "eraseHold": "Giữ 3 giây để xóa",
+  "commonCancel": "Hủy"
 }

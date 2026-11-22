@@ -3,8 +3,10 @@ import 'dart:async';
 import 'package:cupertino_ui/cupertino_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pak_manager/core/model/settings.dart';
+import 'package:pak_manager/features/auth/erase_dialog.dart';
 import 'package:pak_manager/features/auth/login_screen.dart';
 import 'package:pak_manager/features/auth/wiping_screen.dart';
+import 'package:pak_manager/features/shared/hold_confirm_button.dart';
 import 'package:pak_manager/features/shared/pak_buttons.dart';
 import 'package:pak_manager/features/shared/secret_field.dart';
 import 'package:pak_manager/features/shared/theme/pak_colors.dart';
@@ -19,6 +21,8 @@ const _corrupt =
 const _nonAscii =
     'Chỉ dùng chữ không dấu, số, ký hiệu và khoảng trắng. Chữ có dấu có thể '
     'bị bàn phím ghi khác đi và khiến bạn không đăng nhập được.';
+
+const _erase = 'Xóa & Tạo tài khoản mới';
 
 const _unavailable = 'Không mở được dữ liệu của app. Hãy khởi động lại app.';
 
@@ -73,12 +77,13 @@ void main() {
       expect(find.byType(PakPrimaryButton), findsOneWidget);
       expect(find.text('Đăng nhập'), findsOneWidget);
       expect(find.text('Tạo tài khoản'), findsNothing);
-      // Không "Quên mật khẩu", gợi ý hay nút nào khác ngoài nút mắt.
+      // Không "Quên mật khẩu", gợi ý hay nút nào khác ngoài nút mắt và nút
+      // xóa (FR-9).
       final texts = tester
           .widgetList<Text>(find.byType(Text))
           .map((t) => t.data)
           .toList();
-      expect(texts, ['PAK Manager', _attempts(10), 'Đăng nhập']);
+      expect(texts, ['PAK Manager', _attempts(10), 'Đăng nhập', _erase]);
     },
   );
 
@@ -504,7 +509,7 @@ void main() {
         .widgetList<Text>(find.byType(Text))
         .map((t) => t.data)
         .toList();
-    expect(texts, ['PAK Manager', _attempts(5), 'Đăng nhập']);
+    expect(texts, ['PAK Manager', _attempts(5), 'Đăng nhập', _erase]);
     expect(_secret(tester).enabled, isTrue);
     // Timer đã hủy: không hỏi lại nữa.
     final queries = service.lockoutQueries;
@@ -639,5 +644,358 @@ void main() {
     // `unlock` không xóa; S5 gọi `wipe()` đúng một lần.
     expect(service.wipeCalls, 1);
     expect(service.unlockCalls, [validPassword]);
+  });
+
+  group('xóa & tạo tài khoản mới (S3 → S4)', () {
+    // Finder tạo mới mỗi lần dùng: finder dùng chung giữa các test giữ kết
+    // quả cũ.
+    Finder eraseRow() => find.byKey(const ValueKey('row.erase'));
+    Finder dialog() => find.byType(EraseDialog);
+
+    Future<void> openDialog(WidgetTester tester) async {
+      await tester.tap(find.text(_erase));
+      await tester.pump();
+      await tester.pump(eraseDialogTransition * 2);
+    }
+
+    /// Cuộn S3 tới cuối (không dùng `drag`: iOS cho kéo quá đáy).
+    void scrollToEnd(WidgetTester tester) {
+      final position = tester
+          .state<ScrollableState>(find.byType(Scrollable).first)
+          .position;
+      position.jumpTo(position.maxScrollExtent);
+    }
+
+    Future<void> holdFull(WidgetTester tester) async {
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.byType(HoldConfirmButton)),
+      );
+      await tester.pump();
+      await tester.pump(holdConfirmDuration + const Duration(milliseconds: 1));
+      await tester.pump(eraseDialogTransition * 2);
+      await gesture.up();
+      await tester.pump();
+    }
+
+    testWidgets('ux_dr31_fr09_erase_button_pinned_bottom_44_inset_42', (
+      tester,
+    ) async {
+      await _pumpS3(tester);
+
+      final screen = tester.view.physicalSize / tester.view.devicePixelRatio;
+      final erase = tester.getRect(eraseRow());
+      final submit = tester.getRect(find.byType(PakPrimaryButton));
+      expect(erase.height, 44);
+      expect(screen.height - erase.bottom, 42);
+      // Dưới và xa nút "Đăng nhập", căn giữa theo chiều ngang.
+      expect(erase.top - submit.bottom, greaterThan(100));
+      expect(erase.center.dx, closeTo(screen.width / 2, 0.5));
+      // Là button-text `accent`, không nền.
+      final label = tester.widget<Text>(find.text(_erase));
+      expect(label.style?.color?.toARGB32(), PakColors.accent.color.toARGB32());
+      expect(find.byType(PakTextButton), findsOneWidget);
+    });
+
+    testWidgets('ux_dr31_fr09_erase_bottom_42_measured_from_safe_area', (
+      tester,
+    ) async {
+      // Home indicator: 42 đo từ mép safe-area, như phần đầu màn đo từ
+      // status bar (quyết định review story 2.4).
+      tester.view
+        ..devicePixelRatio = 1
+        ..physicalSize = const Size(390, 844)
+        ..padding = const FakeViewPadding(bottom: 34)
+        ..viewPadding = const FakeViewPadding(bottom: 34);
+      addTearDown(tester.view.reset);
+      await _pumpS3(tester);
+
+      final erase = tester.getRect(eraseRow());
+      expect(844 - 34 - erase.bottom, 42);
+      expect(erase.height, 44);
+    });
+
+    testWidgets('ux_dr31_short_screen_scrolls_and_never_overlaps_submit', (
+      tester,
+    ) async {
+      tester.view
+        ..devicePixelRatio = 1
+        ..physicalSize = const Size(360, 420);
+      addTearDown(tester.view.reset);
+      await _pumpS3(tester);
+
+      scrollToEnd(tester);
+      await tester.pump();
+
+      final erase = tester.getRect(eraseRow());
+      final submit = tester.getRect(find.byType(PakPrimaryButton));
+      expect(erase.top - submit.bottom, greaterThanOrEqualTo(24));
+      expect(420 - erase.bottom, 42);
+      expect(erase.height, 44);
+    });
+
+    testWidgets('ux_dr31_keyboard_inset_keeps_erase_below_submit', (
+      tester,
+    ) async {
+      tester.view
+        ..devicePixelRatio = 1
+        ..physicalSize = const Size(360, 700)
+        ..viewInsets = const FakeViewPadding(bottom: 400);
+      addTearDown(tester.view.reset);
+      await _pumpS3(tester);
+
+      scrollToEnd(tester);
+      await tester.pump();
+
+      final erase = tester.getRect(eraseRow());
+      final submit = tester.getRect(find.byType(PakPrimaryButton));
+      expect(erase.top, greaterThanOrEqualTo(submit.bottom + 24));
+      // Nút ghim đáy phần còn lại sau bàn phím, không bị bàn phím che.
+      expect(erase.bottom, lessThanOrEqualTo(700 - 400));
+    });
+
+    testWidgets('ux_dr42_erase_available_when_idle_and_opens_s4', (
+      tester,
+    ) async {
+      final service = await _pumpS3(tester);
+
+      await openDialog(tester);
+
+      expect(dialog(), findsOneWidget);
+      expect(find.byType(LoginScreen), findsOneWidget);
+      expect(service.wipeCalls, 0);
+      expect(service.unlockCalls, isEmpty);
+    });
+
+    testWidgets('ux_dr42_erase_available_after_wrong_and_keeps_message', (
+      tester,
+    ) async {
+      final service = await _pumpS3(tester);
+      await _type(tester, validPassword);
+      await tester.tap(find.byType(PakPrimaryButton));
+      await tester.pump();
+      service.attemptsLeft = 9;
+      service.completeUnlock(const UnlockWrongPassword());
+      await tester.pump();
+
+      await openDialog(tester);
+      expect(dialog(), findsOneWidget);
+      await tester.tap(find.text('Hủy'));
+      await tester.pump();
+      await tester.pump(eraseDialogTransition * 2);
+
+      expect(dialog(), findsNothing);
+      expect(find.text(_wrong), findsOneWidget);
+      expect(find.text(_attempts(9)), findsOneWidget);
+      expect(_secret(tester).controller.text, validPassword);
+    });
+
+    testWidgets('ux_dr42_erase_available_while_locked_out_countdown_runs', (
+      tester,
+    ) async {
+      final service = await _pumpS3(
+        tester,
+        attemptsLeft: 5,
+        lockout: _fullWait,
+      );
+      expect(_secret(tester).enabled, isFalse);
+
+      await openDialog(tester);
+      expect(dialog(), findsOneWidget);
+
+      // Đếm ngược vẫn chạy dưới dialog.
+      service.lockout = _fullWait - lockoutTick;
+      await tester.pump(lockoutTick);
+      await tester.tap(find.text('Hủy'));
+      await tester.pump();
+      await tester.pump(eraseDialogTransition * 2);
+
+      expect(dialog(), findsNothing);
+      expect(find.text(_lockout('29:59')), findsOneWidget);
+      expect(_secret(tester).enabled, isFalse);
+    });
+
+    testWidgets('ux_dr42_fr07_erase_available_when_data_corrupt', (
+      tester,
+    ) async {
+      final service = await _pumpS3(tester, attemptsLeft: 7);
+      await _type(tester, validPassword);
+      await tester.tap(find.byType(PakPrimaryButton));
+      await tester.pump();
+      service.completeUnlock(const UnlockCorrupt());
+      await tester.pump();
+      expect(find.text(_corrupt), findsOneWidget);
+
+      await openDialog(tester);
+      expect(dialog(), findsOneWidget);
+      await tester.tap(find.text('Hủy'));
+      await tester.pump();
+      await tester.pump(eraseDialogTransition * 2);
+
+      expect(find.text(_corrupt), findsOneWidget);
+      expect(find.text(_attempts(7)), findsOneWidget);
+      expect(service.wipeCalls, 0);
+    });
+
+    testWidgets('ux_dr42_fr09_erase_available_when_no_attempts_left', (
+      tester,
+    ) async {
+      final service = await _pumpS3(tester, attemptsLeft: 0);
+      expect(find.text(_attempts(0)), findsOneWidget);
+
+      expect(
+        tester.widget<PakTextButton>(find.byType(PakTextButton)).onPressed,
+        isNotNull,
+      );
+      await openDialog(tester);
+
+      expect(dialog(), findsOneWidget);
+      expect(service.wipeCalls, 0);
+    });
+
+    testWidgets('ux_dr42_erase_disabled_while_checking_password', (
+      tester,
+    ) async {
+      final service = await _pumpS3(tester);
+      await _type(tester, validPassword);
+      await tester.tap(find.byType(PakPrimaryButton));
+      await tester.pump();
+      expect(_button(tester).busy, isTrue);
+
+      expect(
+        tester.widget<PakTextButton>(find.byType(PakTextButton)).onPressed,
+        isNull,
+      );
+      await tester.tap(find.text(_erase));
+      await tester.pump();
+      await tester.pump(eraseDialogTransition * 2);
+      expect(dialog(), findsNothing);
+      expect(service.wipeCalls, 0);
+
+      // Kiểm tra xong thì nút bấm được lại.
+      service.completeUnlock(const UnlockWrongPassword());
+      await tester.pump();
+      expect(
+        tester.widget<PakTextButton>(find.byType(PakTextButton)).onPressed,
+        isNotNull,
+      );
+      await openDialog(tester);
+      expect(dialog(), findsOneWidget);
+    });
+
+    testWidgets('fr09_uj04_hold_full_goes_s4_to_s5_to_s1_with_one_wipe', (
+      tester,
+    ) async {
+      final service = await _pumpS3(tester);
+      await openDialog(tester);
+
+      await holdFull(tester);
+
+      expect(dialog(), findsNothing);
+      expect(find.byType(WipingScreen), findsOneWidget);
+      expect(find.text('Đang xóa dữ liệu…'), findsOneWidget);
+      expect(find.byType(LoginScreen), findsNothing);
+      expect(find.byType(SecretField), findsNothing);
+      expect(service.wipeCalls, 1);
+      // `unlock` không bị gọi: xóa không cần mật khẩu.
+      expect(service.unlockCalls, isEmpty);
+
+      service.completeWipe();
+      await tester.pump();
+
+      expect(find.byType(WipingScreen), findsNothing);
+      expect(find.text('Tạo tài khoản'), findsOneWidget);
+      expect(find.text(_erase), findsNothing);
+      expect(find.byType(SecretField), findsNothing);
+      expect(service.wipeCalls, 1);
+    });
+
+    testWidgets('fr09_uj04_wipe_failure_after_hold_shows_s1_unavailable', (
+      tester,
+    ) async {
+      final service = await _pumpS3(tester);
+      await openDialog(tester);
+      await holdFull(tester);
+
+      service.completeWipe(const WipeFailed());
+      await tester.pump();
+
+      expect(find.text(_unavailable), findsOneWidget);
+      expect(find.text(_erase), findsNothing);
+      expect(
+        tester.widget<LoginScreen>(find.byType(LoginScreen)).unavailable,
+        isTrue,
+      );
+    });
+
+    testWidgets('fr09_early_release_keeps_s3_untouched', (tester) async {
+      final service = await _pumpS3(tester);
+      await _type(tester, validPassword);
+      await openDialog(tester);
+
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.byType(HoldConfirmButton)),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 1500));
+      await gesture.up();
+      await tester.pump();
+      await tester.pump(holdConfirmRewind);
+      await tester.tap(find.text('Hủy'));
+      await tester.pump();
+      await tester.pump(eraseDialogTransition * 2);
+
+      expect(service.wipeCalls, 0);
+      expect(find.byType(WipingScreen), findsNothing);
+      expect(find.byType(LoginScreen), findsOneWidget);
+      expect(_secret(tester).controller.text, validPassword);
+    });
+
+    testWidgets('fr09_cancel_keeps_field_and_does_not_wipe', (tester) async {
+      final service = await _pumpS3(tester);
+      await _type(tester, validPassword);
+      await openDialog(tester);
+
+      await tester.tap(find.text('Hủy'));
+      await tester.pump();
+      await tester.pump(eraseDialogTransition * 2);
+
+      expect(service.wipeCalls, 0);
+      expect(_secret(tester).controller.text, validPassword);
+      expect(_button(tester).onPressed, isNotNull);
+    });
+
+    testWidgets('fr09_erase_button_only_on_s3_not_s1_or_s5', (tester) async {
+      await pumpGateApp(tester, service: FakeAccountService());
+      expect(find.text(_erase), findsNothing);
+      expect(find.byType(PakTextButton), findsNothing);
+
+      await tester.pumpWidget(const SizedBox());
+      final service = FakeAccountService(
+        bootstrapResult: const BootstrapWiping(),
+      );
+      await pumpGateApp(
+        tester,
+        bootstrap: const BootstrapWiping(),
+        service: service,
+      );
+      await tester.pump();
+      expect(find.byType(WipingScreen), findsOneWidget);
+      expect(find.text(_erase), findsNothing);
+    });
+
+    testWidgets('fr09_en_erase_button_label', (tester) async {
+      final service = FakeAccountService(
+        bootstrapResult: const BootstrapHasAccount(),
+      );
+      await pumpGateApp(
+        tester,
+        bootstrap: const BootstrapHasAccount(),
+        service: service,
+        language: AppLanguage.en,
+      );
+      await tester.pump();
+
+      expect(find.text('Erase & Create New Account'), findsOneWidget);
+    });
   });
 }
