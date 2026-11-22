@@ -285,7 +285,7 @@
 - id: DW-2.5-1
   source_spec: `_bmad-output/implementation-artifacts/spec-2-5-du-lieu-bi-hong-khong-bao-gio-dan-toi-xoa.md`
   summary: KDF hỏng vĩnh viễn (máy không cấp phát đủ bộ nhớ Argon2 cho tham số trong header) thì `unlock` luôn trả `UnlockRetry` (hoàn lượt, không đếm), nên người dùng lặp `login.retry` mãi, không có lối thoát hay thông báo khác.
-  evidence: Medium, hiếm (header ghi ở 64 MiB trên máy khác hoặc lúc rảnh, rồi máy chỉ còn ít bộ nhớ lâu dài). Có thật: `account_service.dart` nhánh `kek == null` không đếm số lần `UnlockRetry` liên tiếp. Trước story 2.5 người dùng cũng kẹt, ở `login.corrupt`. Cần quyết định UX: đếm lần liên tiếp rồi hiện thông báo khác (gợi ý khởi động lại máy hoặc dùng "Xóa & Tạo tài khoản mới"), hay giữ nguyên. Gộp với kiểm KDF trên máy yếu của story 7.1.
+  evidence: Medium, hiếm (header ghi ở 64 MiB trên máy khác hoặc lúc rảnh, rồi máy chỉ còn ít bộ nhớ lâu dài). Có thật: `account_service.dart` nhánh `kek == null` không đếm số lần `UnlockRetry` liên tiếp. Trước story 2.5 mỗi lần KDF lỗi đều được đếm (`UnlockCorrupt`), nên người dùng không kẹt vô hạn mà đi tới xóa vault ở lần 10 (lỗi `DW-2.3-3`); story 2.5 đổi "xóa có giới hạn" thành "lặp không giới hạn". Cần quyết định UX: đếm lần liên tiếp rồi hiện thông báo khác (gợi ý khởi động lại máy hoặc dùng "Xóa & Tạo tài khoản mới"), hay giữ nguyên. Gộp với kiểm KDF trên máy yếu của story 7.1.
 
 - id: DW-2.5-2
   source_spec: `_bmad-output/implementation-artifacts/spec-2-5-du-lieu-bi-hong-khong-bao-gio-dan-toi-xoa.md`
@@ -296,3 +296,12 @@
   source_spec: `_bmad-output/implementation-artifacts/spec-2-5-du-lieu-bi-hong-khong-bao-gio-dan-toi-xoa.md`
   summary: Lỗi I/O tạm thời khi đọc `header`/`cards`/`recent` (EIO, khóa file, iOS data protection khi máy khóa) hiện thành `UnlockCorrupt` (`login.corrupt` gợi ý "Xóa & Tạo tài khoản mới"), không tách khỏi file thật sự hỏng.
   evidence: Medium, có từ trước story 2.5 (`readAsBytes` ném cũng ra `UnlockCorrupt`); `_readCapped` giữ nguyên hành vi. Không tự xóa gì (người dùng tự chọn), nhưng nên có kết quả "đọc không được lúc này" kiểu `UnlockRetry`/`UnlockUnavailable` cho lỗi I/O khác `notFound`. Liên quan `DW-2.3-1` (cùng nghi vấn `stat`/đọc trả lỗi khi file còn sống). Cần thử trên máy thật iOS khóa máy lúc app khởi động nền.
+
+## Deferred from: code review of spec-2-5-du-lieu-bi-hong-khong-bao-gio-dan-toi-xoa.md, vòng 2 (2026-11-22)
+
+- id: DW-2.5-4
+  source_spec: `_bmad-output/implementation-artifacts/spec-2-5-du-lieu-bi-hong-khong-bao-gio-dan-toi-xoa.md`
+  summary: Hệ điều hành giết app giữa lúc Argon2 đang chạy (iOS jetsam, Android LMK vì thiếu bộ nhớ) xảy ra sau `recordAttempt` và trước `revertAttempt`, nên lần thử vẫn tính là sai. Mười lần bị giết như vậy dẫn tới xóa vault dù chưa kiểm mật khẩu nào.
+  evidence: Medium (unverified về tần suất), có từ trước story 2.5 và do FR-5 yêu cầu ("tắt app trước khi hoàn lượt vẫn tính là sai", test `fr06_tc06_app_killed_before_revert_still_counts`). Không phân biệt được "bị giết" với "tắt app để né đếm" nếu không có marker "lần thử đang chờ KDF" mà `bootstrap` xử lý khác, tức phải đổi FR-5 và spec 2.5 (Never: không sửa `bootstrap`). Cần kiểm trên máy yếu thật xem Argon2 64 MiB có bị giết không rồi mới quyết định. Gộp với kiểm KDF trên máy yếu của story 7.1 (như `DW-2.5-1`).
+
+- Ghi chú vòng 2: các phát hiện lặp lại `DW-2.5-1` (lặp `login.retry` không giới hạn), `DW-2.5-2` (trần 16 MiB một chiều) và `DW-2.5-3` (lỗi I/O thành `corrupt`) đã có mục, không tạo mục trùng.

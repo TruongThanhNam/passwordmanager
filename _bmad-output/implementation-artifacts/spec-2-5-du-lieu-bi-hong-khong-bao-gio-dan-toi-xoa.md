@@ -102,6 +102,37 @@ Review vòng 1 (2026-11-22): blind-hunter, edge-case-hunter, verification-gap; k
 | 16 | verification-gap | `revertAttempt` có thể khôi phục mốc chờ cũ nếu `_reanchorIfNeeded` chạy giữa KDF | low | Không có đường: lần thử 5–9 vừa đặt mốc mới ngay trước KDF, neo lại chỉ xảy ra khi `bootId` đổi (khởi động lại máy), tức app đã tắt | reject |
 | 17 | verification-gap | Nhánh `reset` rồi `revertAttempt`, và nhánh file không phải file thường/đọc lỗi của `_readCapped` chưa có test | low | Không có người gọi `reset` rồi `revertAttempt`; nhánh đọc lỗi cho cùng kết quả `UnlockCorrupt` như trước | reject |
 
+### Review Findings
+
+Review vòng 2 (2026-11-22): blind-hunter, edge-case-hunter, verification-gap, acceptance-auditor; không lớp nào lỗi. 0 decision-needed, 4 patch, 1 defer mới (3 defer trùng mục có sẵn), 14 reject.
+
+- [x] [Review][Patch] Không có test ghim đúng biên `maxDataFileBytes`: chỉ có `+1` và 1 MiB, đổi `>` thành `>=` trong `_readCapped` vẫn xanh [pak_manager/test/services/account_service_test.dart:1409]
+- [x] [Review][Patch] Comment ở `login_screen.dart` ghi "lần thử đã được hoàn, N không giảm" quá mức: hoàn lượt ghi lỗi thì N giảm (chuỗi `login.retry` đã bỏ lời hứa này ở vòng 1, comment thì chưa) [pak_manager/lib/features/auth/login_screen.dart:218]
+- [x] [Review][Patch] `DW-2.5-1` ghi sai bằng chứng: trước story 2.5 mỗi lần KDF lỗi đều được đếm nên người dùng không kẹt vô hạn ở `login.corrupt`, mà đi tới xóa ở lần 10 (chính là lỗi `DW-2.3-3`); mục cần nói rõ story này đổi "xóa có giới hạn" thành "lặp không giới hạn" [_bmad-output/implementation-artifacts/deferred-work.md:288]
+- [x] [Review][Patch] Comment `cards_oversize` khó đọc ("bị cắt/giải mã sai thì không ra `corrupt` nhờ trần, chỉ trần kích thước mới làm nó `corrupt`"); nên viết lại: payload AEAD hợp lệ, chỉ vượt trần mới `corrupt` [pak_manager/test/services/account_service_test.dart:1363]
+- [x] [Review][Defer] App bị OS giết lúc Argon2 chạy vẫn tính là lần sai, mười lần thì xóa vault dù chưa kiểm mật khẩu — deferred: có từ trước, FR-5 yêu cầu, sửa cần đổi spec/`bootstrap`; ghi `DW-2.5-4`
+- [x] [Review][Defer] Lặp `login.retry` không giới hạn khi KDF hỏng vĩnh viễn — deferred: đã có `DW-2.5-1`
+- [x] [Review][Defer] Trần đọc 16 MiB không có trần ghi — deferred: đã có `DW-2.5-2`
+- [x] [Review][Defer] Lỗi I/O tạm thời đọc `header`/`cards`/`recent` hiện thành `login.corrupt` — deferred: đã có `DW-2.5-3`
+
+#### Rejected
+
+- Vault phiên bản mới hơn hiện `login.corrupt` thay vì "hãy cập nhật app": AD-25 quy định "phiên bản mới hơn → `corrupt` (không đếm, không xóa)" và spec đóng băng ghi `UnlockCorrupt`; sửa cần đổi AD và spec, ngoài phạm vi.
+- KDF lỗi ở lần 10 rồi ghi hoàn lượt cũng lỗi: đĩa giữ `failCount` 10, lần mở sau xóa dù chưa kiểm mật khẩu (blind-hunter/edge-case-hunter/acceptance-auditor, nhiều biến thể): có thật nhưng cần hai lỗi cùng lúc, và "fail closed" là quyết định đóng băng của spec (Always bullet 1, Matrix "Hoàn lượt ghi lỗi"); sửa là sửa spec. Cân nhắc lại khi renegotiate spec cùng `DW-2.5-4`.
+- `revertAttempt` ở `fsyncDirectory` để đĩa đã hoàn còn RAM giữ lần thử, lệch câu chữ spec: đã xử lý ở vòng 1 (#2, sửa doc cho khớp code); sửa câu chữ spec ngoài phạm vi.
+- `on Object` quanh `_deriveKek` nuốt lỗi lập trình: vòng 1 #7 `false`, `on Object` là ranh giới "không ném" của cả codebase.
+- Siêu dữ liệu spec lệch (`status: done`, `review_loop_iteration: 0` so với sprint `review`; `DW-2.3-3` chưa ghi `done`): sửa là sửa spec; `DW-2.3-3` chưa đóng đúng quy ước vì chưa có CI run id.
+- AC3 và đường thiếu bộ nhớ thật chỉ có test mức service/fake, không có test widget nối cả hai: low, test tích hợp là việc lớn so với giá trị; AC3 có hai nửa được test riêng (service và widget).
+- Ngoại lệ sau `recordAttempt` nhưng ngoài `_deriveKek` thành `UnlockCorrupt` mà lần thử vẫn tính: vòng 1 #12, chưa có đường kích hoạt.
+- `_beforeAttempt` không xóa khi `kcv` lệch/`normalize`/`load`/`markWiping`: vòng 1 #4, `revertAttempt` chỉ gọi ngay sau `recordAttempt` thành công, luôn ghi đè `_beforeAttempt`.
+- `revertAttempt` ghi đè mốc chờ do `_reanchorIfNeeded` neo lại giữa KDF: vòng 1 #16, neo lại chỉ khi `bootId` đổi, tức app đã khởi động lại.
+- Đọc ngắn của `raf.read(maxBytes + 1)`: vòng 1 #10, cùng mẫu `SettingsStore._readCapped` đã chạy.
+- `raf.read(maxBytes + 1)` cấp bộ đệm 16 MiB cho mỗi file mỗi lần mở: low, bộ nhớ ảo chưa chạm, cùng mẫu `SettingsStore`; sửa thêm `stat` và nhánh.
+- Test trần header không phát hiện bỏ trần (`HeaderCodec.decode` vốn từ chối sai độ dài): low, không quan sát được nếu không có file thưa; hành vi đúng đã được ghim.
+- Test `fr06_tc06_app_killed_before_revert_still_counts` để bản đầu hoàn muộn: vòng 1 #14, test `await pending` trước khi kết thúc.
+- Ghi chú claim "không đọc cả file vào RAM" của edge-case-hunter: gộp với mục bộ đệm 16 MiB ở trên.
+- Verification-gap: không có phát hiện.
+
 ## Verification
 
 **Commands:**

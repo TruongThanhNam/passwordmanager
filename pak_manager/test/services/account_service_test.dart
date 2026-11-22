@@ -1360,9 +1360,9 @@ void main() {
       'wrapped_dek_tampered': () => {
         'header': headerWith((b) => b[59] ^= 0x01),
       },
-      // Payload AEAD hợp lệ, file dài đúng `maxDataFileBytes + 1` byte: bị
-      // cắt/giải mã sai thì không ra `corrupt` nhờ trần, chỉ trần kích thước
-      // mới làm nó `corrupt` (không có trần thì `unlock` thành công).
+      // Payload AEAD hợp lệ, file dài đúng `maxDataFileBytes + 1` byte: giải
+      // mã không lỗi, nên chỉ trần kích thước mới làm nó `corrupt` (không có
+      // trần thì `unlock` thành công).
       'cards_oversize': () => {
         'cards': encryptedData(
           cardsJson(note: oversizeFiller(cardsJson(note: 0).length)),
@@ -1413,6 +1413,33 @@ void main() {
         'cards': encryptedData(cardsJson(note: 1024 * 1024), 'cards'),
         'recent': encryptedData(recentJson(password: 1024 * 1024), 'recent'),
       });
+      final s = realService();
+      await s.bootstrap();
+
+      final result = await s.unlock(fixturePw);
+
+      expect(result, isA<UnlockSuccess>());
+      expect(diskFailCount(), 0);
+      expect(wipeSteps, isEmpty);
+      (result as UnlockSuccess).session.lock();
+    });
+
+    test('fr07_tc06_data_exactly_at_cap_unlocks', () async {
+      // Ghim biên: file dài đúng `maxDataFileBytes` vẫn mở được (trần là
+      // `>`, không phải `>=`); `*_oversize` dài hơn đúng một byte.
+      final cards = encryptedData(
+        cardsJson(note: oversizeFiller(cardsJson(note: 0).length) - 1),
+        'cards',
+      );
+      final recent = encryptedData(
+        recentJson(
+          password: oversizeFiller(recentJson(password: 0).length) - 1,
+        ),
+        'recent',
+      );
+      expect(cards.length, AccountService.maxDataFileBytes);
+      expect(recent.length, AccountService.maxDataFileBytes);
+      installVault({'cards': cards, 'recent': recent});
       final s = realService();
       await s.bootstrap();
 

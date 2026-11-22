@@ -215,7 +215,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         message = _UnlockMessage.wrong;
       case UnlockCorrupt():
         message = _UnlockMessage.corrupt;
-      // KDF lỗi: lần thử đã được hoàn, N không giảm; bấm lại ngay được.
+      // KDF lỗi: thường lần thử đã được hoàn nên N không giảm (hoàn lượt ghi
+      // lỗi thì lần thử vẫn tính, N giảm); bấm lại ngay được.
       case UnlockRetry():
         message = _UnlockMessage.retry;
       case UnlockUnavailable():
