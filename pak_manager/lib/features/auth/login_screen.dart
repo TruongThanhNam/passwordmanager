@@ -54,6 +54,8 @@ String lockoutClock(Duration remaining) {
 ///   tự, có ký tự không ASCII (hiện `pw.nonAscii`) hoặc hết lượt thử; chuỗi
 ///   đó không bao giờ tới `unlock`. Khi đang kiểm tra: spinner, khóa ô và
 ///   nút.
+/// - Lần sai thứ 10 (UX-DR42): không dialog, [LoginScreen.onWipe] chuyển
+///   sang S5 rồi S1 (story 2.3).
 /// - Đang chờ sau lần sai 5–9 (UX-DR42, FR-4): hỏi
 ///   [AccountService.lockoutRemaining] khi mở màn và sau mỗi kết quả
 ///   `unlock` (trừ thành công và `UnlockBusy`). Còn lại > 0 thì ô và nút vô
@@ -67,6 +69,7 @@ class LoginScreen extends ConsumerStatefulWidget {
     this.unavailable = false,
     this.onCreate,
     this.onUnlocked,
+    this.onWipe,
   });
 
   final bool hasAccount;
@@ -77,6 +80,10 @@ class LoginScreen extends ConsumerStatefulWidget {
 
   /// Mở khóa xong (S3): người nhận sở hữu [VaultSession] và thay cây UI.
   final ValueChanged<VaultSession>? onUnlocked;
+
+  /// Lần sai thứ 10 (S3, `UnlockWipeRequired`): người nhận gỡ màn này và
+  /// dựng S5. Không dialog giữa S3 và S5.
+  final VoidCallback? onWipe;
 
   @override
   ConsumerState<LoginScreen> createState() => _LoginScreenState();
@@ -176,6 +183,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           setState(() => _busy = false);
         } else {
           onUnlocked(session);
+        }
+        return;
+      // Lần sai thứ 10: S3 bị gỡ cùng ô mật khẩu, S5 xóa dữ liệu.
+      case UnlockWipeRequired():
+        final onWipe = widget.onWipe;
+        if (onWipe == null) {
+          setState(() => _busy = false);
+        } else {
+          onWipe();
         }
         return;
       // Lần kiểm tra khác đang chạy: bỏ qua, không thông báo.

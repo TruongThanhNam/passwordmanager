@@ -126,6 +126,15 @@ final class SettingsStore extends ChangeNotifier {
     return _queue;
   }
 
+  /// Xóa ngày export gần nhất (FR-12) và ghi xuống file ngay. `true` khi không
+  /// còn thay đổi chưa ghi ([dirty] `false`); `false` khi ghi lỗi. Store chỉ
+  /// ở RAM (không `path`) luôn trả `true`. Không ném.
+  Future<bool> clearLastExport() async {
+    update((s) => s.copyWith(clearLastExportAt: true));
+    await flush();
+    return !_dirty;
+  }
+
   @override
   void dispose() {
     _disposed = true;

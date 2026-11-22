@@ -28,5 +28,6 @@
   "createFailed": "Không tạo được tài khoản. Hãy thử lại.",
   "pwReveal": "Hiện mật khẩu",
   "pwHide": "Ẩn mật khẩu",
-  "settingsLockVault": "Khóa Vault"
+  "settingsLockVault": "Khóa Vault",
+  "wiping": "Đang xóa dữ liệu…"
 }

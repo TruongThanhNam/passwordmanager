@@ -13,7 +13,8 @@ const Duration waitDuration = Duration(minutes: 30);
 ///
 /// Mốc chờ ([waitBootId], [waitStartMono]) đo bằng `ClockPort.bootId` và
 /// `ClockPort.monotonicMs` (AD-9); không hàm nào ở đây đọc đồng hồ, người gọi
-/// truyền giá trị vào. [wiping] (story 2.3) được giữ nguyên khi đếm.
+/// truyền giá trị vào. [wiping] được giữ nguyên khi đếm; chỉ [withWiping] bật
+/// nó và chỉ [initial] (qua `LockoutGuard.reset`) tắt nó.
 final class GuardState {
   const GuardState({
     required this.failCount,
@@ -37,6 +38,10 @@ final class GuardState {
   /// Đang xóa dữ liệu dở dang (AD-21).
   final bool wiping;
 
+  /// Đúng bằng [initial]: chưa sai lần nào, không mốc chờ, không đang xóa.
+  bool get isInitial =>
+      failCount == 0 && waitBootId == null && waitStartMono == null && !wiping;
+
   /// Số lần thử còn lại trước khi bị chặn.
   int get attemptsLeft => maxAttempts - failCount;
 
@@ -55,6 +60,15 @@ final class GuardState {
     waitBootId: waitBootId,
     waitStartMono: waitStartMono,
     wiping: wiping,
+  );
+
+  /// Bản đánh dấu đang xóa dở (AD-21): [wiping] `true`, các trường khác giữ
+  /// nguyên (kể cả [failCount]).
+  GuardState withWiping() => GuardState(
+    failCount: failCount,
+    waitBootId: waitBootId,
+    waitStartMono: waitStartMono,
+    wiping: true,
   );
 
   /// Mật khẩu đúng (`kcv` khớp): [failCount] về 0 và xóa mốc chờ.

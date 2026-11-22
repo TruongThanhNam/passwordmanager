@@ -26,6 +26,7 @@ import 'services/lockout_guard.dart';
 import 'services/session_controller.dart';
 import 'services/settings_store.dart';
 import 'services/storage_bootstrap.dart';
+import 'services/wipe_coordinator.dart';
 
 /// Asset Bloom filter blocklist (AD-15).
 const blocklistAsset = 'assets/blocklist.bloom';
@@ -88,6 +89,7 @@ void runPakApp(
         writer: writer,
         fileSync: fileSync,
         clock: clock,
+        settings: settings,
       ),
       StorageUnavailable() => const _AccountWiring.unavailable(),
     };
@@ -136,14 +138,17 @@ final class _AccountWiring {
 
 /// Nối `AccountService` khi lưu trữ đã sẵn sàng: khởi tạo Sodium, nạp
 /// blocklist, dựng `StrengthEstimator` (làm nóng từ điển) và `LockoutGuard`
-/// (đo thời gian chờ bằng [clock]) rồi chạy `bootstrap()` (kiểm
-/// `vault/header` và nạp `guard` 4 KiB, nên không cần màn chờ, UX-DR30).
+/// (đo thời gian chờ bằng [clock]) và `WipeCoordinator` (xóa ngày export gần
+/// nhất qua [settings]) rồi chạy `bootstrap()` (kiểm `vault/header`
+/// và nạp `guard` 4 KiB, nên không cần màn chờ, UX-DR30; xóa dở dang thì
+/// trả `BootstrapWiping` để S5 xóa nốt).
 /// Sodium hoặc blocklist lỗi → [_AccountWiring.unavailable]. Không ném.
 Future<_AccountWiring> _wireAccount(
   PakPaths paths, {
   required AtomicFileWriter writer,
   required FileSyncPort fileSync,
   required ClockPort clock,
+  required SettingsStore settings,
 }) async {
   final SodiumSumo sodium;
   try {
@@ -187,6 +192,12 @@ Future<_AccountWiring> _wireAccount(
     fileSync: fileSync,
     paths: paths,
     guard: guard,
+    wipe: WipeCoordinator(
+      paths: paths,
+      guard: guard,
+      settings: settings,
+      fileSync: fileSync,
+    ),
   );
   final bootstrap = await service.bootstrap();
   if (bootstrap is BootstrapUnavailable) {

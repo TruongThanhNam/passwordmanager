@@ -271,6 +271,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Lock Vault'**
   String get settingsLockVault;
+
+  /// wiping: S5, the only line on the full-screen wipe progress screen, centred under the activity indicator.
+  ///
+  /// In en, this message translates to:
+  /// **'Erasing data…'**
+  String get wiping;
 }
 
 class _AppLocalizationsDelegate

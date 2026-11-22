@@ -707,4 +707,136 @@ void main() {
       expect(restarted.isRepeatOfLastWrong(_bytes(_wrongX)), isFalse);
     });
   });
+
+  group('load', () {
+    test('ad21_load_reads_without_writing_or_reading_clock', () async {
+      writeDisk(
+        const GuardState(failCount: 6, waitBootId: 'old', waitStartMono: 5),
+      );
+      final before = diskBytes();
+      final g = guard();
+
+      await g.load();
+
+      expect(
+        g.state,
+        const GuardState(failCount: 6, waitBootId: 'old', waitStartMono: 5),
+      );
+      expect(diskBytes(), before);
+      expect(writes, 0);
+      expect(clock.reads, 0);
+      expect(clock.bootReads, 0);
+    });
+
+    test(
+      'ad21_load_missing_or_unreadable_file_is_initial_and_not_written',
+      () async {
+        final g = guard();
+        await g.load();
+        expect(g.state, GuardState.initial);
+        expect(diskBytes(), isNull);
+
+        guardFile().writeAsBytesSync([0xff, 0x00]);
+        await g.load();
+        expect(g.state, GuardState.initial);
+        expect(diskBytes(), [0xff, 0x00]);
+        expect(writes, 0);
+      },
+    );
+  });
+
+  group('markWiping', () {
+    test('ad21_mark_wiping_writes_flag_and_keeps_count', () async {
+      writeDisk(markedNow(7));
+      final g = guard();
+      await g.load();
+
+      expect(await g.markWiping(), isTrue);
+
+      expect(g.state, markedNow(7).withWiping());
+      expect(diskState(), markedNow(7).withWiping());
+    });
+
+    test(
+      'ad21_mark_wiping_write_failure_keeps_ram_and_returns_false',
+      () async {
+        writeDisk(const GuardState(failCount: 10));
+        AtomicWriteStep? failAt = AtomicWriteStep.writeTmp;
+        final g = guard(failAt: () => failAt);
+        await g.load();
+
+        expect(await g.markWiping(), isFalse);
+
+        expect(g.state.wiping, isFalse);
+        expect(diskState(), const GuardState(failCount: 10));
+        failAt = null;
+        expect(await g.markWiping(), isTrue);
+        expect(diskState().wiping, isTrue);
+      },
+    );
+
+    test('ad21_mark_wiping_waits_for_pending_attempt', () async {
+      writeDisk(const GuardState(failCount: 4));
+      final g = guard();
+      await g.load();
+      final gate = Completer<void>();
+      clock.hold = gate;
+
+      // Lần ghi trước KDF đang đọc đồng hồ: `markWiping` đi sau, không ghi đè.
+      final attempt = g.recordAttempt();
+      final marking = g.markWiping();
+      await Future<void>.delayed(Duration.zero);
+      gate.complete();
+
+      expect(await attempt, isTrue);
+      expect(await marking, isTrue);
+      expect(diskState(), markedNow(5).withWiping());
+    });
+  });
+
+  group('reset', () {
+    test('ad21_reset_writes_initial_and_forgets_wrong_string', () async {
+      writeDisk(markedNow(7).withWiping());
+      final g = guard();
+      await g.load();
+      g.rememberWrong(_bytes(_wrongX));
+
+      expect(await g.reset(), isTrue);
+
+      expect(g.state, GuardState.initial);
+      expect(diskBytes(), GuardCodec.encode(GuardState.initial));
+      expect(g.isRepeatOfLastWrong(_bytes(_wrongX)), isFalse);
+    });
+
+    test('ad21_reset_write_failure_still_resets_ram', () async {
+      writeDisk(markedNow(7).withWiping());
+      final g = guard(failAt: () => AtomicWriteStep.createTmp);
+      await g.load();
+      g.rememberWrong(_bytes(_wrongX));
+
+      expect(await g.reset(), isFalse);
+
+      expect(g.state, GuardState.initial);
+      expect(g.isRepeatOfLastWrong(_bytes(_wrongX)), isFalse);
+      // Đĩa còn `wiping`: lần mở sau xóa lại.
+      expect(diskState().wiping, isTrue);
+    });
+  });
+
+  group('recordSuccess result', () {
+    test('ad21_record_success_returns_whether_disk_write_succeeded', () async {
+      writeDisk(const GuardState(failCount: 10));
+      AtomicWriteStep? failAt = AtomicWriteStep.writeTmp;
+      final g = guard(failAt: () => failAt);
+      await g.load();
+
+      expect(await g.recordSuccess(), isFalse);
+      expect(g.state, GuardState.initial);
+      expect(diskState().failCount, 10);
+
+      failAt = null;
+      expect(await g.recordSuccess(), isTrue);
+      expect(diskState(), GuardState.initial);
+    });
+  });
 }

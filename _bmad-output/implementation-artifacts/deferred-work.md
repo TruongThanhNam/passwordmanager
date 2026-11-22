@@ -242,3 +242,21 @@
   source_spec: `_bmad-output/implementation-artifacts/spec-2-2-thoi-gian-cho-30-phut-khong-phu-thuoc-dong-ho-may.md`
   summary: Mở rộng DW-2.1-2. `guard` cũ còn `failCount` 5–9 khi mất `header` thì sau `create()` tài khoản mới vào S3 ở trạng thái chờ 30:00, `unlock` trả `UnlockLockedOut`, và `waitRemaining` neo lại rồi ghi mốc vào `guard` cũ.
   evidence: Code review story 2.2 (edge-case-hunter). Có từ trước: `normalize(hasAccount: false)` nạp `failCount` từ file sót, `create()` không đặt lại (spec 2.1 cấm). Story 2.2 đổi hậu quả từ "ít lượt hơn" sang "bị chờ 30 phút". Sửa cùng DW-2.1-2 (story 2.3/2.4: `LockoutGuard.reset()` khi tạo hoặc xóa, hoặc `normalize` không nạp khi không có `header`).
+
+## Deferred from: code review of spec-2-3-tu-xoa-du-lieu-o-lan-sai-thu-10.md (2026-11-22)
+
+- id: DW-2.3-1
+  source_spec: `_bmad-output/implementation-artifacts/spec-2-3-tu-xoa-du-lieu-o-lan-sai-thu-10.md`
+  summary: `bootstrap` suy ra "không có tài khoản" từ một lần `FileSystemEntity.type(vault/header)` (Dart đổi mọi lỗi `stat` thành `notFound`), rồi `WipeCoordinator.resumeIfNeeded` dọn im lặng `vault/` và `guard` còn sót.
+  evidence: Chưa xác minh (maybe-false, nếu đúng là medium: mất vault không hỏi). Cần kiểm xem `stat` trên `header` có trả `notFound` khi file còn sống hay không (EIO, EACCES, iOS data protection khi máy khóa lúc app khởi động nền). Nếu có, thêm lần kiểm thứ hai (liệt kê `vault/` hoặc mở `header` để đọc) trước khi dọn im lặng, hoặc chỉ dọn khi `wiping`.
+- id: DW-2.3-2
+  source_spec: `_bmad-output/implementation-artifacts/spec-2-3-tu-xoa-du-lieu-o-lan-sai-thu-10.md`
+  summary: Giảm nhẹ DW-2.1-3 chưa đóng hẳn: mật khẩu đúng ở lần thứ 10 mà `recordSuccess()` ghi lỗi thì `unlock` trả `UnlockUnavailable`, RAM về 0 còn đĩa giữ `failCount` 10; tắt app thì lần mở sau xóa vault của người vừa nhập đúng, còn thử lại cùng phiên thì ghi đè đĩa về 1.
+  evidence: Medium, hiếm (ghi `guard` lỗi hai lần liên tiếp, ví dụ đầy bộ nhớ). Spec 2.3 chủ ý chỉ chặn đăng nhập ở `failCount` 10 (Design Notes). Hướng sửa: thử ghi lại `guard` khi hủy phiên hoặc giữ RAM ở 10 và chặn mở khóa tới khi khởi động lại; cần quyết định UX cho trạng thái "không ghi được".
+
+## Deferred from: code review of spec-2-3-tu-xoa-du-lieu-o-lan-sai-thu-10.md, vòng 2 (2026-11-22)
+
+- id: DW-2.3-3
+  source_spec: `_bmad-output/implementation-artifacts/spec-2-3-tu-xoa-du-lieu-o-lan-sai-thu-10.md`
+  summary: Lần thứ 10 mà KDF lỗi (`_deriveKek` trả `null`, ví dụ thiếu bộ nhớ Argon2) → `unlock` trả `UnlockCorrupt`. `failCount` 10 đã được ghi trước KDF nên lần mở sau `bootstrap` trả `BootstrapWiping` và xóa vault dù mật khẩu chưa được kiểm; trong phiên đó S3 chỉ còn `UnlockLockedOut`, không có đường xóa hay thử lại.
+  evidence: Medium, hiếm (cần chín lần sai rồi KDF lỗi đúng ở lần 10). Có thật: `account_service.dart` đoạn `kek == null` → `UnlockCorrupt`, `failCount` 10 còn trên đĩa, `resumeIfNeeded` coi `exhausted` là `pending`. Spec 2.3 chủ ý giữ (ranh giới `corrupt`/KDF thuộc story 2.5) và `fr07_fr04_tenth_attempt_with_kdf_failure_stays_corrupt` ghim hành vi này. Hướng sửa ở story 2.5: kết quả "thử lại" riêng cho KDF lỗi, và hoàn lại hoặc không tính lần thử khi KDF lỗi ở `failCount` 10 (cần quyết định có hoàn lượt không, vì FR-5 yêu cầu lần thử vẫn tính khi tắt app).

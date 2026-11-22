@@ -109,4 +109,7 @@ class AppLocalizationsVi extends AppLocalizations {
 
   @override
   String get settingsLockVault => 'Khóa Vault';
+
+  @override
+  String get wiping => 'Đang xóa dữ liệu…';
 }

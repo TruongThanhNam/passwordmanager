@@ -4,14 +4,19 @@ import 'dart:io';
 import 'package:cupertino_ui/cupertino_ui.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:pak_manager/core/format/guard_codec.dart';
 import 'package:pak_manager/core/format/settings_codec.dart';
+import 'package:pak_manager/core/guard/guard_state.dart';
 import 'package:pak_manager/core/model/settings.dart';
 import 'package:pak_manager/features/auth/login_screen.dart';
+import 'package:pak_manager/features/auth/wiping_screen.dart';
 import 'package:pak_manager/features/shared/content_column.dart';
 import 'package:pak_manager/features/shared/home_shell.dart';
 import 'package:pak_manager/features/shared/pak_app.dart';
 import 'package:pak_manager/features/shared/pak_buttons.dart';
+import 'package:pak_manager/features/shared/providers.dart';
 import 'package:pak_manager/features/shared/secret_field.dart';
 import 'package:pak_manager/features/shared/session_gate.dart';
 import 'package:pak_manager/main.dart' as app;
@@ -323,6 +328,132 @@ void main() {
     for (final MapEntry(key: name, value: bytes) in files.entries) {
       expect(File('$vault$sep$name').readAsBytesSync(), bytes);
     }
+  });
+
+  testWidgets('ad26_fr12_main_wires_wipe_with_shared_guard_and_settings', (
+    tester,
+  ) async {
+    final savedDebugPrint = debugPrint;
+    final savedFlutterOnError = FlutterError.onError;
+    final savedPlatformOnError = PlatformDispatcher.instance.onError;
+    final sep = Platform.pathSeparator;
+
+    final sandbox = Directory.systemTemp.createTempSync('pak_main_wipe_');
+    addTearDown(() => sandbox.deleteSync(recursive: true));
+    final pak = '${sandbox.path}${sep}pak';
+    final vault = '$pak${sep}vault';
+    Directory(vault).createSync(recursive: true);
+    for (final name in const ['header', 'cards', 'recent']) {
+      File('$vault$sep$name').writeAsBytesSync(
+        File('test/fixtures/vault/v1/$name').readAsBytesSync(),
+      );
+    }
+    File('$vault${sep}draft').writeAsBytesSync([1, 2, 3]);
+    // Tắt app lúc kiểm lần 10, và có ngày export gần nhất.
+    File('$pak${sep}guard')
+        .writeAsBytesSync(GuardCodec.encode(const GuardState(failCount: 10)));
+    File('$pak${sep}settings').writeAsBytesSync(
+      SettingsCodec.encode(
+        Settings.defaults.copyWith(lastExportAt: 1762300800000),
+      ),
+    );
+
+    final messenger = tester.binding.defaultBinaryMessenger;
+    const pathProvider = MethodChannel('plugins.flutter.io/path_provider');
+    messenger.setMockMethodCallHandler(pathProvider, (call) async {
+      if (call.method == 'getApplicationSupportDirectory') {
+        return sandbox.path;
+      }
+      throw MissingPluginException(call.method);
+    });
+    addTearDown(() => messenger.setMockMethodCallHandler(pathProvider, null));
+
+    const prefix = 'dev.flutter.pigeon.pak_manager.PlatformApi.';
+    const replies = <String, Object?>{
+      'bootId': '',
+      'monotonicMs': 0,
+      'excludeFromBackup': null,
+      'fsyncDirectory': null,
+      'androidSdkInt': 28,
+    };
+    for (final MapEntry(key: method, value: value) in replies.entries) {
+      final channel = BasicMessageChannel<Object?>(
+        '$prefix$method',
+        PlatformApi.pigeonChannelCodec,
+      );
+      messenger.setMockDecodedMessageHandler<Object?>(
+        channel,
+        (message) async => [value],
+      );
+      addTearDown(
+        () => messenger.setMockDecodedMessageHandler<Object?>(channel, null),
+      );
+    }
+
+    app.main();
+    for (var i = 0; i < 100; i++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 20)),
+      );
+      await tester.pump();
+      if (find.byType(CupertinoApp).evaluate().isNotEmpty) {
+        break;
+      }
+    }
+
+    debugPrint = savedDebugPrint;
+    FlutterError.onError = savedFlutterOnError;
+    PlatformDispatcher.instance.onError = savedPlatformOnError;
+
+    if (!_sodiumAvailable()) {
+      // Thiếu libsodium: fail closed, không đụng vault.
+      expect(
+        tester.widget<LoginScreen>(find.byType(LoginScreen)).unavailable,
+        isTrue,
+      );
+      expect(File('$vault${sep}header').existsSync(), isTrue);
+      return;
+    }
+
+    // Khung đầu: S5. `guard` của service đã mang `failCount` 10 do
+    // `resumeIfNeeded` nạp, tức coordinator và service dùng chung một guard.
+    expect(find.byType(WipingScreen), findsOneWidget);
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(PakApp)),
+    );
+    final service = container.read(accountServiceProvider)!;
+    expect(service.attemptsLeft, 0);
+
+    for (var i = 0; i < 100; i++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 20)),
+      );
+      await tester.pump();
+      if (find.byType(WipingScreen).evaluate().isEmpty) {
+        break;
+      }
+    }
+
+    // Xong: S1 (chưa có tài khoản), vault sạch, guard và settings về đầu.
+    final login = tester.widget<LoginScreen>(find.byType(LoginScreen));
+    expect(login.hasAccount, isFalse);
+    expect(login.unavailable, isFalse);
+    expect(Directory(vault).existsSync(), isFalse);
+    expect(
+      File('$pak${sep}guard').readAsBytesSync(),
+      GuardCodec.encode(GuardState.initial),
+    );
+    expect(
+      SettingsCodec.decode(File('$pak${sep}settings').readAsBytesSync())
+          .lastExportAt,
+      isNull,
+    );
+    // Cùng một guard và cùng một `SettingsStore` với app.
+    expect(service.attemptsLeft, 10);
+    expect(
+      tester.widget<PakApp>(find.byType(PakApp)).settings.current.lastExportAt,
+      isNull,
+    );
   });
 
   // Blocklist hỏng hoặc không nạp được → fail closed (AD-15, deferred 1.5):

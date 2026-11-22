@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pak_manager/core/model/settings.dart';
 import 'package:pak_manager/features/auth/create_account_screen.dart';
 import 'package:pak_manager/features/auth/login_screen.dart';
+import 'package:pak_manager/features/auth/wiping_screen.dart';
 import 'package:pak_manager/features/shared/home_shell.dart';
 import 'package:pak_manager/features/shared/icons/tab_icons.dart';
 import 'package:pak_manager/features/shared/pak_buttons.dart';
@@ -660,6 +661,165 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(HomeShell), findsNothing);
       expect(find.text('Đăng nhập'), findsOneWidget);
+    });
+  });
+
+  group('xóa dữ liệu (S3 → S5 → S1)', () {
+    Future<FakeAccountService> pumpS3(WidgetTester tester) async {
+      final service = FakeAccountService(
+        bootstrapResult: const BootstrapHasAccount(),
+      )..attemptsLeft = 1;
+      await pumpGateApp(
+        tester,
+        bootstrap: const BootstrapHasAccount(),
+        service: service,
+      );
+      await tester.pump();
+      return service;
+    }
+
+    Future<void> tenthWrong(
+      WidgetTester tester,
+      FakeAccountService service,
+    ) async {
+      await tester.enterText(
+        find.byKey(const ValueKey('login.field')),
+        validPassword,
+      );
+      await tester.pump();
+      await tester.tap(find.byType(PakPrimaryButton));
+      await tester.pump();
+      service.attemptsLeft = 0;
+      service.completeUnlock(const UnlockWipeRequired());
+      await tester.pump();
+    }
+
+    testWidgets('fr04_ux_dr42_tenth_wrong_shows_s5_then_s1_when_done', (
+      tester,
+    ) async {
+      final service = await pumpS3(tester);
+      await tenthWrong(tester, service);
+
+      expect(find.byType(WipingScreen), findsOneWidget);
+      expect(find.byType(SecretField), findsNothing);
+      expect(find.byType(CupertinoAlertDialog), findsNothing);
+      expect(service.wipeCalls, 1);
+
+      service.completeWipe();
+      await tester.pumpAndSettle();
+
+      // Về S1: chỉ nút "Tạo tài khoản", không ô mật khẩu, không S5.
+      expect(find.byType(WipingScreen), findsNothing);
+      expect(find.text('Tạo tài khoản'), findsOneWidget);
+      expect(find.byType(SecretField), findsNothing);
+      expect(
+        tester.widget<LoginScreen>(find.byType(LoginScreen)).hasAccount,
+        isFalse,
+      );
+      expect(
+        tester
+            .widget<PakPrimaryButton>(find.byType(PakPrimaryButton))
+            .onPressed,
+        isNotNull,
+      );
+      expect(service.wipeCalls, 1);
+    });
+
+    testWidgets('fr12_after_wipe_s1_leads_to_create_and_new_session', (
+      tester,
+    ) async {
+      final service = await pumpS3(tester);
+      await tenthWrong(tester, service);
+      service.completeWipe();
+      await tester.pumpAndSettle();
+
+      await createAndEnterShell(tester, service);
+
+      expect(find.byType(HomeShell), findsOneWidget);
+    });
+
+    testWidgets('fr12_wipe_failure_shows_s1_unavailable_fail_closed', (
+      tester,
+    ) async {
+      final service = await pumpS3(tester);
+      await tenthWrong(tester, service);
+
+      service.completeWipe(const WipeFailed());
+      await tester.pumpAndSettle();
+
+      expect(find.byType(WipingScreen), findsNothing);
+      expect(
+        tester.widget<LoginScreen>(find.byType(LoginScreen)).unavailable,
+        isTrue,
+      );
+      expect(
+        tester
+            .widget<PakPrimaryButton>(find.byType(PakPrimaryButton))
+            .onPressed,
+        isNull,
+      );
+      expect(
+        find.text('Không mở được dữ liệu của app. Hãy khởi động lại app.'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('ad26_fr12_bootstrap_wiping_shows_s5_then_s1', (tester) async {
+      final service = FakeAccountService(
+        bootstrapResult: const BootstrapWiping(),
+      );
+      await pumpGateApp(
+        tester,
+        bootstrap: const BootstrapWiping(),
+        service: service,
+      );
+      await tester.pump();
+
+      // S5 ngay từ frame đầu; S1/S3 chưa hiện.
+      expect(find.byType(WipingScreen), findsOneWidget);
+      expect(find.byType(LoginScreen), findsNothing);
+      expect(service.wipeCalls, 1);
+
+      service.completeWipe();
+      await tester.pumpAndSettle();
+
+      expect(find.byType(WipingScreen), findsNothing);
+      expect(find.text('Tạo tài khoản'), findsOneWidget);
+    });
+
+    testWidgets('ad26_bootstrap_wiping_failure_shows_s1_unavailable', (
+      tester,
+    ) async {
+      final service = FakeAccountService(
+        bootstrapResult: const BootstrapWiping(),
+      );
+      await pumpGateApp(
+        tester,
+        bootstrap: const BootstrapWiping(),
+        service: service,
+      );
+      await tester.pump();
+
+      service.completeWipe(const WipeFailed());
+      await tester.pumpAndSettle();
+
+      expect(
+        tester.widget<LoginScreen>(find.byType(LoginScreen)).unavailable,
+        isTrue,
+      );
+    });
+
+    testWidgets('ux_dr32_back_during_s5_does_not_leave_or_restart_wipe', (
+      tester,
+    ) async {
+      final service = await pumpS3(tester);
+      await tenthWrong(tester, service);
+
+      expect(await tester.binding.handlePopRoute(), isTrue);
+      await tester.pump();
+
+      expect(find.byType(WipingScreen), findsOneWidget);
+      expect(service.wipeCalls, 1);
     });
   });
 }

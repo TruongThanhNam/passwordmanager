@@ -113,4 +113,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsLockVault => 'Lock Vault';
+
+  @override
+  String get wiping => 'Erasing data…';
 }

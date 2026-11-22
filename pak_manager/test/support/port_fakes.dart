@@ -6,12 +6,15 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:pak_manager/core/crypto/random_source.dart';
 import 'package:pak_manager/core/ports/app_directory_port.dart';
 import 'package:pak_manager/core/ports/backup_port.dart';
 import 'package:pak_manager/core/ports/clock_port.dart';
 import 'package:pak_manager/core/ports/file_sync_port.dart';
 import 'package:pak_manager/core/ports/system_info_port.dart';
 import 'package:sodium/sodium_sumo.dart';
+
+import '../core/vault_fixture.dart' show seq;
 
 /// `SecureKey` giả [length] byte toàn 0 (mặc định 32), chỉ ghi nhận
 /// `dispose`.
@@ -222,4 +225,31 @@ final class PendingDirectory implements AppDirectoryPort {
     calls++;
     return completer.future;
   }
+}
+
+/// Lỗi giả mô phỏng app bị tắt giữa chừng (ném từ hook của test).
+final class SimulatedCrash implements Exception {}
+
+/// [RandomSource] tất định: mỗi lần gọi trả một dãy byte mới; [requested]
+/// ghi lại độ dài từng lần gọi.
+final class CountingRandom implements RandomSource {
+  int _next = 1;
+  final List<int> requested = [];
+
+  @override
+  Uint8List bytes(int length) {
+    requested.add(length);
+    return seq((_next++) * 7, length);
+  }
+}
+
+/// Đồng hồ hiệu chỉnh KDF giả: mỗi lần đọc tăng 1000 ms nên hiệu chỉnh nhận
+/// ngay lần đầu. Truyền thẳng làm `nowMs` của `AccountService`.
+int Function() kdfClock() {
+  var now = 0;
+  return () {
+    final value = now;
+    now += 1000;
+    return value;
+  };
 }

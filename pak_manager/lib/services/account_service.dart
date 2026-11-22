@@ -7,9 +7,10 @@ import 'package:sodium/sodium_sumo.dart';
 import '../core/crypto/kdf.dart';
 import '../core/crypto/kdf_calibration.dart';
 import '../core/crypto/random_source.dart';
-import '../core/crypto/wipe.dart';
+import '../core/crypto/wipe.dart' as zero;
 import '../core/format/header_codec.dart';
 import '../core/format/vault_file_codec.dart';
+import '../core/guard/guard_state.dart' show maxAttempts;
 import '../core/io/atomic_file_writer.dart';
 import '../core/io/pak_paths.dart';
 import '../core/model/recent_entry.dart';
@@ -17,6 +18,10 @@ import '../core/model/vault_card.dart';
 import '../core/ports/file_sync_port.dart';
 import 'lockout_guard.dart';
 import 'vault_session.dart';
+import 'wipe_coordinator.dart';
+
+// UI chỉ cần kết quả của [AccountService.wipe], không cần coordinator.
+export 'wipe_coordinator.dart' show WipeDone, WipeFailed, WipeResult;
 
 /// Kết quả [AccountService.bootstrap].
 sealed class BootstrapResult {
@@ -37,6 +42,16 @@ final class BootstrapHasAccount extends BootstrapResult {
 
   @override
   String toString() => 'BootstrapHasAccount()';
+}
+
+/// Đang xóa dở (`wiping` còn trên đĩa hoặc `failCount` đã tới giới hạn, AD-26):
+/// chưa xóa gì; `SessionGate` hiện S5 và gọi [AccountService.wipe] để xóa
+/// nốt, rồi về S1.
+final class BootstrapWiping extends BootstrapResult {
+  const BootstrapWiping();
+
+  @override
+  String toString() => 'BootstrapWiping()';
 }
 
 /// Lưu trữ, Sodium hoặc blocklist không dùng được (fail closed): không đọc/ghi
@@ -126,6 +141,16 @@ final class UnlockUnavailable extends UnlockResult {
   String toString() => 'UnlockUnavailable()';
 }
 
+/// Sai ở lần thứ 10 (`kcv` lệch, `failCount` đã ghi 10 trước KDF): phải xóa
+/// toàn bộ dữ liệu (FR-4). `unlock` chưa xóa gì; UI chuyển sang S5, nơi gọi
+/// [AccountService.wipe]. Mật khẩu đúng ở lần thứ 10 vẫn đăng nhập thường.
+final class UnlockWipeRequired extends UnlockResult {
+  const UnlockWipeRequired();
+
+  @override
+  String toString() => 'UnlockWipeRequired()';
+}
+
 /// Một lần [AccountService.unlock] khác đang chạy: lần gọi này không làm gì
 /// (không ghi `guard`, không chạy KDF).
 final class UnlockBusy extends UnlockResult {
@@ -147,6 +172,7 @@ class AccountService {
     required this._fileSync,
     required this._paths,
     required this._guard,
+    required this._wipe,
     KekDeriver? deriveKek,
     this._nowMs,
   }) : _sodium = sodium,
@@ -158,6 +184,7 @@ class AccountService {
   final FileSyncPort _fileSync;
   final PakPaths _paths;
   final LockoutGuard _guard;
+  final WipeCoordinator _wipe;
   final KekDeriver _deriveKek;
 
   /// Đồng hồ của hiệu chỉnh KDF; `null` = `Stopwatch` mặc định.
@@ -179,17 +206,19 @@ class AccountService {
   Future<Duration> lockoutRemaining() => _guard.waitRemaining();
 
   /// Trạng thái tài khoản lúc khởi động, chạy trước `runApp` (không có màn
-  /// chờ, UX-DR30): kiểm `vault/header` có tồn tại hay không rồi nạp `guard`
-  /// (`LockoutGuard.normalize`). Không đọc vault, không xóa gì; chỉ ghi
-  /// `guard` khi có `header` mà `guard` thiếu hoặc không đọc được (AD-8).
+  /// chờ, UX-DR30), theo thứ tự (AD-26): kiểm `vault/header` có tồn tại hay
+  /// không → `WipeCoordinator.resumeIfNeeded` (nạp `guard` rồi quyết định
+  /// xóa) → `LockoutGuard.normalize`. Không đọc vault.
   ///
-  /// Thiếu `header` nghĩa là chưa có tài khoản đã commit (AD-7), kể cả khi
-  /// `vault/` còn `cards`/`recent` từ lần tạo bị tắt giữa chừng: phần đó được
-  /// [create] dọn.
+  /// - `wiping` còn trên đĩa hoặc `failCount` ≥ 10 → [BootstrapWiping]: chưa
+  ///   xóa gì, S5 gọi [wipe] để xóa nốt; không gọi `normalize`.
+  /// - Không có `header` mà `vault/` còn entry hoặc `guard` sót → xóa im
+  ///   lặng rồi [BootstrapNoAccount]; xóa lỗi → [BootstrapUnavailable].
+  /// - Còn lại: chỉ ghi `guard` khi có `header` mà `guard` thiếu hoặc không
+  ///   đọc được hay mốc chờ cần neo lại (AD-8).
+  ///
+  /// Thiếu `header` nghĩa là chưa có tài khoản đã commit (AD-7).
   Future<BootstrapResult> bootstrap() async {
-    // Story 2.3 chèn `WipeCoordinator.resumeIfNeeded()` trước bước này
-    // (AD-26); kết quả mới (vd đang xóa) thêm thành lớp con của
-    // [BootstrapResult].
     final bool hasAccount;
     try {
       final type = await FileSystemEntity.type(
@@ -200,11 +229,25 @@ class AccountService {
     } on Object {
       return const BootstrapUnavailable();
     }
+    switch (await _wipe.resumeIfNeeded(hasAccount: hasAccount)) {
+      case WipeResume.pending:
+        return const BootstrapWiping();
+      case WipeResume.failed:
+        return const BootstrapUnavailable();
+      case WipeResume.cleaned:
+        return const BootstrapNoAccount();
+      case WipeResume.notNeeded:
+        break;
+    }
     await _guard.normalize(hasAccount: hasAccount);
     return hasAccount
         ? const BootstrapHasAccount()
         : const BootstrapNoAccount();
   }
+
+  /// Xóa toàn bộ dữ liệu (FR-12, AD-21): lối duy nhất để UI gọi xóa (lần sai
+  /// thứ 10, xóa nốt khi khởi động, story 2.4). Không ném.
+  Future<WipeResult> wipe() => _wipe.run();
 
   /// Tạo tài khoản với mật khẩu chính [password] (đã qua `PasswordPolicy`,
   /// AD-7):
@@ -291,7 +334,7 @@ class AccountService {
       return const CreateFailure();
     } finally {
       if (pw != null) {
-        wipe(pw);
+        zero.wipe(pw);
       }
       _disposeQuietly(kek);
       _disposeQuietly(dek);
@@ -312,6 +355,12 @@ class AccountService {
   /// `recordSuccess()` → mở bọc DEK → giải mã `cards`/`recent`. Mọi lỗi khác
   /// → [UnlockCorrupt]; KDF lỗi sau khi đã ghi trước thì lần thử vẫn tính
   /// (story 2.5 tách riêng).
+  ///
+  /// Lần sai thứ 10 (`kcv` lệch khi `failCount` đã là 10) → [UnlockWipeRequired];
+  /// `unlock` không xóa gì. Mật khẩu đúng ở lần thứ 10 mà `recordSuccess`
+  /// ghi lỗi → [UnlockUnavailable] và không mở phiên (đĩa còn `failCount` 10,
+  /// lần mở sau xóa; không xóa dữ liệu của người vừa nhập đúng ngay lúc
+  /// này).
   ///
   /// Chỉ ghi `guard`, không ghi hay xóa file vault nào. Bản `Uint8List` của
   /// mật khẩu luôn bị wipe; KEK luôn bị hủy; DEK bị hủy trừ khi đã chuyển cho
@@ -365,11 +414,19 @@ class AccountService {
       }
       if (!codec.kcvMatches(header, kek)) {
         _guard.rememberWrong(pw);
+        if (_guard.state.failCount >= maxAttempts) {
+          return const UnlockWipeRequired();
+        }
         return const UnlockWrongPassword();
       }
       // Mật khẩu đúng: đặt lại bộ đếm trước mọi bước sau, kể cả khi dữ liệu
       // hỏng (AD-4).
-      await _guard.recordSuccess();
+      final wasLastAttempt = _guard.state.failCount >= maxAttempts;
+      final saved = await _guard.recordSuccess();
+      if (!saved && wasLastAttempt) {
+        // Đĩa còn `failCount` 10: không mở phiên, lần mở sau mới xóa.
+        return const UnlockUnavailable();
+      }
       dek = codec.unwrapDek(header, kek);
       if (dek == null) {
         return const UnlockCorrupt();
@@ -398,7 +455,7 @@ class AccountService {
       return const UnlockCorrupt();
     } finally {
       if (pw != null) {
-        wipe(pw);
+        zero.wipe(pw);
       }
       _disposeQuietly(kek);
       _disposeQuietly(dek);
@@ -415,7 +472,7 @@ class AccountService {
       }
       return _sodium.secureCopy(raw);
     } finally {
-      wipe(raw);
+      zero.wipe(raw);
     }
   }
 

@@ -4,6 +4,7 @@ import 'package:cupertino_ui/cupertino_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pak_manager/core/model/settings.dart';
 import 'package:pak_manager/features/auth/login_screen.dart';
+import 'package:pak_manager/features/auth/wiping_screen.dart';
 import 'package:pak_manager/features/shared/pak_buttons.dart';
 import 'package:pak_manager/features/shared/secret_field.dart';
 import 'package:pak_manager/features/shared/theme/pak_colors.dart';
@@ -612,5 +613,31 @@ void main() {
     await tester.pump();
 
     expect(find.text('Try again in 30:00'), findsOneWidget);
+  });
+
+  testWidgets('fr04_ux_dr42_tenth_wrong_goes_to_s5_without_dialog', (
+    tester,
+  ) async {
+    final service = await _pumpS3(tester, attemptsLeft: 1);
+    await _type(tester, validPassword);
+    await tester.tap(find.byType(PakPrimaryButton));
+    await tester.pump();
+    expect(_button(tester).busy, isTrue);
+
+    service.attemptsLeft = 0;
+    service.completeUnlock(const UnlockWipeRequired());
+    await tester.pump();
+
+    // Không dialog, không thông báo trung gian: S3 bị gỡ, S5 hiện ngay.
+    expect(find.byType(WipingScreen), findsOneWidget);
+    expect(find.text('Đang xóa dữ liệu…'), findsOneWidget);
+    expect(find.byType(LoginScreen), findsNothing);
+    expect(find.byType(SecretField), findsNothing);
+    expect(find.byType(CupertinoAlertDialog), findsNothing);
+    expect(find.text(_wrong), findsNothing);
+    expect(find.byType(CupertinoButton), findsNothing);
+    // `unlock` không xóa; S5 gọi `wipe()` đúng một lần.
+    expect(service.wipeCalls, 1);
+    expect(service.unlockCalls, [validPassword]);
   });
 }
