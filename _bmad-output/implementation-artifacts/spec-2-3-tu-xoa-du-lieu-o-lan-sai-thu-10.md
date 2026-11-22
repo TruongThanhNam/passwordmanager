@@ -133,3 +133,35 @@ Review vòng 1 (2026-11-22): blind-hunter, edge-case-hunter, verification-gap; k
 - `cd pak_manager && flutter analyze --fatal-infos --fatal-warnings` -- expected: sạch
 - `cd pak_manager && dart run tool/check_imports.dart` -- expected: không vi phạm
 - `cd pak_manager && flutter test` -- expected: tất cả pass (trừ lỗi teardown `DW-2.1-1` đã biết), số test tăng, không thêm skip
+
+### Review Findings
+
+Review vòng 2 (2026-11-22, `/bmad-code-review`): blind-hunter, edge-case-hunter, verification-gap, acceptance-auditor; không lớp nào lỗi. Verification-gap không nêu lỗ hổng kiểm chứng, chỉ có mục `Other findings`.
+
+- [x] [Review][Patch] Doc `resumeIfNeeded` nói "Đọc đĩa lỗi thì coi như còn sót (dọn lại là an toàn)" nhưng mã không dọn: `on Object` trả `WipeResume.failed`, `bootstrap` ra `BootstrapUnavailable` (fail closed). Sửa doc cho đúng mã [pak_manager/lib/services/wipe_coordinator.dart:134]
+- [x] [Review][Defer] `bootstrap` suy ra "không có tài khoản" từ một lần `FileSystemEntity.type(header)` rồi dọn im lặng `vault/` — deferred: chưa xác minh (maybe-false, nếu đúng là medium); đã ghi ở DW-2.3-1 từ vòng 1, cần kiểm `stat` có trả `notFound` khi file còn sống không [pak_manager/lib/services/account_service.dart:224-231]
+- [x] [Review][Defer] Mật khẩu đúng ở lần thứ 10 mà `recordSuccess` ghi lỗi: đĩa còn `failCount` 10, lần mở sau xóa vault của người vừa nhập đúng — deferred: medium, hiếm; đã ghi ở DW-2.3-2 từ vòng 1, cần quyết định UX [pak_manager/lib/services/account_service.dart:424-429]
+- [x] [Review][Defer] Lần thứ 10 mà KDF lỗi (`_deriveKek` trả `null`) → `UnlockCorrupt`; `failCount` 10 đã nằm trên đĩa nên lần mở sau xóa vault dù mật khẩu chưa được kiểm; trong phiên đó S3 chỉ còn `UnlockLockedOut`. Hành vi do spec chốt và `fr07_fr04_tenth_attempt_with_kdf_failure_stays_corrupt` ghim — deferred: medium, thuộc story 2.5 (kết quả "thử lại" cho KDF lỗi); ghi ở DW-2.3-3 [pak_manager/lib/services/account_service.dart:411-414]
+
+#### Rejected
+
+- `run()` giả định `guard` đã nạp (blind): low. `AccountService.wipe()` chỉ chạy sau `bootstrap`/`unlock`; thêm cờ "đã nạp" là thêm trạng thái cho đường chưa với tới, điều kiện đã ghi ở Implementation Notes.
+- DW-2.1-2, DW-2.1-3, DW-2.2-1 chưa được ghi chú (blind): sửa đổi trái chính sách AGENTS (chỉ đóng mục khi có CI run hoặc SHA); spec đã ghi lý do ở Implementation Notes.
+- Spec `done` lệch `sprint-status` `review` (blind, acceptance-auditor): sửa là sửa spec; bước 6 của review đồng bộ lại hai chỗ.
+- Mâu thuẫn chữ DW-2.1-3 giữa Boundaries và DW-2.3-2 (blind, acceptance-auditor): phần hành vi đã ở DW-2.3-2; phần còn lại là sửa spec đã đóng băng.
+- Không có đường thử lại sau `WipeFailed` (blind): low. Trùng #12 vòng 1, đúng như spec đã duyệt.
+- Hai test symlink có thể bỏ qua, "không thêm skip" không đạt (blind, acceptance-auditor): low. Chỉ bỏ qua khi máy không tạo được symlink; spec ghi rõ CI ubuntu chạy; sửa là sửa dòng Verification.
+- `main_test` thoát sớm khi thiếu libsodium (blind): low. Cùng quy ước các case `main_test` khác.
+- Khoảng trống test của `WipeCoordinator` (nhánh `default`, `resumeIfNeeded` ném, crash sau `resetGuard`) (blind): low. Các nhánh chính đã có test, thêm test cho đường hiếm không đáng.
+- `*.tmp` cạnh `guard`/`settings` không bị xóa; `bootstrap` không dọn `*.tmp`, `pak/tmp/` (blind, acceptance-auditor): false. `storage_bootstrap` quét `*.tmp` (TmpSweeper) trước `runApp` ở mọi lần mở; chưa có đoạn mã nào ghi vào `pak/tmp/` ngoài `wipe`.
+- Chi tiết test dễ gãy (so `double` chính xác, `port_fakes` import fixture, `kdfClock` có trạng thái) (blind): low. Test đang xanh, không có tình huống làm hỏng.
+- `LoginScreen.onWipe == null` không làm gì (blind, acceptance-auditor): false. Trùng #6 vòng 1, `SessionGate` luôn truyền `onWipe`.
+- S5 thiếu `Semantics`/thông báo hoàn tất (blind): false. Trùng #13 vòng 1, UX-DR32 chốt S5 một dòng.
+- Thiếu assertion "`wipe()` không `derive`" (acceptance-auditor): low. `fr05_ad22_wrong_string_forgotten_after_wipe` kết thúc với `derives == 2` sau một lần `unlock` nữa, nên `wipe()` đã không derive.
+- `LoginScreen` bỏ rơi `UnlockWipeRequired` khi `!mounted` (edge-case): low. Màn S3 chỉ bị gỡ khi gate đổi kết quả, không xảy ra giữa lúc `unlock` chạy; `failCount` 10 trên đĩa vẫn dẫn tới xóa ở lần mở sau.
+- `guard` đọc lỗi thoảng qua thì `load` coi là `initial` và `normalize` hủy lần xóa (edge-case): false. Trùng #7 vòng 1, đúng luật AD-8 đã chấp nhận.
+- Xóa dở, `guard` không đọc được, còn `pak/tmp` hay `lastExportAt` (edge-case): false. Trùng #11 vòng 1; cần hai lỗi đĩa chồng nhau, xóa dở luôn để `wiping = true`.
+- `clearLastExport` không ghi khi file `settings` đọc lỗi lúc nạp, doc `WipeDone` nói quá (edge-case): low. Cần lỗi đọc thoảng qua đúng file 4 KiB; sửa cần đường ép ghi mới.
+- `clearLastExport` bỏ qua giá trị trả của `update`, phụ thuộc ghi chen (edge-case): low. Trùng #9 vòng 1, lúc xóa không đường nào đổi cài đặt.
+- `header` là thư mục hay liên kết bị coi là "không có tài khoản" (verification-gap): false. `hasAccount = type != notFound`, nên mọi loại entry đều tính là có tài khoản.
+- `bootstrap` chặn khung hình đầu vì xóa đệ quy và fsync, doc `main.dart` cũ (edge-case): false. Spec chủ ý dọn im lặng "việc nhỏ" và doc `main.dart` đã cập nhật (`BootstrapWiping`).

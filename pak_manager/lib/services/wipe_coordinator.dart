@@ -131,7 +131,8 @@ final class WipeCoordinator {
   ///    [WipeResume.cleaned] hoặc [WipeResume.failed].
   /// 3. Còn lại → [WipeResume.notNeeded].
   ///
-  /// Đọc đĩa lỗi thì coi như còn sót (dọn lại là an toàn). Không ném.
+  /// Đọc đĩa lỗi (nạp `guard` hay liệt kê `vault/` ném) thì trả
+  /// [WipeResume.failed], không dọn gì (fail closed). Không ném.
   Future<WipeResume> resumeIfNeeded({required bool hasAccount}) async {
     try {
       await _guard.load();

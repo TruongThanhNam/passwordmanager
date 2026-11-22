@@ -253,3 +253,10 @@
   source_spec: `_bmad-output/implementation-artifacts/spec-2-3-tu-xoa-du-lieu-o-lan-sai-thu-10.md`
   summary: Giảm nhẹ DW-2.1-3 chưa đóng hẳn: mật khẩu đúng ở lần thứ 10 mà `recordSuccess()` ghi lỗi thì `unlock` trả `UnlockUnavailable`, RAM về 0 còn đĩa giữ `failCount` 10; tắt app thì lần mở sau xóa vault của người vừa nhập đúng, còn thử lại cùng phiên thì ghi đè đĩa về 1.
   evidence: Medium, hiếm (ghi `guard` lỗi hai lần liên tiếp, ví dụ đầy bộ nhớ). Spec 2.3 chủ ý chỉ chặn đăng nhập ở `failCount` 10 (Design Notes). Hướng sửa: thử ghi lại `guard` khi hủy phiên hoặc giữ RAM ở 10 và chặn mở khóa tới khi khởi động lại; cần quyết định UX cho trạng thái "không ghi được".
+
+## Deferred from: code review of spec-2-3-tu-xoa-du-lieu-o-lan-sai-thu-10.md, vòng 2 (2026-11-22)
+
+- id: DW-2.3-3
+  source_spec: `_bmad-output/implementation-artifacts/spec-2-3-tu-xoa-du-lieu-o-lan-sai-thu-10.md`
+  summary: Lần thứ 10 mà KDF lỗi (`_deriveKek` trả `null`, ví dụ thiếu bộ nhớ Argon2) → `unlock` trả `UnlockCorrupt`. `failCount` 10 đã được ghi trước KDF nên lần mở sau `bootstrap` trả `BootstrapWiping` và xóa vault dù mật khẩu chưa được kiểm; trong phiên đó S3 chỉ còn `UnlockLockedOut`, không có đường xóa hay thử lại.
+  evidence: Medium, hiếm (cần chín lần sai rồi KDF lỗi đúng ở lần 10). Có thật: `account_service.dart` đoạn `kek == null` → `UnlockCorrupt`, `failCount` 10 còn trên đĩa, `resumeIfNeeded` coi `exhausted` là `pending`. Spec 2.3 chủ ý giữ (ranh giới `corrupt`/KDF thuộc story 2.5) và `fr07_fr04_tenth_attempt_with_kdf_failure_stays_corrupt` ghim hành vi này. Hướng sửa ở story 2.5: kết quả "thử lại" riêng cho KDF lỗi, và hoàn lại hoặc không tính lần thử khi KDF lỗi ở `failCount` 10 (cần quyết định có hoàn lượt không, vì FR-5 yêu cầu lần thử vẫn tính khi tắt app).
